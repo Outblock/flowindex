@@ -10,6 +10,7 @@ import { useTimeTicker } from '../../hooks/useTimeTicker';
 
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import swift from 'react-syntax-highlighter/dist/esm/languages/prism/swift';
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import { vscDarkPlus, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -23,13 +24,14 @@ import TxResolvedAddress from '../../components/tx/TxResolvedAddress';
 import { NotFoundPage } from '../../components/ui/NotFoundPage';
 import { deriveEnrichments, decodeEVMCallData } from '../../lib/deriveFromEvents';
 import { buildTxDetailAssetView, type TxDetailDisplayTransferRow } from '../../lib/txAssetFlow';
-import { buildTxAddressBook, describeEvmExecution, type TxAddressBook } from '../../lib/txAddressBook';
+import { buildTxAddressBook, type TxAddressBook } from '../../lib/txAddressBook';
 import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
 import { parseCadenceError } from '../../lib/parseCadenceError';
 import { sha256Hex, normalizedScriptHash } from '../../lib/normalizeScript';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
+SyntaxHighlighter.registerLanguage('json', json);
 
 /** Decode a Flow EVM "direct call" raw_tx_payload (0xff-prefixed RLP).
  *  Returns decoded fields or null if not a direct call or decode fails.
@@ -192,10 +194,8 @@ function EVMEntityLink({ address, meta, fallbackLabel }: { address?: string; met
     );
 }
 
-function getEVMExecutionHeaderLink(exec: any): { href: string; label: string; verified: boolean } | null {
-    const method = String(exec?.decoded_call?.method || '').trim();
-    const contract = String(exec?.to_meta?.label || exec?.decoded_call?.implementation_name || exec?.decoded_call?.contract_name || exec?.to_meta?.contract_name || '').trim();
-    const label = method ? `${method}()` : contract;
+function getEVMExecutionHeaderLink(exec: any, events?: any[]): { href: string; label: string; verified: boolean } | null {
+    const label = getEvmExecutionDisplayLabel(exec, events);
     if (!label) return null;
     return {
         href: exec?.to ? evmAddressHref(exec.to) : `https://evm.flowindex.io/tx/0x${String(exec?.hash || '').replace(/^0x/i, '')}`,
@@ -239,6 +239,48 @@ function getExecutionCallData(exec: any, events?: any[]): string {
     return decodeFlowDirectCallPayload(formatted.payload)?.data || '';
 }
 
+function inferEvmMethodLabel(exec: any, events?: any[]): string {
+    const method = String(exec?.decoded_call?.method || '').trim();
+    if (method) return `${method}()`;
+
+    const signature = String(exec?.decoded_call?.signature || '').trim();
+    const signatureMatch = signature.match(/^([A-Za-z0-9_]+)\s*\(/);
+    if (signatureMatch?.[1]) return `${signatureMatch[1]}()`;
+
+    const callData = getExecutionCallData(exec, events);
+    if (!callData) return '';
+
+    const decoded = decodeEVMCallData(callData);
+    switch (decoded.callType) {
+        case 'erc20_transfer':
+            return 'transfer()';
+        case 'erc20_transferFrom':
+            return 'transferFrom()';
+        case 'erc721_safeTransferFrom':
+            return 'safeTransferFrom()';
+        case 'erc1155_safeTransferFrom':
+            return 'safeTransferFrom()';
+        case 'erc1155_safeBatchTransferFrom':
+            return 'safeBatchTransferFrom()';
+        default:
+            return '';
+    }
+}
+
+function getEvmExecutionDisplayLabel(exec: any, events?: any[]): string {
+    const contract = String(
+        exec?.to_meta?.label ||
+        exec?.decoded_call?.implementation_name ||
+        exec?.decoded_call?.contract_name ||
+        exec?.to_meta?.contract_name ||
+        ''
+    ).trim();
+    const methodLabel = inferEvmMethodLabel(exec, events);
+    if (contract && methodLabel) return `${contract}.${methodLabel}`;
+    if (contract) return contract;
+    return methodLabel;
+}
+
 function getEvmStandardTag(callType: string, value?: string | number): EvmExecutionTag | null {
     const standard = (() => {
         if (callType.startsWith('erc20')) return 'ERC-20';
@@ -262,16 +304,22 @@ function getEvmStandardTag(callType: string, value?: string | number): EvmExecut
     return { label: standard, className };
 }
 
+function getEvmExecutionLabelTag(exec: any, events?: any[]): EvmExecutionTag | null {
+    const label = getEvmExecutionDisplayLabel(exec, events);
+
+    if (!label) return null;
+
+    return {
+        label,
+        className: 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
+        mono: label.includes('()'),
+    };
+}
+
 function getEvmExecutionTags(exec: any, events?: any[]): EvmExecutionTag[] {
     const tags: EvmExecutionTag[] = [];
-    const method = String(exec?.decoded_call?.method || '').trim();
-    if (method) {
-        tags.push({
-            label: `${method}()`,
-            className: 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20',
-            mono: true,
-        });
-    }
+    const labelTag = getEvmExecutionLabelTag(exec, events);
+    if (labelTag) tags.push(labelTag);
 
     const callData = getExecutionCallData(exec, events);
     const decoded = callData ? decodeEVMCallData(callData) : { callType: 'unknown' };
@@ -279,6 +327,26 @@ function getEvmExecutionTags(exec: any, events?: any[]): EvmExecutionTag[] {
     if (standardTag) tags.push(standardTag);
 
     return tags;
+}
+
+function JsonPayloadBlock({ value, isDark }: { value: unknown; isDark: boolean }) {
+    return (
+        <SyntaxHighlighter
+            language="json"
+            style={isDark ? vscDarkPlus : oneLight}
+            customStyle={{
+                margin: 0,
+                padding: '0.875rem 1rem',
+                fontSize: '11px',
+                lineHeight: '1.7',
+                borderRadius: '0',
+                background: 'transparent',
+            }}
+            wrapLongLines
+        >
+            {JSON.stringify(value, null, 2)}
+        </SyntaxHighlighter>
+    );
 }
 
 /** NFT transfer row with lazy-loaded name + thumbnail */
@@ -614,7 +682,7 @@ function TransactionSummaryCard({ transaction, assetView, addressBook, formatAdd
     const fmtAddr = (addr: string) => formatShort(addr, 8, 4);
     const evmSteps = hasEvm
         ? (transaction.evm_executions || [])
-            .map((exec: any) => describeEvmExecution(exec))
+            .map((exec: any) => getEvmExecutionDisplayLabel(exec, transaction.events))
             .filter(Boolean)
             .filter((step: string, index: number, arr: string[]) => arr.indexOf(step) === index)
             .slice(0, 4)
@@ -2386,16 +2454,17 @@ function TransactionDetail() {
                                     fullTx.evm_executions.map((exec: any, idx: number) => (
                                         <div key={idx} className="border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
                                             {(() => {
-                                                const headerLink = getEVMExecutionHeaderLink(exec);
+                                                const executionLabel = getEvmExecutionDisplayLabel(exec, transaction.events);
+                                                const headerLink = getEVMExecutionHeaderLink(exec, transaction.events);
                                                 return (
                                             <div className="bg-zinc-50 dark:bg-black/40 px-4 py-3 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
                                                 <div className="min-w-0">
                                                     <span className="text-[10px] text-zinc-500 uppercase tracking-widest block">
                                                         EVM Execution {fullTx.evm_executions.length > 1 ? `#${idx + 1}` : ''}
                                                     </span>
-                                                    {describeEvmExecution(exec) && (
+                                                    {executionLabel && (
                                                         <span className="text-xs text-zinc-700 dark:text-zinc-300 font-mono block mt-1 truncate">
-                                                            {describeEvmExecution(exec)}
+                                                            {executionLabel}
                                                         </span>
                                                     )}
                                                 </div>
@@ -2675,10 +2744,30 @@ function TransactionDetail() {
                                                     }
                                                     // Try to decode the raw_tx_payload (Flow direct call 0xff format)
                                                     const decodedRawTx = rawTxPayloadHex ? decodeFlowDirectCallPayload(rawTxPayloadHex) : null;
+                                                    const rawTxPayloadView = decodedRawTx ? {
+                                                        type: 'Flow Direct Call (0xff)',
+                                                        nonce: decodedRawTx.nonce,
+                                                        sub_type: decodedRawTx.subType,
+                                                        from: decodedRawTx.from || null,
+                                                        to: decodedRawTx.to || 'Contract Creation',
+                                                        data: decodedRawTx.data || null,
+                                                        value: `${decodedRawTx.value} FLOW`,
+                                                        gas_limit: decodedRawTx.gasLimit,
+                                                        raw: rawTxPayloadHex,
+                                                    } : null;
+                                                    const abiPayload = exec.decoded_call ? {
+                                                        method: exec.decoded_call.method || null,
+                                                        signature: exec.decoded_call.signature || null,
+                                                        contract_name: exec.decoded_call.contract_name || exec.to_meta?.label || exec.to_meta?.contract_name || null,
+                                                        implementation_name: exec.decoded_call.implementation_name || null,
+                                                        implementation_address: exec.to_meta?.implementation_address || null,
+                                                        via_proxy: Boolean(exec.decoded_call.via_proxy),
+                                                        args: Array.isArray(exec.decoded_call.args) ? exec.decoded_call.args : [],
+                                                    } : null;
 
                                                     const isExpanded = expandedPayloads[idx] ?? false;
                                                     const payloadTabKey = `evm_payload_tab_${idx}`;
-                                                    const activePayloadTab = (expandedPayloads as any)[payloadTabKey] || (decodedRawTx ? 'raw' : 'evm');
+                                                    const activePayloadTab = (expandedPayloads as any)[payloadTabKey] || (abiPayload ? 'abi' : decodedRawTx ? 'raw' : 'evm');
                                                     return (
                                                         <div className="border border-zinc-200 dark:border-white/5 rounded-sm overflow-hidden">
                                                             <button
@@ -2696,42 +2785,40 @@ function TransactionDetail() {
                                                                 style={{ gridTemplateRows: isExpanded ? '1fr' : '0fr' }}
                                                             >
                                                                 <div className="overflow-hidden">
-                                                                    {/* Sub-tabs: Raw TX Payload (default) | EVM Payload */}
-                                                                    {decodedRawTx && (
+                                                                    {/* Sub-tabs: ABI Payload | Raw TX Payload | EVM Payload */}
+                                                                    {(decodedRawTx || abiPayload) && (
                                                                         <div className="flex border-b border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-black/30">
-                                                                            <button
-                                                                                onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'raw' })); }}
-                                                                                className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'raw' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
-                                                                            >
-                                                                                Raw TX Payload
-                                                                            </button>
+                                                                            {decodedRawTx && (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'raw' })); }}
+                                                                                    className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'raw' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                                                                                >
+                                                                                    Raw TX Payload
+                                                                                </button>
+                                                                            )}
                                                                             <button
                                                                                 onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'evm' })); }}
                                                                                 className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'evm' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
                                                                             >
                                                                                 EVM Payload
                                                                             </button>
+                                                                            {abiPayload && (
+                                                                                <button
+                                                                                    onClick={(e) => { e.stopPropagation(); setExpandedPayloads(prev => ({ ...prev, [payloadTabKey]: 'abi' })); }}
+                                                                                    className={`px-4 py-2 text-[10px] uppercase tracking-widest transition-colors ${activePayloadTab === 'abi' ? 'text-zinc-900 dark:text-white border-b-2 border-zinc-900 dark:border-white' : 'text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300'}`}
+                                                                                >
+                                                                                    ABI Payload
+                                                                                </button>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                     <div className="p-4 bg-zinc-50 dark:bg-black/40 border-t border-zinc-200 dark:border-white/5 max-h-[400px] overflow-y-auto">
-                                                                        {activePayloadTab === 'raw' && decodedRawTx ? (
-                                                                            <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                                                {JSON.stringify({
-                                                                                    type: 'Flow Direct Call (0xff)',
-                                                                                    nonce: decodedRawTx.nonce,
-                                                                                    sub_type: decodedRawTx.subType,
-                                                                                    from: decodedRawTx.from || null,
-                                                                                    to: decodedRawTx.to || 'Contract Creation',
-                                                                                    data: decodedRawTx.data || null,
-                                                                                    value: `${decodedRawTx.value} FLOW`,
-                                                                                    gas_limit: decodedRawTx.gasLimit,
-                                                                                    raw: rawTxPayloadHex,
-                                                                                }, null, 2)}
-                                                                            </pre>
+                                                                        {activePayloadTab === 'raw' && rawTxPayloadView ? (
+                                                                            <JsonPayloadBlock value={rawTxPayloadView} isDark={isDark} />
+                                                                        ) : activePayloadTab === 'abi' && abiPayload ? (
+                                                                            <JsonPayloadBlock value={abiPayload} isDark={isDark} />
                                                                         ) : (
-                                                                            <pre className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-wrap break-all">
-                                                                                {JSON.stringify(decodedPayload, null, 2)}
-                                                                            </pre>
+                                                                            <JsonPayloadBlock value={decodedPayload} isDark={isDark} />
                                                                         )}
                                                                     </div>
                                                                 </div>
