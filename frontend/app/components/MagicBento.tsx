@@ -12,6 +12,7 @@ export interface BentoCardProps {
   disableAnimations?: boolean;
   icon?: React.ElementType;
   size?: string;
+  logo?: string;
 }
 
 export interface BentoProps {
@@ -198,7 +199,6 @@ const MagicBento: React.FC<BentoProps> = ({
         className="bento-section grid grid-cols-1 md:grid-cols-12 gap-4 select-none relative bg-transparent"
       >
         {items.map((card, index) => {
-          const Icon = card.icon || NanoBanana;
           return (
             <div
               key={index}
@@ -207,6 +207,21 @@ const MagicBento: React.FC<BentoProps> = ({
                 enableBorderGlow ? 'card--border-glow' : ''
               } ${card.size || ''}`}
             >
+              {/* Logo Background */}
+              {card.logo && (
+                <div 
+                  className="absolute inset-0 opacity-[0.35] pointer-events-none bg-no-repeat bg-right-bottom" 
+                  style={{ 
+                    backgroundImage: `url(${card.logo})`,
+                    backgroundSize: '60%',
+                    mixBlendMode: 'luminosity',
+                    filter: 'grayscale(1) brightness(0.6)',
+                    maskImage: 'linear-gradient(to top left, black 20%, transparent 80%)',
+                    WebkitMaskImage: 'linear-gradient(to top left, black 20%, transparent 80%)'
+                  }} 
+                />
+              )}
+              
               {/* Nothing Dot Grid Background */}
               <div 
                 className="absolute inset-0 opacity-[0.08] pointer-events-none" 
@@ -219,8 +234,12 @@ const MagicBento: React.FC<BentoProps> = ({
               <div className="relative z-10 flex flex-col h-full justify-between pointer-events-none">
                 <div>
                   <div className="flex justify-between items-start mb-8">
-                    <div className="p-2 bg-neutral-900 border border-neutral-800 text-[#00ef8b]">
-                      <Icon size={20} />
+                    <div className="flex gap-2">
+                      {!card.logo && card.icon && (
+                        <div className="p-2 bg-neutral-900 border border-neutral-800 text-[#00ef8b]">
+                          <card.icon size={20} />
+                        </div>
+                      )}
                     </div>
                     <span className="text-[10px] font-bold font-mono text-neutral-600 uppercase tracking-widest">
                       {card.label}

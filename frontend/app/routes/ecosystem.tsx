@@ -3,22 +3,22 @@ import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motio
 import { useState, useEffect } from 'react'
 import { NanoBanana } from '../components/NanoBanana'
 import MagicBento from '../components/MagicBento'
-import { Terminal, Cpu, Zap, Brain, Wallet, Code, Bell, Database, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 export const Route = createFileRoute('/ecosystem')({
   component: EcosystemPage,
 })
 
 const products = [
-  { title: 'Simulator', description: 'Test your Cadence scripts and transactions in a local simulated environment before deploying to mainnet.', size: 'md:col-span-8', color: '#00ef8b', icon: Cpu, label: 'STABLE' },
-  { title: 'Passkey', description: 'Next-gen auth for Flow. Secure, passwordless logins using WebAuthn.', size: 'md:col-span-4', color: '#3b82f6', icon: Zap, label: 'NEW' },
-  { title: 'Runner', description: 'Reliable execution engine for long-running Cadence tasks.', size: 'md:col-span-4', color: '#8b5cf6', icon: Terminal, label: 'BETA' },
-  { title: 'AI Assistant', description: 'Intelligent assistant to help you write, debug, and optimize Cadence code.', size: 'md:col-span-8', color: '#f59e0b', icon: Brain, label: 'AI' },
-  { title: 'Agent Wallet', description: 'Fully programmable wallets designed for AI agents and automated interactions.', size: 'md:col-span-4', color: '#ef4444', icon: Wallet, label: 'BETA' },
-  { title: 'Studio', description: 'A powerful, web-based IDE tailored for the Flow ecosystem.', size: 'md:col-span-4', color: '#ec4899', icon: Code, label: 'IDE' },
-  { title: 'Webhook', description: 'Scalable event delivery system. Get notified instantly when on-chain events occur.', size: 'md:col-span-4', color: '#06b6d4', icon: Bell, label: 'CORE' },
-  { title: 'Cadence MCP', description: 'Model Context Protocol for Cadence. Connect Flow development tools to LLMs seamlessly.', size: 'md:col-span-6', color: '#14b8a6', icon: Database, label: 'PROTOCOL' },
-  { title: 'Cadence LSP', description: 'Language Server Protocol for Cadence. Professional IDE features.', size: 'md:col-span-6', color: '#a78bfa', icon: Search, label: 'TOOLING' },
+  { title: 'Simulator', description: 'Fork mainnet state and dry-run any Cadence transaction — catch errors before they cost real tokens.', size: 'md:col-span-8', color: '#00ef8b', logo: '/logos/simulator.png', label: 'STABLE' },
+  { title: 'Passkey', description: 'Passwordless Flow wallets powered by WebAuthn. One tap to sign, no seed phrases.', size: 'md:col-span-4', color: '#3b82f6', logo: '/logos/passkey.png', label: 'NEW' },
+  { title: 'Runner', description: 'A web-based Cadence IDE with instant preview. Write, compile, and deploy — all in the browser.', size: 'md:col-span-4', color: '#8b5cf6', logo: '/logos/runner.png', label: 'BETA' },
+  { title: 'AI Assistant', description: 'Chat-driven Cadence copilot. Ask it to write, explain, audit, or optimize your smart contracts in real time.', size: 'md:col-span-8', color: '#f59e0b', logo: '/logos/ai.png', label: 'AI' },
+  { title: 'Agent Wallet', description: 'Programmable custodial wallets built for AI agents — sign, send, and interact on-chain autonomously.', size: 'md:col-span-4', color: '#ef4444', logo: '/logos/agent-wallet.png', label: 'BETA' },
+  { title: 'Studio', description: 'Visual workflow builder for on-chain automation. Drag, connect, deploy — like n8n for Flow.', size: 'md:col-span-4', color: '#ec4899', logo: '/logos/studio.png', label: 'WORKFLOW' },
+  { title: 'Webhook', description: 'Real-time on-chain event delivery to your backend. Subscribe to any event, get notified instantly.', size: 'md:col-span-4', color: '#06b6d4', logo: '/logos/webhook.png', label: 'CORE' },
+  { title: 'Cadence MCP', description: 'Bridge between LLMs and Flow. Give any AI model native access to Cadence tooling via Model Context Protocol.', size: 'md:col-span-6', color: '#14b8a6', logo: '/logos/mcp.png', label: 'PROTOCOL' },
+  { title: 'Cadence LSP', description: 'Autocomplete, go-to-definition, inline diagnostics — full Language Server Protocol support for Cadence in any editor.', size: 'md:col-span-6', color: '#a78bfa', icon: Search, label: 'TOOLING' },
 ]
 
 function EcosystemPage() {
