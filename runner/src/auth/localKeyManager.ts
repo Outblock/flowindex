@@ -304,10 +304,14 @@ export async function decryptFromKeystore(
 
   const storedKey = core.StoredKey.importJSON(jsonBytes);
 
-  // Check if this is a mnemonic-based keystore by trying to decrypt mnemonic
-  const mnemonic = storedKey.decryptMnemonic(pwBytes);
-  if (mnemonic && mnemonic.length > 0) {
+  // StoredKey can report its own kind. Trying to decrypt a mnemonic first is
+  // not reliable for raw private-key keystores and can yield garbage strings.
+  if (storedKey.isMnemonic()) {
+    const mnemonic = storedKey.decryptMnemonic(pwBytes);
     storedKey.delete();
+    if (!mnemonic || mnemonic.length === 0) {
+      throw new Error('Failed to decrypt keystore — wrong password?');
+    }
     // Re-derive with the correct curve
     const derived = await deriveFromMnemonic(mnemonic);
     return sigAlgo === 'ECDSA_secp256k1'
@@ -342,8 +346,17 @@ export async function decryptMnemonicFromKeystore(
   const pwBytes = stringToBytes(password);
 
   const storedKey = core.StoredKey.importJSON(jsonBytes);
+  if (!storedKey.isMnemonic()) {
+    storedKey.delete();
+    return null;
+  }
+
   const mnemonic = storedKey.decryptMnemonic(pwBytes);
   storedKey.delete();
+
+  if (!mnemonic || mnemonic.length === 0) {
+    throw new Error('Failed to decrypt keystore — wrong password?');
+  }
 
   if (mnemonic && mnemonic.length > 0) return mnemonic;
   return null;
