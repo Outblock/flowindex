@@ -10,6 +10,7 @@ import { AuthProvider } from '../contexts/AuthContext';
 import { MobileMenuProvider } from '../contexts/MobileMenuContext';
 import { Toaster } from 'react-hot-toast';
 import { lazy, Suspense } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const AIChatWidget = lazy(() => import('../components/chat/AIChatWidget'));
 import '../index.css';
@@ -39,6 +40,11 @@ export const Route = createRootRoute({
     }),
     component: RootComponent,
 })
+
+function AuthedChatWidget() {
+    const { accessToken } = useAuth();
+    return <AIChatWidget authToken={accessToken} />;
+}
 
 function RootComponent() {
     return (
@@ -70,7 +76,7 @@ function RootComponent() {
                             </main>
                         </div>
                     </div>
-                    <Suspense fallback={null}><AIChatWidget /></Suspense>
+                    <Suspense fallback={null}><AuthedChatWidget /></Suspense>
                     <Toaster position="bottom-right" />
                     </MobileMenuProvider>
                 </WebSocketProvider>

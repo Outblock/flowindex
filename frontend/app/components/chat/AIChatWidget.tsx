@@ -1111,7 +1111,27 @@ function getStoredMode(): ChatMode {
   return 'balanced';
 }
 
-export default function AIChatWidget() {
+/* ── Types for session persistence ── */
+
+interface WidgetSession {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+export default function AIChatWidget({ authToken }: { authToken?: string | null }) {
   const routerState = useRouterState();
   const hideWidget = routerState.location.pathname === '/playground';
   const [mounted, setMounted] = useState(false);
@@ -1130,6 +1150,24 @@ export default function AIChatWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Session persistence state
+  const [sessions, setSessions] = useState<WidgetSession[]>([]);
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
+  const [showSessions, setShowSessions] = useState(false);
+  const [shareToast, setShareToast] = useState(false);
+  const savedMsgCountRef = useRef(0);
+
+  // Fetch recent sessions when authToken changes
+  useEffect(() => {
+    if (!authToken) { setSessions([]); return; }
+    fetch(`${AI_CHAT_URL}/api/sessions`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then(r => r.ok ? r.json() : { sessions: [] })
+      .then(({ sessions }) => setSessions((sessions || []).slice(0, 5)))
+      .catch(() => {});
+  }, [authToken]);
 
   const handleModeChange = useCallback((m: ChatMode) => {
     setChatMode(m);
@@ -1342,7 +1380,67 @@ export default function AIChatWidget() {
 
   const handleClear = () => {
     setMessages([]);
+    setSessionId(crypto.randomUUID());
+    savedMsgCountRef.current = 0;
   };
+
+  // Auto-save messages after each complete assistant response
+  useEffect(() => {
+    if (!authToken || !sessionId) return;
+    if (status === 'streaming' || status === 'submitted') return;
+    if (messages.length < 2) return;
+    // Only save new messages we haven't saved yet
+    if (messages.length <= savedMsgCountRef.current) return;
+
+    // Find the latest user + assistant pair
+    const lastMsg = messages[messages.length - 1];
+    const prevMsg = messages[messages.length - 2];
+    if (lastMsg.role !== 'assistant' || prevMsg.role !== 'user') return;
+
+    // Extract text from parts (UIMessage has no .content)
+    const getTextContent = (msg: UIMessage) =>
+      msg.parts?.filter(p => p.type === 'text').map(p => (p as any).text).join('') || '';
+
+    const textContent = getTextContent(lastMsg);
+    const userContent = getTextContent(prevMsg);
+
+    // Extract tool calls/results from dynamic-tool or tool-* parts
+    const toolParts = lastMsg.parts?.filter(p =>
+      (p.type as string) === 'dynamic-tool' || (p.type as string).startsWith('tool-')
+    ) || [];
+    const toolCalls = toolParts.length > 0
+      ? toolParts.map((p: any) => ({ toolName: p.toolName || '', args: p.input ?? p.args }))
+      : null;
+    const toolResults = toolParts.length > 0
+      ? toolParts.filter((p: any) => p.state === 'result' || p.output != null)
+          .map((p: any) => ({ name: p.toolName || '', result: p.output ?? p.result }))
+      : null;
+
+    savedMsgCountRef.current = messages.length;
+
+    fetch(`${AI_CHAT_URL}/api/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: userContent },
+          { role: 'assistant', content: textContent, tool_calls: toolCalls, tool_results: toolResults },
+        ],
+        title: userContent,
+        source: 'widget',
+      }),
+    }).catch(() => {}); // Silent fail
+
+    // Update local sessions list
+    setSessions(prev => {
+      const exists = prev.find(s => s.id === sessionId);
+      if (exists) return prev;
+      return [{ id: sessionId, title: userContent.slice(0, 80), updated_at: new Date().toISOString() }, ...prev].slice(0, 5);
+    });
+  }, [messages, status, authToken, sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -1482,6 +1580,54 @@ export default function AIChatWidget() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {/* Session history button (logged in only) */}
+                  {authToken && (
+                    <button
+                      onClick={() => setShowSessions(v => !v)}
+                      className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-sm transition-colors"
+                      title="Chat history"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <line x1="2" y1="4" x2="14" y2="4" />
+                        <line x1="2" y1="8" x2="14" y2="8" />
+                        <line x1="2" y1="12" x2="14" y2="12" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Share button */}
+                  {authToken && messages.length > 0 && (
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`${AI_CHAT_URL}/api/sessions/${sessionId}/share`, {
+                              method: 'POST',
+                              headers: { Authorization: `Bearer ${authToken}` },
+                            });
+                            if (res.ok) {
+                              const { share_url } = await res.json();
+                              await navigator.clipboard.writeText(share_url);
+                              setShareToast(true);
+                              setTimeout(() => setShareToast(false), 2000);
+                            }
+                          } catch { /* silent */ }
+                        }}
+                        className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-sm transition-colors"
+                        title="Share conversation"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 12V14H12V12" />
+                          <polyline points="4 7 8 3 12 7" />
+                          <line x1="8" y1="3" x2="8" y2="11" />
+                        </svg>
+                      </button>
+                      {shareToast && (
+                        <div className="absolute top-full right-0 mt-1 z-50 bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm whitespace-nowrap shadow-lg">
+                          Link copied!
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {messages.length > 0 && (
                     <button
                       onClick={handleClear}
@@ -1500,6 +1646,78 @@ export default function AIChatWidget() {
                   </button>
                 </div>
               </div>
+
+              {/* Session dropdown */}
+              <AnimatePresence>
+                {showSessions && authToken && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden border-b border-zinc-200 dark:border-white/10 shrink-0"
+                  >
+                    <div className="px-3 py-2 space-y-1">
+                      <button
+                        onClick={() => { handleClear(); setShowSessions(false); }}
+                        className="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-nothing-green hover:bg-nothing-green/10 rounded-sm transition-colors flex items-center gap-1.5"
+                      >
+                        <Plus size={12} /> New chat
+                      </button>
+                      {sessions.length > 0 ? sessions.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`${AI_CHAT_URL}/api/sessions/${s.id}`, {
+                                headers: { Authorization: `Bearer ${authToken}` },
+                              });
+                              if (!res.ok) return;
+                              const data = await res.json();
+                              const dbMsgs: any[] = data.messages || [];
+                              const uiMessages = dbMsgs.map((m: any) => ({
+                                id: m.id || crypto.randomUUID(),
+                                role: m.role as 'user' | 'assistant',
+                                parts: [
+                                  ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+                                  ...(m.tool_calls || []).map((tc: any) => ({
+                                    type: 'dynamic-tool' as const,
+                                    toolCallId: crypto.randomUUID(),
+                                    toolName: tc.toolName || tc.name || '',
+                                    input: tc.args,
+                                    state: 'result' as const,
+                                    output: m.tool_results?.find((tr: any) => tr.name === (tc.toolName || tc.name))?.result,
+                                  })),
+                                ],
+                              })) as UIMessage[];
+                              setMessages(uiMessages);
+                              setSessionId(s.id);
+                              savedMsgCountRef.current = uiMessages.length;
+                              setShowSessions(false);
+                            } catch { /* silent */ }
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-sm transition-colors hover:bg-zinc-100 dark:hover:bg-white/5 ${
+                            sessionId === s.id ? 'bg-zinc-100 dark:bg-white/5' : ''
+                          }`}
+                        >
+                          <div className="text-[11px] text-zinc-700 dark:text-zinc-300 truncate">{s.title || 'Untitled'}</div>
+                          <div className="text-[9px] text-zinc-400">{formatRelativeTime(s.updated_at)}</div>
+                        </button>
+                      )) : (
+                        <p className="text-[11px] text-zinc-400 px-2.5 py-1.5">No saved sessions</p>
+                      )}
+                      <a
+                        href={`${AI_CHAT_URL}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-2.5 py-1.5 text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                      >
+                        View all at ai.flowindex.io &rarr;
+                      </a>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-4 custom-scrollbar">
