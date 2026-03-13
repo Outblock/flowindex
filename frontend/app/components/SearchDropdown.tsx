@@ -326,9 +326,9 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                         isActive={activeIndex === idx}
                         icon={<Coins className="h-4 w-4 text-nothing-green" />}
                         label={
-                          <HighlightMatch text={t.name} query={highlightQuery} />
+                          <HighlightMatch text={t.name || t.contract_name} query={highlightQuery} />
                         }
-                        sublabel={t.symbol}
+                        sublabel={t.symbol || t.contract_name}
                         badge="FT"
                         badgeClass="bg-nothing-green/10 text-nothing-green"
                         onClick={() =>
