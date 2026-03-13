@@ -49,6 +49,11 @@ type TxResult struct {
 	ComputationUsed int64     `json:"computation_used"`
 }
 
+const (
+	slowClientOperationThreshold = 500 * time.Millisecond
+	slowWaitForResultThreshold   = 2 * time.Second
+)
+
 // Client talks to a Flow Emulator REST API.
 type Client struct {
 	baseURL    string // REST API (default port 8888)
@@ -385,10 +390,14 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 	}
 
 	// Fetch latest block ID for reference
+	refBlockStart := time.Now()
 	refBlockID, err := c.getLatestBlockID(ctx)
+	refBlockElapsed := time.Since(refBlockStart)
 	if err != nil {
 		log.Printf("[simulator] warning: could not fetch latest block ID, using zeros: %v", err)
 		refBlockID = strings.Repeat("0", 64)
+	} else if refBlockElapsed >= slowClientOperationThreshold {
+		log.Printf("[simulator] fetched latest block ID in %s", refBlockElapsed)
 	}
 
 	// Base64-encode the script
@@ -453,6 +462,7 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 	const maxRetries = 10
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
+		submitStart := time.Now()
 		req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/v1/transactions", bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("building tx request: %w", err)
@@ -468,6 +478,7 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
+			submitElapsed := time.Since(submitStart)
 			var txResp struct {
 				ID string `json:"id"`
 			}
@@ -477,7 +488,20 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 			if txResp.ID == "" {
 				return nil, fmt.Errorf("emulator returned empty tx ID")
 			}
-			return c.waitForResult(ctx, txResp.ID)
+			if submitElapsed >= slowClientOperationThreshold {
+				log.Printf("[simulator] transaction %s accepted in %s (attempt %d/%d)", txResp.ID, submitElapsed, attempt+1, maxRetries)
+			}
+			waitStart := time.Now()
+			result, err := c.waitForResult(ctx, txResp.ID)
+			waitElapsed := time.Since(waitStart)
+			if err != nil {
+				log.Printf("[simulator] transaction %s result wait failed after %s: %v", txResp.ID, waitElapsed, err)
+				return nil, err
+			}
+			if waitElapsed >= slowWaitForResultThreshold {
+				log.Printf("[simulator] transaction %s sealed in %s (success=%t events=%d)", txResp.ID, waitElapsed, result.Success, len(result.Events))
+			}
+			return result, nil
 		}
 
 		// Retry on "pending block" errors
@@ -500,6 +524,7 @@ func (c *Client) SendTransaction(ctx context.Context, tx *TxRequest) (*TxResult,
 
 // waitForResult polls the emulator for a sealed transaction result.
 func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, error) {
+	start := time.Now()
 	url := fmt.Sprintf("%s/v1/transaction_results/%s", c.baseURL, txID)
 
 	for i := 0; i < 360; i++ {
@@ -559,6 +584,19 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 				})
 			}
 
+			elapsed := time.Since(start)
+			if elapsed >= slowWaitForResultThreshold {
+				log.Printf(
+					"[simulator] transaction %s reached %s after %s (polls=%d, success=%t, events=%d)",
+					txID,
+					status,
+					elapsed,
+					i+1,
+					txResult.Success,
+					len(txResult.Events),
+				)
+			}
+
 			return txResult, nil
 		}
 
@@ -569,6 +607,7 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 		}
 	}
 
+	log.Printf("[simulator] transaction %s did not seal after %s", txID, time.Since(start))
 	return nil, fmt.Errorf("transaction %s did not seal after 180s", txID)
 }
 
@@ -576,6 +615,8 @@ func (c *Client) waitForResult(ctx context.Context, txID string) (*TxResult, err
 // This prevents the "pending block ... is currently being executed" race condition
 // when a new transaction is submitted immediately after the previous one seals.
 func (c *Client) WaitForBlockReady(ctx context.Context) error {
+	start := time.Now()
+	pendingPolls := 0
 	// Quick test: try a lightweight blocks query. If the emulator is still
 	// committing a block, any /v1/ endpoint may return 400 with "pending block".
 	for i := 0; i < 20; i++ {
@@ -591,9 +632,14 @@ func (c *Client) WaitForBlockReady(ctx context.Context) error {
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
+			elapsed := time.Since(start)
+			if elapsed >= slowClientOperationThreshold {
+				log.Printf("[simulator] emulator became block-ready after %s (pending_polls=%d)", elapsed, pendingPolls)
+			}
 			return nil // emulator is ready
 		}
 		if strings.Contains(string(body), "pending block") {
+			pendingPolls++
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -602,8 +648,13 @@ func (c *Client) WaitForBlockReady(ctx context.Context) error {
 			continue
 		}
 		// Non-pending-block error, assume ready
+		elapsed := time.Since(start)
+		if elapsed >= slowClientOperationThreshold {
+			log.Printf("[simulator] block-ready probe returned non-pending response after %s (status=%d)", elapsed, resp.StatusCode)
+		}
 		return nil
 	}
+	log.Printf("[simulator] emulator still had pending block after %s (pending_polls=%d)", time.Since(start), pendingPolls)
 	return fmt.Errorf("emulator still has pending block after 5s")
 }
 

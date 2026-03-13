@@ -59,8 +59,21 @@ const (
 )
 
 var (
-	cadenceAddressRe = regexp.MustCompile(`^(?:0x)?[0-9a-fA-F]{16}$`)
+	cadenceAddressRe  = regexp.MustCompile(`^(?:0x)?[0-9a-fA-F]{16}$`)
+	simulateRequestID atomic.Uint64
 )
+
+func nextSimRequestID() string {
+	return fmt.Sprintf("sim-%06d", simulateRequestID.Add(1))
+}
+
+func logSimStage(requestID, stage string, started time.Time, format string, args ...any) {
+	extra := ""
+	if format != "" {
+		extra = " " + fmt.Sprintf(format, args...)
+	}
+	log.Printf("[simulate %s] stage=%s elapsed=%s%s", requestID, stage, time.Since(started), extra)
+}
 
 // Handler serves the /api/simulate endpoint.
 // Requests are serialized via a mutex because the Flow Emulator
@@ -70,6 +83,7 @@ type Handler struct {
 	mu                sync.Mutex
 	emulatorContainer string
 	stuckTimeout      time.Duration
+	lastHealthyCheck  atomic.Int64 // unix timestamp of last successful emulator poll
 	lastBlockChange   atomic.Int64 // unix timestamp of last observed block height change
 	lastBlockHeight   atomic.Int64
 	recovering        atomic.Bool
@@ -116,6 +130,7 @@ func NewHandler(client *Client, emulatorContainer string, stuckTimeoutSec int) *
 		emulatorContainer: emulatorContainer,
 		stuckTimeout:      time.Duration(stuckTimeoutSec) * time.Second,
 	}
+	h.lastHealthyCheck.Store(time.Now().Unix())
 	h.lastBlockChange.Store(time.Now().Unix())
 	go h.warmupLoop()
 	go h.watchdog()
@@ -129,10 +144,15 @@ func (h *Handler) HealthStatus() HealthSnapshot {
 	if since < 0 {
 		since = 0
 	}
+	lastHealthy := time.Unix(h.lastHealthyCheck.Load(), 0)
+	sinceHealthy := time.Since(lastHealthy)
+	if sinceHealthy < 0 {
+		sinceHealthy = 0
+	}
 
 	return HealthSnapshot{
 		Recovering:           h.recovering.Load(),
-		Stalled:              since > h.stuckTimeout,
+		Stalled:              sinceHealthy > h.stuckTimeout,
 		LastSealedHeight:     h.lastBlockHeight.Load(),
 		SecondsSinceProgress: int64(since.Seconds()),
 		StuckTimeoutSeconds:  int64(h.stuckTimeout.Seconds()),
@@ -276,7 +296,7 @@ func (h *Handler) watchdog() {
 
 		if err != nil {
 			// Can't reach emulator or got "pending block" error — check how long it's been stuck
-			stuckSince := time.Unix(h.lastBlockChange.Load(), 0)
+			stuckSince := time.Unix(h.lastHealthyCheck.Load(), 0)
 			if time.Since(stuckSince) > h.stuckTimeout {
 				log.Printf("[watchdog] emulator stuck for %s (timeout=%s), recovering...",
 					time.Since(stuckSince).Round(time.Second), h.stuckTimeout)
@@ -284,6 +304,7 @@ func (h *Handler) watchdog() {
 			}
 			continue
 		}
+		h.lastHealthyCheck.Store(time.Now().Unix())
 
 		// Track block height changes
 		prev := h.lastBlockHeight.Load()
@@ -575,8 +596,12 @@ func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, ar
 
 // HandleSimulate processes a simulate request.
 func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
+	requestID := nextSimRequestID()
+	requestStart := time.Now()
+
 	var req SimulateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("[simulate %s] invalid request body after %s: %v", requestID, time.Since(requestStart), err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -586,6 +611,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Cadence == "" {
+		log.Printf("[simulate %s] rejected empty cadence after %s", requestID, time.Since(requestStart))
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -595,6 +621,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, _, err := normalizeScheduledOptions(req.Scheduled); err != nil {
+		log.Printf("[simulate %s] rejected invalid scheduled options after %s: %v", requestID, time.Since(requestStart), err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -608,6 +635,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		req.Authorizers[i] = normalizeAddress(a)
 	}
 	if err := validateSimulateRequest(req); err != nil {
+		log.Printf("[simulate %s] rejected invalid request after %s: %v", requestID, time.Since(requestStart), err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -621,7 +649,18 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	// Using the service account avoids slow state fetches for arbitrary payer addresses.
 	const serviceAccount = "e467b9dd11fa00df"
 
+	log.Printf(
+		"[simulate %s] request received cadence_bytes=%d args=%d authorizers=%d scheduled=%t verbose=%t",
+		requestID,
+		len(req.Cadence),
+		len(req.Arguments),
+		len(req.Authorizers),
+		req.Scheduled != nil,
+		req.Verbose,
+	)
+
 	if h.recovering.Load() {
+		log.Printf("[simulate %s] rejected while recovering after %s", requestID, time.Since(requestStart))
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -631,10 +670,13 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serialize: emulator can only execute one block at a time
+	lockStart := time.Now()
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	logSimStage(requestID, "queue_wait", lockStart, "")
 
 	if h.recovering.Load() {
+		log.Printf("[simulate %s] became unavailable while waiting for lock after %s", requestID, time.Since(requestStart))
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -644,7 +686,9 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure emulator has no pending block before starting
+	preReadyStart := time.Now()
 	if err := h.client.WaitForBlockReady(r.Context()); err != nil {
+		log.Printf("[simulate %s] pre-ready failed after %s: %v", requestID, time.Since(requestStart), err)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -652,11 +696,14 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	logSimStage(requestID, "wait_ready_pre", preReadyStart, "")
 
 	// Simulations must run against an isolated snapshot so transaction side
 	// effects never leak into the next request.
+	snapshotStart := time.Now()
 	snapName, err := h.createStateSnapshot(r.Context(), "sim")
 	if err != nil {
+		log.Printf("[simulate %s] snapshot create failed after %s: %v", requestID, time.Since(requestStart), err)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -664,6 +711,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s", snapName)
 
 	// Build and send the transaction
 	txReq := &TxRequest{
@@ -673,11 +721,21 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		Payer:       serviceAccount,
 	}
 
+	sendStart := time.Now()
 	result, err := h.client.SendTransaction(r.Context(), txReq)
+	txID := ""
+	if result != nil {
+		txID = result.TxID
+	}
+	logSimStage(requestID, "send_transaction", sendStart, "tx_id=%s err=%v", txID, err)
 	if err != nil {
 		// Still wait for block to settle and revert before releasing mutex.
+		waitStart := time.Now()
 		waitErr := h.client.WaitForBlockReady(r.Context())
+		logSimStage(requestID, "wait_ready_after_error", waitStart, "err=%v", waitErr)
+		revertStart := time.Now()
 		revertErr := h.revertStateSnapshot(r.Context(), snapName)
+		logSimStage(requestID, "snapshot_revert_after_error", revertStart, "err=%v", revertErr)
 		msg := "simulation failed: " + err.Error()
 		if waitErr != nil {
 			msg += "; emulator did not settle cleanly: " + waitErr.Error()
@@ -685,6 +743,7 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		if revertErr != nil {
 			msg += "; failed to restore emulator state: " + revertErr.Error()
 		}
+		log.Printf("[simulate %s] failed after %s: %s", requestID, time.Since(requestStart), msg)
 		w.WriteHeader(http.StatusBadGateway)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -695,8 +754,12 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 
 	// Wait for emulator to finish committing the block before releasing mutex.
 	// Without this, the next queued request may hit "pending block" errors.
+	postReadyStart := time.Now()
 	if err := h.client.WaitForBlockReady(r.Context()); err != nil {
+		logSimStage(requestID, "wait_ready_post", postReadyStart, "err=%v", err)
+		revertStart := time.Now()
 		revertErr := h.revertStateSnapshot(r.Context(), snapName)
+		logSimStage(requestID, "snapshot_revert_after_post_wait_error", revertStart, "err=%v", revertErr)
 		msg := "emulator did not settle after simulation: " + err.Error()
 		if revertErr != nil {
 			msg += "; failed to restore emulator state: " + revertErr.Error()
@@ -708,12 +771,17 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	logSimStage(requestID, "wait_ready_post", postReadyStart, "")
 
 	var scheduledResults []TxResult
 	if result.Success && req.Scheduled != nil {
+		scheduledStart := time.Now()
 		scheduledResults, err = h.executeScheduledBlocks(r.Context(), req.Scheduled)
+		logSimStage(requestID, "scheduled_blocks", scheduledStart, "count=%d err=%v", len(scheduledResults), err)
 		if err != nil {
+			revertStart := time.Now()
 			revertErr := h.revertStateSnapshot(r.Context(), snapName)
+			logSimStage(requestID, "snapshot_revert_after_scheduled_error", revertStart, "err=%v", revertErr)
 			msg := "scheduled transaction execution failed: " + err.Error()
 			if revertErr != nil {
 				msg += "; failed to restore emulator state: " + revertErr.Error()
@@ -739,14 +807,18 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 
 	parsedBalanceChanges := parseBalanceChanges(allEvents)
 	if len(parsedBalanceChanges) > 0 {
-		postBalances, err := h.fetchPostBalances(r.Context(), parsedBalanceChanges)
+		balanceStart := time.Now()
+		postBalances, err := h.fetchPostBalances(r.Context(), requestID, parsedBalanceChanges)
+		logSimStage(requestID, "fetch_post_balances", balanceStart, "addresses=%d err=%v", len(uniqueBalanceAddressesNeedingLookup(parsedBalanceChanges)), err)
 		if err != nil {
 			log.Printf("[simulator] warning: failed to enrich balances with before/after: %v", err)
 		}
 		resp.BalanceChanges = buildBalanceChanges(parsedBalanceChanges, postBalances)
 	}
 
+	revertStart := time.Now()
 	if err := h.revertStateSnapshot(r.Context(), snapName); err != nil {
+		logSimStage(requestID, "snapshot_revert", revertStart, "err=%v", err)
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(SimulateResponse{
 			Success: false,
@@ -754,9 +826,19 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	logSimStage(requestID, "snapshot_revert", revertStart, "")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(resp)
+	log.Printf(
+		"[simulate %s] completed total=%s success=%t events=%d balance_changes=%d scheduled_results=%d",
+		requestID,
+		time.Since(requestStart),
+		resp.Success,
+		len(resp.Events),
+		len(resp.BalanceChanges),
+		len(resp.ScheduledResults),
+	)
 }
 
 // balanceKey is used to aggregate balance changes by address+token.
@@ -771,11 +853,40 @@ type parsedBalanceChange struct {
 	Token           string
 	ContractAddress string
 	DeltaScaled     *big.Int
+	AfterHint       string
 }
 
 // parseBalanceChanges extracts token balance deltas from transaction events.
 func parseBalanceChanges(events []TxEvent) []parsedBalanceChange {
 	deltas := make(map[balanceKey]*big.Int)
+	afterHints := make(map[balanceKey]string)
+	baseFungibleKeys := make(map[balanceKey]struct{})
+
+	for _, ev := range events {
+		amount, address, key, balanceAfter, ok := parseFungibleBalanceChangeHint(ev)
+		if !ok {
+			continue
+		}
+
+		scaledAmount, err := parseUFix64Amount(amount)
+		if err != nil {
+			continue
+		}
+
+		if _, exists := deltas[key]; !exists {
+			deltas[key] = new(big.Int)
+		}
+		if strings.Contains(ev.Type, "Withdrawn") {
+			deltas[key].Sub(deltas[key], scaledAmount)
+		} else {
+			deltas[key].Add(deltas[key], scaledAmount)
+		}
+
+		baseFungibleKeys[key] = struct{}{}
+		if address != "" && balanceAfter != "" {
+			afterHints[key] = balanceAfter
+		}
+	}
 
 	for _, ev := range events {
 		evType := ev.Type
@@ -812,12 +923,16 @@ func parseBalanceChanges(events []TxEvent) []parsedBalanceChange {
 			continue
 		}
 
+		key := balanceKey{Address: address, Token: token, ContractAddress: contractAddress}
+		if _, ok := baseFungibleKeys[key]; ok {
+			continue
+		}
+
 		scaledAmount, err := parseUFix64Amount(amount)
 		if err != nil {
 			continue
 		}
 
-		key := balanceKey{Address: address, Token: token, ContractAddress: contractAddress}
 		if _, ok := deltas[key]; !ok {
 			deltas[key] = new(big.Int)
 		}
@@ -835,6 +950,7 @@ func parseBalanceChanges(events []TxEvent) []parsedBalanceChange {
 			Token:           key.Token,
 			ContractAddress: key.ContractAddress,
 			DeltaScaled:     new(big.Int).Set(delta),
+			AfterHint:       afterHints[key],
 		})
 	}
 
@@ -850,19 +966,21 @@ func buildBalanceChanges(parsed []parsedBalanceChange, postBalances map[balanceK
 			Delta:   formatScaledAmount(change.DeltaScaled),
 		}
 
-		if postBalances != nil {
-			key := balanceKey{
-				Address:         change.Address,
-				Token:           change.Token,
-				ContractAddress: change.ContractAddress,
-			}
-			if after, ok := postBalances[key]; ok {
-				afterScaled, err := parseUFix64Amount(after)
-				if err == nil {
-					beforeScaled := new(big.Int).Sub(new(big.Int).Set(afterScaled), change.DeltaScaled)
-					apiChange.After = formatScaledAmount(afterScaled)
-					apiChange.Before = formatScaledAmount(beforeScaled)
-				}
+		key := balanceKey{
+			Address:         change.Address,
+			Token:           change.Token,
+			ContractAddress: change.ContractAddress,
+		}
+		after := change.AfterHint
+		if after == "" && postBalances != nil {
+			after = postBalances[key]
+		}
+		if after != "" {
+			afterScaled, err := parseUFix64Amount(after)
+			if err == nil {
+				beforeScaled := new(big.Int).Sub(new(big.Int).Set(afterScaled), change.DeltaScaled)
+				apiChange.After = formatScaledAmount(afterScaled)
+				apiChange.Before = formatScaledAmount(beforeScaled)
 			}
 		}
 
@@ -871,22 +989,48 @@ func buildBalanceChanges(parsed []parsedBalanceChange, postBalances map[balanceK
 	return changes
 }
 
-func (h *Handler) fetchPostBalances(ctx context.Context, changes []parsedBalanceChange) (map[balanceKey]string, error) {
+func uniqueBalanceAddresses(changes []parsedBalanceChange) []string {
 	if len(changes) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(changes))
+	addresses := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if _, ok := seen[change.Address]; ok {
+			continue
+		}
+		seen[change.Address] = struct{}{}
+		addresses = append(addresses, change.Address)
+	}
+
+	return addresses
+}
+
+func (h *Handler) fetchPostBalances(ctx context.Context, requestID string, changes []parsedBalanceChange) (map[balanceKey]string, error) {
+	lookupAddresses := uniqueBalanceAddressesNeedingLookup(changes)
+	if len(lookupAddresses) == 0 {
 		return nil, nil
 	}
 
 	byAddress := make(map[string][]parsedBalanceChange)
 	for _, change := range changes {
+		if change.AfterHint != "" {
+			continue
+		}
 		byAddress[change.Address] = append(byAddress[change.Address], change)
 	}
 
 	results := make(map[balanceKey]string, len(changes))
-	for address, addressChanges := range byAddress {
+	for _, address := range lookupAddresses {
+		addressChanges := byAddress[address]
+		queryStart := time.Now()
 		balances, err := h.client.GetTokenBalances(ctx, address)
 		if err != nil {
+			logSimStage(requestID, "balance_query", queryStart, "address=%s err=%v", address, err)
 			return nil, fmt.Errorf("querying balances for %s: %w", address, err)
 		}
+		logSimStage(requestID, "balance_query", queryStart, "address=%s vaults=%d", address, len(balances))
 		for _, change := range addressChanges {
 			key := balanceKey{
 				Address:         change.Address,
@@ -898,6 +1042,107 @@ func (h *Handler) fetchPostBalances(ctx context.Context, changes []parsedBalance
 	}
 
 	return results, nil
+}
+
+func uniqueBalanceAddressesNeedingLookup(changes []parsedBalanceChange) []string {
+	if len(changes) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(changes))
+	addresses := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if change.AfterHint != "" {
+			continue
+		}
+		if _, ok := seen[change.Address]; ok {
+			continue
+		}
+		seen[change.Address] = struct{}{}
+		addresses = append(addresses, change.Address)
+	}
+
+	return addresses
+}
+
+func parseFungibleBalanceChangeHint(ev TxEvent) (amount string, address string, key balanceKey, balanceAfter string, ok bool) {
+	if !(strings.Contains(ev.Type, "FungibleToken.Withdrawn") || strings.Contains(ev.Type, "FungibleToken.Deposited")) {
+		return "", "", balanceKey{}, "", false
+	}
+
+	amount, address, vaultType, balanceAfter := parseFungibleBalanceEventPayload(ev.Payload)
+	if amount == "" || address == "" || vaultType == "" {
+		return "", "", balanceKey{}, "", false
+	}
+
+	contractAddress, token, ok := parseVaultIdentifier(vaultType)
+	if !ok {
+		return "", "", balanceKey{}, "", false
+	}
+
+	return amount, address, balanceKey{
+		Address:         address,
+		Token:           token,
+		ContractAddress: contractAddress,
+	}, balanceAfter, true
+}
+
+func parseFungibleBalanceEventPayload(payload json.RawMessage) (amount string, address string, vaultType string, balanceAfter string) {
+	if len(payload) == 0 {
+		return "", "", "", ""
+	}
+
+	var cadenceEvent struct {
+		Type  string `json:"type"`
+		Value struct {
+			Fields []struct {
+				Name  string          `json:"name"`
+				Value json.RawMessage `json:"value"`
+			} `json:"fields"`
+		} `json:"value"`
+	}
+	if err := json.Unmarshal(payload, &cadenceEvent); err != nil {
+		return "", "", "", ""
+	}
+
+	for _, field := range cadenceEvent.Value.Fields {
+		switch field.Name {
+		case "amount", "balanceAfter":
+			var val struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			}
+			if err := json.Unmarshal(field.Value, &val); err != nil {
+				continue
+			}
+			if field.Name == "amount" {
+				amount = val.Value
+			} else {
+				balanceAfter = val.Value
+			}
+		case "from", "to":
+			address = extractAddress(field.Value)
+		case "type":
+			var val struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			}
+			if err := json.Unmarshal(field.Value, &val); err == nil {
+				vaultType = val.Value
+			}
+		}
+	}
+
+	return amount, address, vaultType, balanceAfter
+}
+
+func parseVaultIdentifier(identifier string) (contractAddress string, token string, ok bool) {
+	parts := strings.Split(identifier, ".")
+	if len(parts) < 4 {
+		return "", "", false
+	}
+
+	return parts[len(parts)-3], parts[len(parts)-2], true
 }
 
 // parseCadenceEventPayload tries to extract amount and address from a Cadence JSON event payload.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -46,13 +47,39 @@ func main() {
 
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		health := handler.HealthStatus()
 		ok, err := client.HealthCheck(r.Context())
-		if !ok || err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"unhealthy","error":"` + err.Error() + `"}`))
-			return
+		status := "ok"
+		statusCode := http.StatusOK
+		emulatorErr := ""
+		if err != nil {
+			emulatorErr = err.Error()
 		}
-		w.Write([]byte(`{"status":"ok"}`))
+
+		switch {
+		case !ok || err != nil:
+			status = "unhealthy"
+			statusCode = http.StatusServiceUnavailable
+		case health.Recovering:
+			status = "recovering"
+			statusCode = http.StatusServiceUnavailable
+		case health.Stalled:
+			status = "stalled"
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		payload := map[string]any{
+			"status":           status,
+			"emulator_healthy": ok,
+			"health":           health,
+		}
+		if emulatorErr != "" {
+			payload["emulator_error"] = emulatorErr
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		_ = json.NewEncoder(w).Encode(payload)
 	})
 
 	// Simulate endpoint
