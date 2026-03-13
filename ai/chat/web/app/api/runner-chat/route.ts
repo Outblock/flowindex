@@ -344,5 +344,18 @@ export async function POST(req: Request) {
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+    sendReasoning: cfg.thinking,
+    messageMetadata({ part }) {
+      if (part.type === "finish") {
+        const anthropicMetadata = (part as any).providerMetadata?.anthropic;
+        return {
+          usage: (part as any).totalUsage ?? (part as any).usage,
+          model: cfg.model,
+          contextManagement: anthropicMetadata?.contextManagement,
+        };
+      }
+      return undefined;
+    },
+  });
 }

@@ -60,10 +60,10 @@ function ContextUsageIndicator({
   const dashOffset = circumference * (1 - usagePct);
 
   return (
-    <div className="relative ml-auto group/context">
+    <div className="relative self-center group/context shrink-0">
       <button
         type="button"
-        className="flex items-center gap-1 px-1.5 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border border-transparent hover:border-zinc-200 dark:hover:border-white/10 transition-all"
+        className="flex items-center gap-1 px-1 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all"
         title={`Context window usage (${modelLabel})`}
       >
         <span>{renderedPercent}</span>
@@ -1600,7 +1600,7 @@ export default function AIChatWidget() {
                 <form
                   onSubmit={(e) => { e.preventDefault(); if (!isStreaming) handleSend(input); }}
                 >
-                  {/* Textarea + send button row */}
+                  {/* Textarea + context + send button row */}
                   <div className="flex gap-2">
                     <textarea
                       ref={inputRef}
@@ -1617,6 +1617,13 @@ export default function AIChatWidget() {
                       className="flex-1 min-w-0 resize-none text-[16px] md:text-[13px] bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 rounded-sm px-3 py-2.5 text-zinc-700 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-nothing-green/40 transition-colors"
                       style={{ maxHeight: '120px' }}
                     />
+                    {lastUsage && (
+                      <ContextUsageIndicator
+                        usage={lastUsage}
+                        maxTokens={CONTEXT_WINDOW}
+                        modelLabel={CHAT_MODES.find((mode) => mode.key === chatMode)?.model || 'Claude'}
+                      />
+                    )}
                     {isStreaming ? (
                       <button
                         type="button"
@@ -1755,13 +1762,6 @@ export default function AIChatWidget() {
                           </div>
                         </div>
                       </div>
-                      {lastUsage && (
-                        <ContextUsageIndicator
-                          usage={lastUsage}
-                          maxTokens={CONTEXT_WINDOW}
-                          modelLabel={CHAT_MODES.find((mode) => mode.key === chatMode)?.model || 'Claude'}
-                        />
-                      )}
                   </div>
                 </div>
               </div>

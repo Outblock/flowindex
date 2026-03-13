@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
-import type { UIMessage } from 'ai';
+import type { UIMessage, LanguageModelUsage } from 'ai';
 import {
   Bot, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download,
   Search, ChevronRight, Code, Wrench, Zap, Scale, Brain, ChevronUp,
@@ -27,6 +27,63 @@ import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 import { executeCustodialTransaction } from '../flow/execute';
 
 const AI_CHAT_URL = import.meta.env.VITE_AI_CHAT_URL || 'https://ai.flowindex.io';
+const CONTEXT_WINDOW = 200_000;
+
+function formatCompactTokens(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+  }).format(value);
+}
+
+function ContextUsageIndicator({ usage, maxTokens, modelLabel }: {
+  usage: LanguageModelUsage; maxTokens: number; modelLabel: string;
+}) {
+  const usedTokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  const usagePct = maxTokens > 0 ? Math.min(usedTokens / maxTokens, 1) : 0;
+  const renderedPercent = new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(usagePct);
+  const radius = 8;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - usagePct);
+
+  return (
+    <div className="relative self-center group/context shrink-0">
+      <button
+        type="button"
+        className="flex items-center gap-1 px-1 py-1 rounded text-[10px] uppercase tracking-widest font-bold text-zinc-500 hover:text-zinc-300 transition-all"
+        title={`Context window usage (${modelLabel})`}
+      >
+        <span>{renderedPercent}</span>
+        <svg aria-hidden="true" className="shrink-0" width="16" height="16" viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r={radius} fill="none" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+          <circle cx="10" cy="10" r={radius} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+            strokeDasharray={`${circumference} ${circumference}`} strokeDashoffset={dashOffset} opacity="0.7"
+            style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }} />
+        </svg>
+      </button>
+      <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/context:block group-focus-within/context:block z-50">
+        <div className="w-48 rounded border border-zinc-700 bg-zinc-800 shadow-xl overflow-hidden">
+          <div className="px-3 py-2 border-b border-zinc-700">
+            <div className="flex items-center justify-between gap-3 text-[11px] text-zinc-400">
+              <span>{modelLabel}</span>
+              <span className="font-mono">{formatCompactTokens(usedTokens)} / {formatCompactTokens(maxTokens)}</span>
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-zinc-700 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(usagePct * 100, 100)}%` }} />
+            </div>
+          </div>
+          <div className="px-3 py-2 space-y-1 text-[11px] text-zinc-400">
+            <div className="flex justify-between"><span>Input</span><span className="font-mono">{formatCompactTokens(usage.inputTokens ?? 0)}</span></div>
+            <div className="flex justify-between"><span>Output</span><span className="font-mono">{formatCompactTokens(usage.outputTokens ?? 0)}</span></div>
+            {(usage.reasoningTokens ?? 0) > 0 && (
+              <div className="flex justify-between"><span>Reasoning</span><span className="font-mono">{formatCompactTokens(usage.reasoningTokens ?? 0)}</span></div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Types ── */
 
@@ -1880,6 +1937,19 @@ export default function AIPanel({
 
   const isStreaming = status === 'streaming' || status === 'submitted';
 
+  // Extract token usage from the last assistant message's metadata
+  const lastUsage = useMemo((): LanguageModelUsage | null => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const metadata = (msg as any).metadata as { usage?: LanguageModelUsage; model?: string } | undefined;
+      if (msg.role === 'assistant' && metadata?.usage) {
+        return metadata.usage;
+      }
+    }
+    return null;
+  }, [messages]);
+
   const handleStop = useCallback(() => {
     stoppedAtRef.current = Date.now();
     stop();
@@ -2096,6 +2166,13 @@ export default function AIPanel({
               className="flex-1 min-w-0 resize-none text-[12px] bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/40 transition-colors"
               style={{ maxHeight: '100px' }}
             />
+            {lastUsage && (
+              <ContextUsageIndicator
+                usage={lastUsage}
+                maxTokens={CONTEXT_WINDOW}
+                modelLabel={CHAT_MODES.find((m) => m.key === chatMode)?.model || 'Claude'}
+              />
+            )}
             {isStreaming ? (
               <button
                 type="button"

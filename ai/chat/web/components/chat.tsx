@@ -339,6 +339,13 @@ export function Chat() {
                 autoFocus
               />
               <PromptInputFooter className="!pb-2.5 !pt-0">
+                <ContextStatus
+                  contextWindow={CONTEXT_WINDOW}
+                  didCompactContext={didCompactContext}
+                  modelId={lastModel}
+                  lastUsage={lastUsage}
+                  mode={mode}
+                />
                 <PromptInputSubmit
                   status={status}
                   onStop={stop}
@@ -346,14 +353,6 @@ export function Chat() {
                 />
               </PromptInputFooter>
             </PromptInput>
-
-            <ContextStatus
-              contextWindow={CONTEXT_WINDOW}
-              didCompactContext={didCompactContext}
-              modelId={lastModel}
-              lastUsage={lastUsage}
-              mode={mode}
-            />
 
             <ComposerToolbar
               hideTools={hideTools}
@@ -516,7 +515,7 @@ function ContextStatus({
   if (!lastUsage) return null;
 
   return (
-    <div className="mt-1 flex items-center justify-end gap-2">
+    <div className="ml-auto flex items-center gap-2">
       {didCompactContext && (
         <span className="rounded-sm border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-400/80">
           Compacted
