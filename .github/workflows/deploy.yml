@@ -215,6 +215,7 @@ jobs:
               -e SKIP_MIGRATION=true \
               -e SIMULATOR_URL=${{ secrets.SIMULATOR_URL }} \
               -e SIMULATOR_ADMIN_URL=${{ secrets.SIMULATOR_ADMIN_URL }} \
+              -e BLOCKSCOUT_API_KEY=${{ secrets.BLOCKSCOUT_API_KEY }} \
               $IMAGE
           '
 

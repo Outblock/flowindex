@@ -1081,4 +1081,34 @@ CREATE INDEX IF NOT EXISTS idx_sched_tx_owner ON app.scheduled_transactions (han
 CREATE INDEX IF NOT EXISTS idx_sched_tx_status ON app.scheduled_transactions (status, scheduled_id DESC);
 CREATE INDEX IF NOT EXISTS idx_sched_tx_block ON app.scheduled_transactions (scheduled_block DESC);
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Blockscout EVM Metadata (synced periodically from Blockscout v2 API)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS app.evm_contracts (
+    address         BYTEA PRIMARY KEY,
+    name            TEXT,
+    abi             JSONB,
+    source_code     TEXT,
+    compiler        TEXT,
+    language        TEXT,
+    license         TEXT,
+    optimization    BOOLEAN,
+    proxy_type      TEXT,
+    impl_address    BYTEA,
+    verified_at     TIMESTAMPTZ,
+    synced_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app.evm_address_labels (
+    address         BYTEA PRIMARY KEY,
+    name            TEXT,
+    tags            TEXT[],
+    is_contract     BOOLEAN,
+    is_verified     BOOLEAN,
+    token_name      TEXT,
+    token_symbol    TEXT,
+    synced_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
 COMMIT;

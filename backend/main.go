@@ -1307,6 +1307,21 @@ func main() {
 		log.Println("Network Poller is DISABLED (ENABLE_NETWORK_POLLER=false)")
 	}
 
+	// Start Blockscout Metadata Sync (verified contracts + address labels)
+	enableBlockscoutSync := os.Getenv("ENABLE_BLOCKSCOUT_SYNC") != "false"
+	if enableBlockscoutSync {
+		syncIntervalMin := getEnvInt("BLOCKSCOUT_SYNC_INTERVAL_MIN", 60)
+		bsSync := ingester.NewBlockscoutSync(repo, syncIntervalMin)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			bsSync.Start(ctx)
+		}()
+	} else {
+		log.Println("Blockscout Sync is DISABLED (ENABLE_BLOCKSCOUT_SYNC=false)")
+	}
+
 	// Start Lookup Repair Job (optional)
 	enableLookupRepair := os.Getenv("ENABLE_LOOKUP_REPAIR") == "true"
 	if enableLookupRepair {
