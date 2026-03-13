@@ -3,7 +3,6 @@ package ingester
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"log"
 	"strings"
 	"sync"
@@ -66,58 +65,90 @@ func (s *BlockscoutSync) syncVerifiedContracts(ctx context.Context) {
 		since = ""
 	}
 
-	contracts, err := s.client.FetchVerifiedContracts(ctx, since)
+	// Phase 1: Get list of new verified contracts (no ABI/source in list response)
+	listItems, err := s.client.FetchVerifiedContractsList(ctx, since)
 	if err != nil {
-		log.Printf("[blockscout_sync] fetch contracts error: %v", err)
+		log.Printf("[blockscout_sync] fetch contracts list error: %v", err)
 	}
-	if len(contracts) == 0 {
+	if len(listItems) == 0 {
 		log.Printf("[blockscout_sync] contracts: 0 new (since=%s)", since)
 		return
 	}
 
+	log.Printf("[blockscout_sync] contracts: %d new, fetching details...", len(listItems))
+
+	// Phase 2: Fetch full detail (ABI + source) for each contract, concurrency-limited
+	const concurrency = 5
+	sem := make(chan struct{}, concurrency)
+	var mu sync.Mutex
 	var rows []repository.EVMContractRow
-	for _, c := range contracts {
-		addr := hexToBytes(c.Address.Hash)
-		if addr == nil {
-			continue
-		}
 
-		var implAddr []byte
-		if len(c.Address.Implementations) > 0 {
-			implAddr = hexToBytes(c.Address.Implementations[0].Address)
-		}
+	var wg sync.WaitGroup
+	for _, item := range listItems {
+		addrHash := item.Address.Hash
 
-		var abiJSON json.RawMessage
-		if len(c.ABI) > 0 && string(c.ABI) != "null" {
-			abiJSON = c.ABI
-		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(item blockscoutSmartContractListItem) {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		var verifiedAt *time.Time
-		if c.VerifiedAt != "" {
-			if t, err := time.Parse(time.RFC3339Nano, c.VerifiedAt); err == nil {
-				verifiedAt = &t
+			detail, err := s.client.FetchContractDetail(ctx, addrHash)
+			if err != nil {
+				log.Printf("[blockscout_sync] fetch detail for %s error: %v", addrHash, err)
+				// Fall back to list-level data (no ABI/source)
+				detail = nil
 			}
-		}
 
-		name := c.Name
-		if name == "" {
-			name = c.Address.Name
-		}
+			addr := hexToBytes(addrHash)
+			if addr == nil {
+				return
+			}
 
-		rows = append(rows, repository.EVMContractRow{
-			Address:      addr,
-			Name:         name,
-			ABI:          abiJSON,
-			SourceCode:   c.SourceCode,
-			Compiler:     c.CompilerVersion,
-			Language:     c.Language,
-			License:      c.LicenseType,
-			Optimization: c.OptimizationEnabled,
-			ProxyType:    c.Address.ProxyType,
-			ImplAddress:  implAddr,
-			VerifiedAt:   verifiedAt,
-		})
+			row := repository.EVMContractRow{
+				Address:      addr,
+				Name:         item.Name,
+				Compiler:     item.CompilerVersion,
+				Language:     item.Language,
+				License:      item.LicenseType,
+				Optimization: item.OptimizationEnabled,
+				ProxyType:    item.Address.ProxyType,
+			}
+
+			if item.Name == "" {
+				row.Name = item.Address.Name
+			}
+
+			if len(item.Address.Implementations) > 0 {
+				row.ImplAddress = hexToBytes(item.Address.Implementations[0].Address)
+			}
+
+			if item.VerifiedAt != "" {
+				if t, err := time.Parse(time.RFC3339Nano, item.VerifiedAt); err == nil {
+					row.VerifiedAt = &t
+				}
+			}
+
+			// Enrich with detail data (ABI + source)
+			if detail != nil {
+				if len(detail.ABI) > 0 && string(detail.ABI) != "null" {
+					row.ABI = detail.ABI
+				}
+				row.SourceCode = detail.SourceCode
+				if detail.ProxyType != "" {
+					row.ProxyType = detail.ProxyType
+				}
+				if len(detail.Implementations) > 0 {
+					row.ImplAddress = hexToBytes(detail.Implementations[0].Address)
+				}
+			}
+
+			mu.Lock()
+			rows = append(rows, row)
+			mu.Unlock()
+		}(item)
 	}
+	wg.Wait()
 
 	if len(rows) > 0 {
 		if err := s.repo.UpsertEVMContracts(ctx, rows); err != nil {

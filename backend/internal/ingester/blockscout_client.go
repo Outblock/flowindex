@@ -33,20 +33,25 @@ func newBlockscoutClient() *blockscoutClient {
 	}
 }
 
-func (c *blockscoutClient) newRequest(ctx context.Context, url string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (c *blockscoutClient) newRequest(ctx context.Context, rawURL string) (*http.Request, error) {
+	// Blockscout requires apikey as a query param (header auth doesn't bypass rate limits)
+	if c.apiKey != "" {
+		sep := "?"
+		if strings.Contains(rawURL, "?") {
+			sep = "&"
+		}
+		rawURL += sep + "apikey=" + c.apiKey
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
 	return req, nil
 }
 
-// blockscoutSmartContract represents a verified contract from the Blockscout API.
-type blockscoutSmartContract struct {
+// blockscoutSmartContractListItem represents a contract from the list endpoint.
+type blockscoutSmartContractListItem struct {
 	Address struct {
 		Hash           string `json:"hash"`
 		Name           string `json:"name"`
@@ -58,14 +63,29 @@ type blockscoutSmartContract struct {
 			Name    string `json:"name"`
 		} `json:"implementations"`
 	} `json:"address"`
+	Name                string `json:"name"`
+	CompilerVersion     string `json:"compiler_version"`
+	Language            string `json:"language"`
+	LicenseType         string `json:"license_type"`
+	OptimizationEnabled bool   `json:"optimization_enabled"`
+	VerifiedAt          string `json:"verified_at"`
+}
+
+// blockscoutContractDetail represents the full contract detail (with ABI + source).
+type blockscoutContractDetail struct {
 	Name                string          `json:"name"`
+	ABI                 json.RawMessage `json:"abi"`
+	SourceCode          string          `json:"source_code"`
 	CompilerVersion     string          `json:"compiler_version"`
 	Language            string          `json:"language"`
 	LicenseType         string          `json:"license_type"`
 	OptimizationEnabled bool            `json:"optimization_enabled"`
 	VerifiedAt          string          `json:"verified_at"`
-	ABI                 json.RawMessage `json:"abi"`
-	SourceCode          string          `json:"source_code"`
+	ProxyType           string          `json:"proxy_type"`
+	Implementations     []struct {
+		Address string `json:"address"`
+		Name    string `json:"name"`
+	} `json:"implementations"`
 }
 
 // blockscoutAddress represents an address from the Blockscout API.
@@ -83,14 +103,14 @@ type blockscoutAddress struct {
 	} `json:"token"`
 }
 
-// FetchVerifiedContracts paginates through the verified contracts list.
-// Returns all contracts with verified_at > since (empty string = all).
-func (c *blockscoutClient) FetchVerifiedContracts(ctx context.Context, since string) ([]blockscoutSmartContract, error) {
+// FetchVerifiedContractsList paginates through the verified contracts list.
+// Returns list items (without ABI/source). Use FetchContractDetail for full data.
+func (c *blockscoutClient) FetchVerifiedContractsList(ctx context.Context, since string) ([]blockscoutSmartContractListItem, error) {
 	if c.baseURL == "" {
 		return nil, nil
 	}
 
-	var all []blockscoutSmartContract
+	var all []blockscoutSmartContractListItem
 	nextParams := ""
 
 	for {
@@ -120,8 +140,8 @@ func (c *blockscoutClient) FetchVerifiedContracts(ctx context.Context, since str
 		}
 
 		var result struct {
-			Items          []blockscoutSmartContract `json:"items"`
-			NextPageParams map[string]interface{}    `json:"next_page_params"`
+			Items          []blockscoutSmartContractListItem `json:"items"`
+			NextPageParams map[string]interface{}            `json:"next_page_params"`
 		}
 		if err := json.Unmarshal(body, &result); err != nil {
 			return all, fmt.Errorf("decode response: %w", err)
@@ -161,6 +181,42 @@ func (c *blockscoutClient) FetchVerifiedContracts(ctx context.Context, since str
 	}
 
 	return all, nil
+}
+
+// FetchContractDetail fetches full contract data (ABI, source code) for a single address.
+func (c *blockscoutClient) FetchContractDetail(ctx context.Context, evmAddress string) (*blockscoutContractDetail, error) {
+	if c.baseURL == "" || evmAddress == "" {
+		return nil, nil
+	}
+
+	addr := strings.TrimPrefix(strings.ToLower(evmAddress), "0x")
+	url := fmt.Sprintf("%s/api/v2/smart-contracts/0x%s", c.baseURL, addr)
+
+	req, err := c.newRequest(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d for contract 0x%s", resp.StatusCode, addr)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10MB for source code
+	if err != nil {
+		return nil, err
+	}
+
+	var result blockscoutContractDetail
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // FetchAddress fetches metadata for a single address.
