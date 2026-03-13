@@ -27,6 +27,8 @@ import {
   Check,
   Loader2,
   X,
+  Share2,
+  Link,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -82,6 +84,7 @@ import {
   ContextCacheUsage,
 } from "@/components/ai-elements/context";
 
+import { shareSession, unshareSession } from "@/lib/chat-store";
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
 import { FlowLogo } from "./flow-logo";
@@ -195,10 +198,48 @@ type ChatMessageMetadata = {
   };
 };
 
-export function Chat() {
+interface ChatProps {
+  sessionId: string;
+  userId: string | null;
+}
+
+export function Chat({ sessionId, userId }: ChatProps) {
   const { mode, selectMode } = useModelSelector();
   const modeRef = useRef(mode);
   modeRef.current = mode;
+
+  // Share dialog state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = useCallback(async () => {
+    setShareLoading(true);
+    setShareDialogOpen(true);
+    const result = await shareSession(sessionId);
+    if (result) {
+      setShareUrl(result.share_url);
+    }
+    setShareLoading(false);
+  }, [sessionId]);
+
+  const handleUnshare = useCallback(async () => {
+    setShareLoading(true);
+    const ok = await unshareSession(sessionId);
+    if (ok) {
+      setShareUrl(null);
+      setShareDialogOpen(false);
+    }
+    setShareLoading(false);
+  }, [sessionId]);
+
+  const handleCopyShareUrl = useCallback(() => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  }, [shareUrl]);
 
   const modeFetch = useCallback(async (url: RequestInfo | URL, init?: RequestInit) => {
     if (init?.body) {
@@ -359,10 +400,86 @@ export function Chat() {
               mode={mode}
               selectMode={selectMode}
               setHideTools={setHideTools}
+              showShare={!!userId && messages.length > 0}
+              onShare={handleShare}
             />
           </PromptInputProvider>
         </div>
       </div>
+
+      {/* Share Dialog */}
+      <AnimatePresence>
+        {shareDialogOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={() => setShareDialogOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.15 }}
+              className="w-full max-w-md mx-4 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[15px] font-semibold text-white flex items-center gap-2">
+                  <Share2 size={16} />
+                  Share Conversation
+                </h2>
+                <button
+                  onClick={() => setShareDialogOpen(false)}
+                  className="p-1 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p className="text-[12px] text-zinc-400 mb-4 leading-relaxed">
+                Anyone with the link can view a read-only copy of this conversation.
+              </p>
+
+              {shareLoading && !shareUrl ? (
+                <div className="flex items-center gap-2 text-[12px] text-zinc-400 py-4">
+                  <Loader2 size={14} className="animate-spin" />
+                  Generating share link...
+                </div>
+              ) : shareUrl ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-sm text-[12px] text-zinc-300 font-mono overflow-hidden">
+                      <Link size={12} className="shrink-0 text-zinc-500" />
+                      <span className="truncate">{shareUrl}</span>
+                    </div>
+                    <button
+                      onClick={handleCopyShareUrl}
+                      className="shrink-0 px-3 py-2 bg-[var(--flow-green)] text-black text-[12px] font-semibold rounded-sm hover:bg-[var(--flow-green-dim)] transition-colors flex items-center gap-1.5"
+                    >
+                      {shareCopied ? <Check size={12} /> : <Copy size={12} />}
+                      {shareCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={handleUnshare}
+                    disabled={shareLoading}
+                    className="text-[11px] text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  >
+                    <X size={10} />
+                    Revoke share link
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[12px] text-red-400">Failed to generate share link. Please try again.</p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -547,11 +664,15 @@ function ComposerToolbar({
   mode,
   selectMode,
   setHideTools,
+  showShare,
+  onShare,
 }: {
   hideTools: boolean;
   mode: ChatMode;
   selectMode: (mode: ChatMode) => void;
   setHideTools: React.Dispatch<React.SetStateAction<boolean>>;
+  showShare?: boolean;
+  onShare?: () => void;
 }) {
   const attachments = usePromptInputAttachments();
 
@@ -678,6 +799,18 @@ function ComposerToolbar({
           </div>
         </div>
       </div>
+
+      {showShare && (
+        <button
+          type="button"
+          onClick={onShare}
+          className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] border border-transparent hover:border-white/10 transition-all ml-auto"
+          title="Share conversation"
+        >
+          <Share2 size={10} />
+          Share
+        </button>
+      )}
     </div>
   );
 }

@@ -105,7 +105,14 @@ export function Sidebar({ activeSessionId, onSelectSession, onNewChat, refreshKe
                   : "text-zinc-400 hover:text-white hover:bg-white/[0.03]"
               }`}
             >
-              <span className="truncate flex-1">{s.title}</span>
+              <span className="truncate flex-1">
+                {s.title}
+                {s.source === "widget" && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-zinc-700 text-zinc-400 rounded">
+                    widget
+                  </span>
+                )}
+              </span>
               <button
                 onClick={(e) => handleDelete(e, s.id)}
                 className="hidden group-hover:flex p-0.5 text-zinc-500 hover:text-red-400 transition-colors"
