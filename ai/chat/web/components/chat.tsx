@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import type { UIMessage } from "ai";
+import type { UIMessage, LanguageModelUsage } from "ai";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   Database,
@@ -60,6 +60,17 @@ import {
   SourcesContent,
   Source,
 } from "@/components/ai-elements/sources";
+import {
+  Context,
+  ContextTrigger,
+  ContextContent,
+  ContextContentHeader,
+  ContextContentBody,
+  ContextInputUsage,
+  ContextOutputUsage,
+  ContextReasoningUsage,
+  ContextCacheUsage,
+} from "@/components/ai-elements/context";
 
 import { SqlResultTable } from "./sql-result-table";
 import { ChartArtifact } from "./chart-artifact";
@@ -189,6 +200,18 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [hideTools, setHideTools] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Extract token usage from the last assistant message's metadata
+  const CONTEXT_WINDOW = 200_000;
+  const lastUsage = useMemo((): LanguageModelUsage | null => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && (msg as any).metadata?.usage) {
+        return (msg as any).metadata.usage as LanguageModelUsage;
+      }
+    }
+    return null;
+  }, [messages]);
 
   const handleSend = useCallback(
     (text: string) => {
@@ -435,6 +458,29 @@ export function Chat() {
                 </div>
               </div>
             </div>
+
+            {/* Context window usage — right-aligned */}
+            {lastUsage && (
+              <div className="ml-auto">
+                <Context
+                  usedTokens={(lastUsage.inputTokens ?? 0) + (lastUsage.outputTokens ?? 0)}
+                  maxTokens={CONTEXT_WINDOW}
+                  usage={lastUsage}
+                  modelId={CHAT_MODES.find(m => m.key === mode)?.model}
+                >
+                  <ContextTrigger className="!h-7 !px-1.5 !py-0 !text-[10px] !gap-1 text-zinc-500 hover:text-zinc-300" />
+                  <ContextContent side="top" align="end" className="bg-zinc-900 border-white/10">
+                    <ContextContentHeader className="text-zinc-300" />
+                    <ContextContentBody className="space-y-1">
+                      <ContextInputUsage className="text-zinc-400" />
+                      <ContextOutputUsage className="text-zinc-400" />
+                      <ContextReasoningUsage className="text-zinc-400" />
+                      <ContextCacheUsage className="text-zinc-400" />
+                    </ContextContentBody>
+                  </ContextContent>
+                </Context>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -548,6 +594,21 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
 
             if (part.type === "text") {
               if (!part.text.trim()) return null;
+              // Compaction summaries — Claude condensed old context
+              const isCompaction =
+                (part.providerMetadata?.anthropic as { type?: string } | undefined)
+                  ?.type === "compaction";
+              if (isCompaction) {
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-amber-500/70 bg-amber-500/5 border border-amber-500/10 rounded-sm"
+                  >
+                    <Sparkles size={10} className="shrink-0" />
+                    <span>Context compacted</span>
+                  </div>
+                );
+              }
               return <MessageResponse key={i}>{part.text}</MessageResponse>;
             }
 

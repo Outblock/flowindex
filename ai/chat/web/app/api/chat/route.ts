@@ -66,8 +66,7 @@ type ChatMode = keyof typeof MODE_CONFIG;
  * Strip failed/errored tool invocations from message parts — they add no
  * value to the conversation and waste tokens. Compaction handles the rest.
  */
-function stripFailedToolCalls(m: Record<string, unknown>): Record<string, unknown> {
-  if (!Array.isArray(m.parts)) return m;
+function stripFailedToolCalls(m: UIMessage): UIMessage {
   const parts = (m.parts as any[]).filter((part: any) => {
     if (
       part.type === "tool-invocation" &&
@@ -80,10 +79,10 @@ function stripFailedToolCalls(m: Record<string, unknown>): Record<string, unknow
 
   // If all parts were stripped, keep a minimal text part so the message isn't empty
   if (parts.length === 0) {
-    return { ...m, parts: [{ type: "text", text: "(tool calls failed)" }] };
+    return { ...m, parts: [{ type: "text" as const, text: "(tool calls failed)" }] } as UIMessage;
   }
 
-  return { ...m, parts };
+  return { ...m, parts } as UIMessage;
 }
 
 // Try to connect to an MCP server and fetch its tools. Returns empty on failure.
@@ -158,7 +157,7 @@ export async function POST(req: Request) {
   ]);
 
   // Strip failed tool calls before sending to the API
-  const cleanedMessages = messages.map(stripFailedToolCalls) as UIMessage[];
+  const cleanedMessages = messages.map(stripFailedToolCalls);
 
   const result = streamText({
     model: anthropic(cfg.model),
@@ -298,5 +297,15 @@ export async function POST(req: Request) {
 
   return result.toUIMessageStreamResponse({
     sendReasoning: cfg.thinking,
+    messageMetadata({ part }) {
+      // Send token usage on finish so the client can show context window usage
+      if (part.type === "finish") {
+        return {
+          usage: (part as any).totalUsage ?? (part as any).usage,
+          model: cfg.model,
+        };
+      }
+      return undefined;
+    },
   });
 }
