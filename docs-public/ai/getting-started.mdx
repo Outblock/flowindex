@@ -92,10 +92,15 @@ pip install -r requirements.txt
 python server.py
 ```
 
-This starts the Vanna v2 agent server on port 8084 with:
+This starts the dual-target Vanna server on port 8084 with:
 - A web UI at `http://localhost:8084`
 - REST API endpoints at `http://localhost:8084/api/v1/`
 - Auto-generated API docs at `http://localhost:8084/docs`
+
+Target-specific endpoints:
+- FlowIndex: `/api/v1/flowindex/ask`, `/api/v1/flowindex/generate_sql`, `/api/v1/flowindex/run_sql`
+- Flow EVM: `/api/v1/evm/ask`, `/api/v1/evm/generate_sql`, `/api/v1/evm/run_sql`
+- Legacy alias: `/api/v1/ask` still points to FlowIndex
 
 ### 2. Start the MCP Server
 
@@ -106,7 +111,20 @@ cd ai/chat
 python mcp_server.py
 ```
 
-This starts the MCP server on port 8085, exposing tools (`run_flowindex_sql`, `run_evm_sql`, `run_cadence`) and resources (database schemas, documentation).
+This starts the MCP server on port 8085, exposing query tools such as `ask_flowindex_vanna`, `ask_evm_vanna`, `run_flowindex_sql`, `run_evm_sql`, and `run_cadence`.
+
+### Optional: Start With Remote DB URLs
+
+If you already have remote DB URLs, you can put them in `ai/chat/.env` and start directly:
+
+```bash
+cd ai/chat
+cp .env.example .env
+# fill FLOWINDEX_DATABASE_URL, BLOCKSCOUT_DATABASE_URL, ANTHROPIC_API_KEY
+bash start-local.sh --direct-db
+```
+
+If the databases are only reachable from GCP private networking, omit `--direct-db` and `start-local.sh` will fetch the URLs from the backend VM and open IAP tunnels for you.
 
 ### 3. Start the Web Frontend
 
@@ -139,18 +157,23 @@ The nginx reverse proxy on port 80 routes traffic to the appropriate backend ser
 The Python backend exposes a REST API for programmatic access:
 
 ```bash
-# Ask a question (generates SQL, executes it, returns results)
-curl -X POST http://localhost:8084/api/v1/ask \
+# Ask a FlowIndex question (generates SQL, executes it, returns results)
+curl -X POST http://localhost:8084/api/v1/flowindex/ask \
   -H "Content-Type: application/json" \
   -d '{"question": "What are the 10 most recent blocks?"}'
 
-# Generate SQL only (no execution)
-curl -X POST http://localhost:8084/api/v1/generate_sql \
+# Ask an EVM / Blockscout question
+curl -X POST http://localhost:8084/api/v1/evm/ask \
   -H "Content-Type: application/json" \
-  -d '{"question": "How many transactions happened today?"}'
+  -d '{"question": "Who are the top 10 WFLOW holders?"}'
 
-# Execute raw SQL (SELECT only)
-curl -X POST http://localhost:8084/api/v1/run_sql \
+# Generate FlowIndex SQL only (no execution)
+curl -X POST http://localhost:8084/api/v1/flowindex/generate_sql \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many native Flow transactions happened today?"}'
+
+# Execute raw FlowIndex SQL (SELECT only)
+curl -X POST http://localhost:8084/api/v1/flowindex/run_sql \
   -H "Content-Type: application/json" \
   -d '{"sql": "SELECT height, timestamp FROM raw.blocks ORDER BY height DESC LIMIT 5"}'
 
