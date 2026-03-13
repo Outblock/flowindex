@@ -235,6 +235,25 @@ func (r *Repository) UpsertEVMContracts(ctx context.Context, rows []EVMContractR
 	return tx.Commit(ctx)
 }
 
+// GetEVMContractsMissingABI returns addresses of contracts that have no ABI (for backfill).
+func (r *Repository) GetEVMContractsMissingABI(ctx context.Context, limit int) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT encode(address, 'hex')
+		FROM app.evm_contracts
+		WHERE abi IS NULL
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (string, error) {
+		var addr string
+		err := row.Scan(&addr)
+		return addr, err
+	})
+}
+
 // GetUnlabeledEVMAddresses returns EVM addresses from evm_transactions that
 // are not yet in evm_address_labels (or are stale > 7 days). Limited to `limit` rows.
 func (r *Repository) GetUnlabeledEVMAddresses(ctx context.Context, limit int) ([][]byte, error) {

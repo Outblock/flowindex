@@ -54,6 +54,7 @@ func (s *BlockscoutSync) run(ctx context.Context) {
 	defer cancel()
 
 	s.syncVerifiedContracts(fetchCtx)
+	s.backfillContractDetails(fetchCtx)
 	s.syncAddressLabels(fetchCtx)
 }
 
@@ -155,6 +156,87 @@ func (s *BlockscoutSync) syncVerifiedContracts(ctx context.Context) {
 			log.Printf("[blockscout_sync] upsert contracts error: %v", err)
 		} else {
 			log.Printf("[blockscout_sync] contracts: upserted %d", len(rows))
+		}
+	}
+}
+
+// backfillContractDetails fetches ABI + source code for contracts that were
+// synced without them (e.g. from a previous version that only used the list endpoint).
+func (s *BlockscoutSync) backfillContractDetails(ctx context.Context) {
+	addrs, err := s.repo.GetEVMContractsMissingABI(ctx, 200)
+	if err != nil {
+		log.Printf("[blockscout_sync] get contracts missing ABI error: %v", err)
+		return
+	}
+	if len(addrs) == 0 {
+		return
+	}
+
+	log.Printf("[blockscout_sync] backfill: %d contracts missing ABI", len(addrs))
+
+	const concurrency = 5
+	sem := make(chan struct{}, concurrency)
+	var mu sync.Mutex
+	var rows []repository.EVMContractRow
+
+	var wg sync.WaitGroup
+	for _, addrHex := range addrs {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(addrHex string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			detail, err := s.client.FetchContractDetail(ctx, addrHex)
+			if err != nil {
+				log.Printf("[blockscout_sync] backfill detail for 0x%s error: %v", addrHex, err)
+				return
+			}
+			if detail == nil {
+				return
+			}
+
+			addr := hexToBytes(addrHex)
+			if addr == nil {
+				return
+			}
+
+			row := repository.EVMContractRow{
+				Address:      addr,
+				Name:         detail.Name,
+				Compiler:     detail.CompilerVersion,
+				Language:     detail.Language,
+				License:      detail.LicenseType,
+				Optimization: detail.OptimizationEnabled,
+				ProxyType:    detail.ProxyType,
+			}
+
+			if len(detail.ABI) > 0 && string(detail.ABI) != "null" {
+				row.ABI = detail.ABI
+			}
+			row.SourceCode = detail.SourceCode
+
+			if detail.VerifiedAt != "" {
+				if t, err := time.Parse(time.RFC3339Nano, detail.VerifiedAt); err == nil {
+					row.VerifiedAt = &t
+				}
+			}
+			if len(detail.Implementations) > 0 {
+				row.ImplAddress = hexToBytes(detail.Implementations[0].Address)
+			}
+
+			mu.Lock()
+			rows = append(rows, row)
+			mu.Unlock()
+		}(addrHex)
+	}
+	wg.Wait()
+
+	if len(rows) > 0 {
+		if err := s.repo.UpsertEVMContracts(ctx, rows); err != nil {
+			log.Printf("[blockscout_sync] backfill upsert error: %v", err)
+		} else {
+			log.Printf("[blockscout_sync] backfill: updated %d contracts with ABI/source", len(rows))
 		}
 	}
 }
