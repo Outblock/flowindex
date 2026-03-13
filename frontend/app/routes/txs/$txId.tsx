@@ -1529,7 +1529,7 @@ function TransactionDetail() {
                                                     <div className="flex items-center gap-1 text-[11px] text-zinc-500 justify-end">
                                                         {row.from ? (
                                                             <span className="inline-flex items-center gap-1">
-                                                                <span className="text-zinc-400 dark:text-zinc-600">From</span> <AddressLink address={row.from} prefixLen={6} suffixLen={4} size={12} className="text-[11px]" />
+                                                                <span className="text-zinc-400 dark:text-zinc-600">From</span> <AddressLink address={row.from} prefixLen={6} suffixLen={4} size={16} className="text-[11px]" />
                                                             </span>
                                                         ) : <span />}
                                                     </div>
@@ -1541,7 +1541,7 @@ function TransactionDetail() {
                                                     <div className="flex items-center gap-1 text-[11px] text-zinc-500">
                                                         {row.to ? (
                                                             <span className="inline-flex items-center gap-1">
-                                                                <span className="text-zinc-400 dark:text-zinc-600">To</span> <AddressLink address={row.to} prefixLen={6} suffixLen={4} size={12} className="text-[11px]" />
+                                                                <span className="text-zinc-400 dark:text-zinc-600">To</span> <AddressLink address={row.to} prefixLen={6} suffixLen={4} size={16} className="text-[11px]" />
                                                             </span>
                                                         ) : <span />}
                                                     </div>
