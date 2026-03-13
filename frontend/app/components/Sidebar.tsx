@@ -13,22 +13,29 @@ export default function Sidebar() {
     const { theme, toggleTheme } = useTheme();
     const { fontFamily, pixelVariant, setFontFamily, setPixelVariant } = useFont();
     const [fontMenuOpen, setFontMenuOpen] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('sidebarCollapsed');
-            if (saved !== null) return saved === 'true';
-        }
-        return location.pathname.startsWith('/developer') || location.pathname.startsWith('/playground');
-    });
-    const [autoCollapse, setAutoCollapse] = useState(() => {
-        if (typeof window !== 'undefined') return localStorage.getItem('sidebarAutoCollapse') === 'true';
-        return false;
-    });
+    // SSR-safe defaults: start collapsed to avoid flash-of-expanded on refresh
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [autoCollapse, setAutoCollapse] = useState(false);
     const [hoverExpanded, setHoverExpanded] = useState(false);
+    const [hydrated, setHydrated] = useState(false);
 
-    // Persist sidebar state to localStorage
-    useEffect(() => { localStorage.setItem('sidebarCollapsed', String(isCollapsed)); }, [isCollapsed]);
-    useEffect(() => { localStorage.setItem('sidebarAutoCollapse', String(autoCollapse)); }, [autoCollapse]);
+    // Read persisted state after hydration to avoid SSR mismatch
+    useEffect(() => {
+        const savedCollapsed = localStorage.getItem('sidebarCollapsed');
+        const savedAutoCollapse = localStorage.getItem('sidebarAutoCollapse') === 'true';
+        if (savedCollapsed !== null) {
+            setIsCollapsed(savedCollapsed === 'true');
+        } else {
+            // Default: collapse on developer/playground paths
+            setIsCollapsed(location.pathname.startsWith('/developer') || location.pathname.startsWith('/playground'));
+        }
+        setAutoCollapse(savedAutoCollapse);
+        setHydrated(true);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Persist sidebar state to localStorage (only after hydration to avoid writing SSR defaults)
+    useEffect(() => { if (hydrated) localStorage.setItem('sidebarCollapsed', String(isCollapsed)); }, [isCollapsed, hydrated]);
+    useEffect(() => { if (hydrated) localStorage.setItem('sidebarAutoCollapse', String(autoCollapse)); }, [autoCollapse, hydrated]);
     const { isOpen: isMobileOpen, close: closeMobileMenu } = useMobileMenu();
 
     // Auto-collapse when entering Developer Portal or Playground, auto-expand when leaving
