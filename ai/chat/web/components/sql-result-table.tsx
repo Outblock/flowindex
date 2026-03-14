@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Download, Search } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Download, Search, Table, Filter } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface SqlResult {
   columns: string[];
   rows: Record<string, unknown>[];
 }
 
-export function SqlResultTable({ result }: { result: SqlResult }) {
+export function SqlResultTable({ result, className }: { result: SqlResult; className?: string }) {
   const [search, setSearch] = useState("");
 
   const filteredRows = search
@@ -19,7 +20,7 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
       )
     : result.rows;
 
-  const exportCsv = () => {
+  const exportCsv = useCallback(() => {
     const header = result.columns.join(",");
     const rows = filteredRows.map((row) =>
       result.columns
@@ -39,30 +40,33 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
     a.download = "query-results.csv";
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }, [result.columns, filteredRows]);
 
   return (
-    <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
+    <div className={cn("rounded-none border border-white/5 overflow-hidden bg-black", className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-[var(--bg-element)]/40 border-b border-[var(--border-subtle)]">
-        <span className="text-[11px] text-[var(--text-tertiary)] font-medium tabular-nums">
-          {filteredRows.length} {filteredRows.length === 1 ? "row" : "rows"}
-        </span>
+      <div className="flex items-center justify-between gap-4 px-4 py-3 bg-zinc-950 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <Table size={14} className="text-[var(--nothing-red)] opacity-80" />
+          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em] dot-matrix tabular-nums">
+            {filteredRows.length} BUFFER_ENTRIES
+          </span>
+        </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="relative group">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-tertiary)] group-focus-within:text-[var(--flow-green)] transition-colors duration-150" />
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600 group-focus-within:text-[var(--nothing-red)] transition-colors duration-200" />
             <input
               type="text"
-              placeholder="Filter..."
+              placeholder="SEARCH..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-28 focus:w-40 pl-7 pr-2 py-1.5 text-[11px] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--flow-green)]/40 transition-all duration-200"
+              className="w-32 focus:w-48 pl-9 pr-3 py-1.5 text-[10px] uppercase font-mono bg-black border border-white/5 rounded-none text-white placeholder-zinc-700 focus:outline-none focus:border-[var(--nothing-red)]/50 transition-all duration-300"
             />
           </div>
           <button
             onClick={exportCsv}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-panel)] border border-[var(--border-subtle)] rounded-md hover:border-[var(--border-strong)] transition-all duration-150 cursor-pointer"
+            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-white bg-white/[0.02] border border-white/5 rounded-none hover:border-white/20 transition-all duration-200 cursor-pointer"
           >
             <Download size={12} />
             CSV
@@ -71,14 +75,14 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto max-h-[400px] scrollbar-thin">
+      <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr>
               {result.columns.map((col) => (
                 <th
                   key={col}
-                  className="px-3.5 py-2.5 text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wide border-b border-[var(--border-subtle)] whitespace-nowrap sticky top-0 bg-[var(--bg-panel)] z-10"
+                  className="px-4 py-3 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap sticky top-0 bg-zinc-950 z-10"
                 >
                   {col}
                 </th>
@@ -89,12 +93,12 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
             {filteredRows.map((row, i) => (
               <tr
                 key={i}
-                className="border-b border-[var(--border-subtle)]/50 hover:bg-[var(--bg-element)]/30 transition-colors duration-100"
+                className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors duration-150"
               >
                 {result.columns.map((col) => (
                   <td
                     key={col}
-                    className="px-3.5 py-2.5 text-[12px] text-[var(--text-secondary)] whitespace-nowrap max-w-[300px] truncate mono-font"
+                    className="px-4 py-3 text-[12px] text-zinc-400 whitespace-nowrap max-w-[400px] truncate font-mono tracking-tight"
                     title={String(row[col] ?? "")}
                   >
                     {formatValue(row[col])}
@@ -107,8 +111,8 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
       </div>
 
       {filteredRows.length === 0 && (
-        <div className="py-8 text-center">
-          <p className="text-[12px] text-[var(--text-tertiary)]">No matching rows</p>
+        <div className="py-12 text-center bg-black">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600 font-bold dot-matrix">Zero Results Detected</p>
         </div>
       )}
     </div>
@@ -117,12 +121,12 @@ export function SqlResultTable({ result }: { result: SqlResult }) {
 
 function formatValue(val: unknown): string | React.ReactNode {
   if (val === null || val === undefined) {
-    return <span className="text-[var(--text-tertiary)]/40 italic">null</span>;
+    return <span className="text-zinc-700 italic">null</span>;
   }
   if (typeof val === "number") return val.toLocaleString();
-  if (typeof val === "boolean") return val ? "true" : "false";
+  if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
   if (typeof val === "string" && val.startsWith("0x")) {
-    return <span className="text-[var(--flow-green)]/70">{val}</span>;
+    return <span className="text-[var(--nothing-red)]/80">{val}</span>;
   }
   return String(val);
 }

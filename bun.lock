@@ -38,6 +38,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
+        "dot-anime-react": "^1.0.2",
         "embla-carousel-react": "^8.6.0",
         "geist": "^1.7.0",
         "lucide-react": "^0.563.0",
@@ -2229,6 +2230,8 @@
     "dompurify": ["dompurify@3.2.7", "", { "optionalDependencies": { "@types/trusted-types": "^2.0.7" } }, "sha512-WhL/YuveyGXJaerVlMYGWhvQswa7myDG17P7Vu65EWC05o8vfeNbvNf4d/BOvH99+ZW+LlQsc1GDKMa1vNK6dw=="],
 
     "domutils": ["domutils@3.2.2", "", { "dependencies": { "dom-serializer": "^2.0.0", "domelementtype": "^2.3.0", "domhandler": "^5.0.3" } }, "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw=="],
+
+    "dot-anime-react": ["dot-anime-react@1.0.2", "", { "peerDependencies": { "react": ">=16.8.0" } }, "sha512-Wv1Vv08kLSKLkumnzLzj1UKKFUg2AGJBKo4hHbaQgmBCYArQ/fhg0UbRvUMMgzlY/713Atpb8tdsIqI/0+/03w=="],
 
     "dotenv": ["dotenv@16.4.7", "", {}, "sha512-47qPchRCykZC03FhkYAhrvwU4xDBFIj1QPqaarj6mdM/hgUzfPHcpkHJOn3mJAufFeeAxAzeGsr5X0M4k6fLZQ=="],
 

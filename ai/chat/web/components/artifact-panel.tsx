@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CopyIcon, DownloadIcon } from "lucide-react";
+import { CopyIcon, DownloadIcon, X } from "lucide-react";
 
 import {
   Artifact,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ai-elements/code-block";
 import { SqlResultTable, type SqlResult } from "./sql-result-table";
 import { ChartArtifact, type ChartData } from "./chart-artifact";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -129,6 +130,7 @@ function SqlHeaderActions({ data }: { data: SqlResult }) {
       tooltip="Export CSV"
       icon={DownloadIcon}
       onClick={exportCsv}
+      className="!text-zinc-500 hover:!text-white hover:!bg-white/5 !rounded-none"
     />
   );
 }
@@ -148,6 +150,7 @@ function CadenceHeaderActions({ data }: { data: CadenceArtifactData }) {
       tooltip="Copy result"
       icon={CopyIcon}
       onClick={copyResult}
+      className="!text-zinc-500 hover:!text-white hover:!bg-white/5 !rounded-none"
     />
   );
 }
@@ -158,7 +161,7 @@ function CadenceHeaderActions({ data }: { data: CadenceArtifactData }) {
 
 function SqlBody({ data }: { data: SqlResult }) {
   return (
-    <ArtifactContent>
+    <ArtifactContent className="!p-0">
       <SqlResultTable result={data} />
     </ArtifactContent>
   );
@@ -166,7 +169,7 @@ function SqlBody({ data }: { data: SqlResult }) {
 
 function ChartBody({ data }: { data: ChartData }) {
   return (
-    <ArtifactContent>
+    <ArtifactContent className="!bg-black">
       <ChartArtifact data={data} />
     </ArtifactContent>
   );
@@ -174,22 +177,22 @@ function ChartBody({ data }: { data: ChartData }) {
 
 function CadenceBody({ data }: { data: CadenceArtifactData }) {
   return (
-    <ArtifactContent className="space-y-4">
-      <CodeBlock code={data.script} language="swift">
-        <CodeBlockHeader>
-          <CodeBlockTitle>Cadence Script</CodeBlockTitle>
+    <ArtifactContent className="space-y-6 !p-6 !bg-black">
+      <CodeBlock code={data.script} language="swift" className="!rounded-none !border-white/5 !bg-zinc-950">
+        <CodeBlockHeader className="!border-b !border-white/5 !px-4 !py-3">
+          <CodeBlockTitle className="!text-[10px] !uppercase !tracking-widest !font-bold !text-zinc-500">Cadence Script</CodeBlockTitle>
           <CodeBlockActions>
-            <CodeBlockCopyButton />
+            <CodeBlockCopyButton className="!text-zinc-500 hover:!text-white !rounded-none" />
           </CodeBlockActions>
         </CodeBlockHeader>
       </CodeBlock>
       {data.result !== undefined && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-[var(--text-tertiary)] uppercase tracking-wide">
-            Result
+        <div className="space-y-2">
+          <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.2em] dot-matrix">
+            Execution Output
           </p>
-          <pre className="rounded-md border border-[var(--border-subtle)] bg-[var(--bg-element)] p-3 text-xs text-[var(--text-secondary)] overflow-auto max-h-[300px]">
-            {JSON.stringify(data.result, null, 2)}
+          <pre className="rounded-none border border-white/5 bg-zinc-950 p-4 text-[12px] font-mono text-zinc-300 overflow-auto max-h-[400px]">
+            {typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2)}
           </pre>
         </div>
       )}
@@ -212,13 +215,15 @@ export function ArtifactPanel() {
           initial={{ width: 0, opacity: 0 }}
           animate={{ width: "50%", opacity: 1 }}
           exit={{ width: 0, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className="h-full overflow-hidden border-l border-[var(--border-subtle)] bg-[var(--bg-app)]"
+          transition={{ type: "tween", duration: 0.3, ease: "circOut" }}
+          className="h-full overflow-hidden border-l border-white/5 bg-black z-30"
         >
-          <Artifact className="h-full rounded-none border-0 shadow-none">
-            <ArtifactHeader>
-              <ArtifactTitle>{artifact.title}</ArtifactTitle>
-              <ArtifactActions>
+          <Artifact className="h-full rounded-none border-0 shadow-none !bg-black">
+            <ArtifactHeader className="!h-16 !px-6 !border-b !border-white/5 !bg-zinc-950">
+              <ArtifactTitle className="dot-matrix !text-[13px] uppercase tracking-[0.2em] !font-bold text-white">
+                {artifact.title}
+              </ArtifactTitle>
+              <ArtifactActions className="!gap-1">
                 {artifact.type === "sql" && (
                   <SqlHeaderActions data={artifact.data as SqlResult} />
                 )}
@@ -227,18 +232,25 @@ export function ArtifactPanel() {
                     data={artifact.data as CadenceArtifactData}
                   />
                 )}
-                <ArtifactClose onClick={closeArtifact} />
+                <ArtifactClose 
+                  onClick={closeArtifact} 
+                  className="!text-zinc-500 hover:!text-white hover:!bg-white/5 !rounded-none !p-1.5"
+                >
+                  <X size={18} />
+                </ArtifactClose>
               </ArtifactActions>
             </ArtifactHeader>
-            {artifact.type === "sql" && (
-              <SqlBody data={artifact.data as SqlResult} />
-            )}
-            {artifact.type === "chart" && (
-              <ChartBody data={artifact.data as ChartData} />
-            )}
-            {artifact.type === "cadence" && (
-              <CadenceBody data={artifact.data as CadenceArtifactData} />
-            )}
+            <div className="flex-1 overflow-auto custom-scrollbar">
+              {artifact.type === "sql" && (
+                <SqlBody data={artifact.data as SqlResult} />
+              )}
+              {artifact.type === "chart" && (
+                <ChartBody data={artifact.data as ChartData} />
+              )}
+              {artifact.type === "cadence" && (
+                <CadenceBody data={artifact.data as CadenceArtifactData} />
+              )}
+            </div>
           </Artifact>
         </motion.div>
       )}

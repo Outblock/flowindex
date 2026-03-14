@@ -117,18 +117,18 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
   const prismLang = langMap[language] || language || "text";
 
   return (
-    <div className="rounded-sm border border-white/10 overflow-hidden my-1.5">
+    <div className="rounded-none border border-white/5 overflow-hidden my-3">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-2.5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors text-left group"
       >
         <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.15 }}>
-          <ChevronRight size={12} className="text-zinc-400" />
+          <ChevronRight size={12} className="text-zinc-500 group-hover:text-white" />
         </motion.div>
         {icon}
-        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold flex-1">{label}</span>
-        <button onClick={handleCopy} className="text-zinc-400 hover:text-white transition-colors p-0.5">
-          {copied ? <Check size={10} className="text-[var(--flow-green)]" /> : <Copy size={10} />}
+        <span className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-bold flex-1">{label}</span>
+        <button onClick={handleCopy} className="text-zinc-500 hover:text-white transition-colors p-1">
+          {copied ? <Check size={12} className="text-[var(--nothing-green)]" /> : <Copy size={12} />}
         </button>
       </button>
       <AnimatePresence initial={false}>
@@ -138,12 +138,12 @@ function CollapsibleCode({ code, language, label, icon }: { code: string; langua
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="overflow-hidden"
+            className="overflow-hidden border-t border-white/5"
           >
             <SyntaxHighlighter
               language={prismLang}
               style={vscDarkPlus}
-              customStyle={{ margin: 0, padding: "12px", fontSize: "12px", lineHeight: "1.6", background: "#18181b", borderRadius: 0 }}
+              customStyle={{ margin: 0, padding: "16px", fontSize: "12px", lineHeight: "1.6", background: "#050505", borderRadius: 0 }}
               wrapLongLines
             >
               {code}
@@ -294,33 +294,33 @@ export function Chat({ sessionId, userId }: ChatProps) {
         <ConversationContent className="mx-auto max-w-3xl px-6 py-8">
           {messages.length === 0 ? (
             <ConversationEmptyState>
-              {/* Logo with glow */}
+              {/* Logo with green glow */}
               <div className="relative mb-8">
                 <div className="absolute inset-0 blur-2xl opacity-20 bg-[var(--flow-green)] rounded-full scale-150" />
                 <ChatBotIcon size={56} className="relative text-[var(--flow-green)]" />
               </div>
 
-              <h1 className="text-[28px] font-semibold tracking-tight text-foreground mb-2">
-                FlowIndex AI
+              <h1 className="dot-matrix text-[32px] mb-4 text-white">
+                FLOWSCAN AI
               </h1>
-              <p className="text-[13px] text-[var(--text-tertiary)] mb-10 max-w-sm text-center leading-relaxed">
-                Query the Flow blockchain with natural language — SQL and
-                Cadence.
+              <p className="text-[12px] text-[var(--text-secondary)] mb-12 max-w-sm text-center leading-relaxed font-mono uppercase tracking-wider">
+                Blockchain Intelligence / Natural Language Interface
               </p>
 
               {/* Suggestion grid */}
-              <div className="grid grid-cols-2 gap-2.5 w-full max-w-md">
+              <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s.text}
                     onClick={() => handleSend({ text: s.text, files: [] })}
-                    className="group flex items-start gap-3 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-4 py-3.5 text-left transition-all duration-200 hover:border-[var(--border-strong)] hover:bg-[var(--bg-element)] cursor-pointer"
+                    className="group flex items-start gap-3 rounded-none border border-[var(--border-subtle)] bg-[var(--bg-panel)] px-5 py-4 text-left transition-all duration-300 hover:border-[var(--nothing-green)] hover:bg-[var(--bg-element)] cursor-pointer relative overflow-hidden"
                   >
+                    <div className="absolute top-0 left-0 w-[2px] h-0 bg-[var(--nothing-green)] transition-all duration-300 group-hover:h-full" />
                     <s.icon
-                      size={16}
-                      className="mt-0.5 shrink-0 text-[var(--text-tertiary)] group-hover:text-[var(--flow-green)] transition-colors duration-200"
+                      size={14}
+                      className="mt-0.5 shrink-0 text-[var(--text-tertiary)] group-hover:text-white transition-colors duration-200"
                     />
-                    <span className="text-[12.5px] leading-snug text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors duration-200">
+                    <span className="text-[11px] uppercase font-bold tracking-widest text-[var(--text-secondary)] group-hover:text-white transition-colors duration-200">
                       {s.label}
                     </span>
                   </button>
@@ -347,17 +347,9 @@ export function Chat({ sessionId, userId }: ChatProps) {
                         <ChatBotIcon isThinking size={22} className="text-[var(--flow-green)]" />
                       </div>
                       <div
-                        className="inline-block bg-clip-text animate-shine text-[13px]"
-                        style={{
-                          backgroundImage: "linear-gradient(120deg, rgba(255,255,255,0.3) 40%, #1c9c4d 50%, rgba(255,255,255,0.3) 60%)",
-                          backgroundSize: "200% 100%",
-                          WebkitBackgroundClip: "text",
-                          backgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                          color: "transparent",
-                        }}
+                        className="inline-block animate-shine-green text-[12px] font-mono uppercase tracking-widest font-bold"
                       >
-                        Thinking...
+                        Processing...
                       </div>
                     </div>
                   </Message>
@@ -369,17 +361,17 @@ export function Chat({ sessionId, userId }: ChatProps) {
       </Conversation>
 
       {/* Input area */}
-      <div className="prompt-input-flow pb-4 pt-2 px-6">
+      <div className="pb-8 pt-4 px-6">
         <div className="mx-auto max-w-3xl">
           <PromptInputProvider>
-            <PromptInput onSubmit={handleSend} accept="image/*" multiple>
+            <PromptInput onSubmit={handleSend} accept="image/*" multiple className="prompt-input-nothing !rounded-none !p-1">
               <PendingPromptAttachments />
               <PromptInputTextarea
-                placeholder="Ask about Flow — blocks, transactions, Cadence scripts..."
-                className="!min-h-12 !py-3.5 !text-[13.5px] placeholder:text-[var(--text-tertiary)]"
+                placeholder="INPUT COMMAND OR QUERY..."
+                className="!min-h-14 !py-4 !text-[13px] placeholder:text-[var(--text-tertiary)] font-mono uppercase tracking-tight !bg-transparent"
                 autoFocus
               />
-              <PromptInputFooter className="!pb-2.5 !pt-0">
+              <PromptInputFooter className="!pb-3 !pt-1 !px-3">
                 <ContextStatus
                   contextWindow={CONTEXT_WINDOW}
                   didCompactContext={didCompactContext}
@@ -390,7 +382,7 @@ export function Chat({ sessionId, userId }: ChatProps) {
                 <PromptInputSubmit
                   status={status}
                   onStop={stop}
-                  className="!rounded-lg !bg-[var(--flow-green)] !text-black hover:!bg-[var(--flow-green-dim)] !size-7 !transition-all !duration-200"
+                  className="!rounded-none !bg-[var(--nothing-green)] !text-white hover:!bg-[var(--nothing-green-dim)] !size-8 !transition-all !duration-200"
                 />
               </PromptInputFooter>
             </PromptInput>
@@ -677,59 +669,54 @@ function ComposerToolbar({
   const attachments = usePromptInputAttachments();
 
   return (
-    <div className="flex items-center gap-1.5 mt-1.5">
+    <div className="flex items-center gap-2 mt-2 px-1">
       <div className="relative group/attach">
         <button
           type="button"
           onClick={attachments.openFileDialog}
-          className="w-7 h-7 flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] hover:bg-white/10 rounded-sm transition-colors border border-transparent hover:border-white/10"
+          className="w-8 h-8 flex items-center justify-center text-[var(--text-tertiary)] hover:text-white hover:bg-white/5 rounded-none transition-all border border-transparent hover:border-white/10"
           title="Attach image"
         >
-          <Plus size={13} />
+          <Plus size={14} />
         </button>
-        <div className="absolute bottom-full left-0 mb-1 hidden group-hover/attach:block z-50 pointer-events-none">
-          <div className="bg-zinc-700 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap">
-            Upload image
-          </div>
-        </div>
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-none text-[10px] uppercase tracking-[0.15em] font-bold transition-all bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700"
           >
             {(() => {
               const current = CHAT_MODES.find((m) => m.key === mode) || CHAT_MODES[0];
               const CurrentIcon = current.icon;
               return (
                 <>
-                  <CurrentIcon size={10} />
+                  <CurrentIcon size={12} />
                   {current.label}
                 </>
               );
             })()}
-            <ChevronUp size={8} className="ml-0.5 opacity-60" />
+            <ChevronUp size={10} className="ml-1 opacity-40" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="min-w-[200px] z-[80] bg-zinc-900 border border-white/10 shadow-lg p-1">
-          <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-400 px-2 py-1">Model</DropdownMenuLabel>
-          <DropdownMenuSeparator className="bg-white/10" />
+        <DropdownMenuContent side="top" align="start" className="min-w-[220px] z-[80] bg-zinc-950 border border-zinc-800 shadow-2xl p-1 rounded-none">
+          <DropdownMenuLabel className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 px-3 py-2">System Module</DropdownMenuLabel>
+          <DropdownMenuSeparator className="bg-zinc-800" />
           {CHAT_MODES.map(({ key, label, icon: Icon, desc, model }) => (
             <DropdownMenuItem
               key={key}
               onSelect={() => selectMode(key)}
-              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-sm cursor-pointer transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-none cursor-pointer transition-colors ${
                 mode === key
-                  ? "bg-[var(--flow-green)]/10 text-[var(--flow-green)]"
-                  : "text-zinc-300"
+                  ? "bg-white/5 text-white"
+                  : "text-zinc-400 hover:bg-white/[0.02] hover:text-zinc-200"
               }`}
             >
-              <Icon size={14} className="shrink-0" />
+              <Icon size={14} className={`shrink-0 ${mode === key ? "text-[var(--nothing-green)]" : ""}`} />
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-medium leading-tight">{label}</span>
-                <span className={`text-[10px] leading-tight ${mode === key ? "text-[var(--flow-green)]/60" : "text-zinc-500"}`}>{model} · {desc}</span>
+                <span className="text-xs font-bold uppercase tracking-wider">{label}</span>
+                <span className="text-[9px] leading-tight text-zinc-500 mt-0.5">{model}</span>
               </div>
             </DropdownMenuItem>
           ))}
@@ -739,61 +726,45 @@ function ComposerToolbar({
       <button
         type="button"
         onClick={() => setHideTools((v) => !v)}
-        className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold transition-all ${
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-none text-[10px] uppercase tracking-[0.15em] font-bold transition-all ${
           hideTools
-            ? "bg-zinc-500/10 border border-zinc-500/30 text-zinc-500"
-            : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] border border-transparent hover:border-white/10"
+            ? "bg-zinc-900 border border-zinc-800 text-zinc-500"
+            : "text-zinc-500 hover:text-white border border-transparent hover:bg-white/5"
         }`}
-        title={hideTools ? "Show tool calls" : "Hide tool calls"}
+        title={hideTools ? "Show System Logs" : "Hide System Logs"}
       >
-        {hideTools ? <EyeOff size={10} /> : <Eye size={10} />}
-        Tools
+        {hideTools ? <EyeOff size={12} /> : <Eye size={12} />}
+        Logs
       </button>
 
       <div className="relative group/mcp">
         <button
           type="button"
-          className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] border border-transparent hover:border-white/10 transition-all"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-[10px] uppercase tracking-[0.15em] font-bold text-zinc-500 hover:text-white border border-transparent hover:bg-white/5 transition-all"
           title="Connected MCP tools"
         >
-          <Wrench size={10} />
+          <Wrench size={12} />
           MCP
         </button>
         <div className="absolute bottom-full left-0 mb-1.5 hidden group-hover/mcp:block z-50">
-          <div className="bg-zinc-900 border border-white/10 rounded-sm shadow-xl p-2.5 w-56">
-            <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-400 mb-2">Connected Tools</p>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Database size={10} className="text-[var(--flow-green)] shrink-0" />
-                <span className="text-[11px] text-zinc-300">FlowIndex SQL</span>
+          <div className="bg-zinc-950 border border-zinc-800 shadow-2xl p-3 w-60">
+            <p className="text-[9px] uppercase tracking-[0.2em] font-bold text-zinc-500 mb-3">Active Modules</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5">
+                <Database size={12} className="text-[var(--nothing-green)] shrink-0" />
+                <span className="text-[11px] text-zinc-400 font-mono uppercase">FlowIndex SQL</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Database size={10} className="text-blue-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">EVM Blockscout SQL</span>
+              <div className="flex items-center gap-2.5">
+                <Database size={12} className="text-zinc-500 shrink-0" />
+                <span className="text-[11px] text-zinc-400 font-mono uppercase">EVM Blockscout SQL</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Code2 size={10} className="text-purple-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">Cadence Scripts</span>
+              <div className="flex items-center gap-2.5">
+                <Code2 size={12} className="text-zinc-500 shrink-0" />
+                <span className="text-[11px] text-zinc-400 font-mono uppercase">Cadence Scripts</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Code2 size={10} className="text-purple-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">Cadence Check & Docs</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Bot size={10} className="text-orange-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">EVM RPC (Chain 747)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Search size={10} className="text-amber-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">Web Search</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ChevronRight size={10} className="text-cyan-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">API Fetch</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Download size={10} className="text-pink-400 shrink-0" />
-                <span className="text-[11px] text-zinc-300">Charts</span>
+              <div className="flex items-center gap-2.5">
+                <Search size={12} className="text-zinc-500 shrink-0" />
+                <span className="text-[11px] text-zinc-400 font-mono uppercase">Web Search</span>
               </div>
             </div>
           </div>
@@ -804,11 +775,11 @@ function ComposerToolbar({
         <button
           type="button"
           onClick={onShare}
-          className="flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] uppercase tracking-widest font-bold text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] border border-transparent hover:border-white/10 transition-all ml-auto"
-          title="Share conversation"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-none text-[10px] uppercase tracking-[0.15em] font-bold text-zinc-500 hover:text-white border border-transparent hover:bg-white/5 transition-all ml-auto"
+          title="Share Session"
         >
-          <Share2 size={10} />
-          Share
+          <Share2 size={12} />
+          Export
         </button>
       )}
     </div>
@@ -834,7 +805,7 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
 
     return (
       <Message from="user">
-        <MessageContent className="!rounded-2xl !bg-[var(--bg-element)] !px-4 !py-3 !gap-3">
+        <MessageContent className="!rounded-none !bg-[var(--bg-element)] !border !border-white/5 !px-5 !py-4 !gap-4">
           {files.length > 0 && <AttachmentList files={files} />}
           {text.trim() && <CollapsibleUserMessage text={text} />}
         </MessageContent>
@@ -848,14 +819,14 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
         <div className="shrink-0 mt-1.5">
           <ChatBotIcon size={22} className="text-[var(--flow-green)]" />
         </div>
-        <MessageContent>
+        <MessageContent className="prose-nothing">
           {message.parts.map((part, i) => {
             if (part.type === "reasoning") {
               const reasoningPart = part as any;
               return (
                 <Reasoning key={i} isStreaming={isMessageStreaming && !!reasoningPart.reasoning}>
-                  <ReasoningTrigger />
-                  <ReasoningContent>{reasoningPart.reasoning || ""}</ReasoningContent>
+                  <ReasoningTrigger className="!text-[10px] !uppercase !tracking-[0.2em] !font-bold !text-zinc-500" />
+                  <ReasoningContent className="!bg-zinc-950 !border-white/5 !rounded-none !text-zinc-400 !font-mono !text-[12px]">{reasoningPart.reasoning || ""}</ReasoningContent>
                 </Reasoning>
               );
             }
@@ -870,10 +841,10 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
                 return (
                   <div
                     key={i}
-                    className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-amber-500/70 bg-amber-500/5 border border-amber-500/10 rounded-sm"
+                    className="flex items-center gap-2 py-2 px-3 my-2 text-[10px] uppercase font-bold tracking-widest text-zinc-500 bg-zinc-900 border border-white/5 rounded-none"
                   >
                     <Sparkles size={10} className="shrink-0" />
-                    <span>Context compacted</span>
+                    <span>Memory Optimized</span>
                   </div>
                 );
               }
@@ -901,29 +872,29 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
               }
               // web_search / fetch_api — compact status line
               if (name === "web_search" || name === "web_search_20250305" || name === "fetch_api") {
-                const label = name.startsWith("web_search") ? "Searching the web" : `Fetching ${toolPart.args?.url || toolPart.input?.url || "API"}`;
+                const label = name.startsWith("web_search") ? "Web Query" : `Fetch ${toolPart.args?.url || toolPart.input?.url || "API"}`;
                 const done = toolPart.state === "output-available" || toolPart.state === "result";
                 const err = toolPart.state === "output-error";
                 return (
-                  <div key={i} className="flex items-center gap-2 py-1.5 px-2.5 my-1 text-[11px] text-zinc-500 bg-white/[0.03] border border-white/5 rounded-sm">
+                  <div key={i} className="flex items-center gap-2 py-2 px-3 my-2 text-[10px] uppercase font-bold tracking-widest text-zinc-500 bg-zinc-900 border border-white/5 rounded-none">
                     {!done && !err ? (
-                      <span className="inline-block w-2.5 h-2.5 border border-zinc-400 border-t-transparent rounded-full animate-spin" />
+                      <span className="inline-block w-2.5 h-2.5 border border-zinc-500 border-t-transparent rounded-none animate-spin" />
                     ) : err ? (
-                      <span className="text-red-400 text-[10px]">✕</span>
+                      <span className="text-red-500 text-[10px]">✕</span>
                     ) : (
-                      <Search size={10} className="text-[var(--flow-green)]" />
+                      <Check size={10} className="text-[var(--nothing-green)]" />
                     )}
-                    <span className="truncate">{done ? (name.startsWith("web_search") ? "Web search complete" : "Fetched API") : label}...</span>
+                    <span className="truncate">{done ? (name.startsWith("web_search") ? "Web Query Complete" : "API Synchronized") : label}...</span>
                   </div>
                 );
               }
               // Generic tool fallback — expandable details
               const toolDone = toolPart.state === "output-available" || toolPart.state === "result";
               const toolErr = toolPart.state === "output-error";
-              const toolOutput = toolDone ? toolPart.output : toolErr ? (toolPart.errorText || "Tool call failed") : null;
+              const toolOutput = toolDone ? toolPart.output : toolErr ? (toolPart.errorText || "Execution Failure") : null;
               const toolInput = toolPart.input ?? toolPart.args;
               const hasDetails = toolInput || toolOutput;
-              const friendlyName = name.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+              const friendlyName = name.replace(/_/g, " ").toUpperCase();
               const inputSummary = toolInput
                 ? typeof toolInput === "string"
                   ? toolInput.slice(0, 60)
@@ -934,30 +905,30 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
                 return s.length > 2000 ? s.slice(0, 2000) + "\n...[truncated]" : s;
               };
               return (
-                <details key={i} className="my-1 rounded-sm border border-white/5 overflow-hidden">
-                  <summary className="flex items-center gap-2 py-1.5 px-2.5 text-[11px] text-zinc-400 bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] select-none">
+                <details key={i} className="my-2 rounded-none border border-white/5 overflow-hidden">
+                  <summary className="flex items-center gap-3 py-2 px-3 text-[10px] uppercase font-bold tracking-widest text-zinc-500 bg-zinc-900 cursor-pointer hover:bg-zinc-800 transition-colors select-none">
                     {!toolDone && !toolErr ? (
-                      <span className="inline-block w-2.5 h-2.5 border border-zinc-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span className="inline-block w-2.5 h-2.5 border border-zinc-500 border-t-transparent rounded-none animate-spin shrink-0" />
                     ) : toolErr ? (
-                      <span className="text-red-400 text-[10px] shrink-0">✕</span>
+                      <span className="text-red-500 text-[10px] shrink-0">✕</span>
                     ) : (
-                      <span className="text-[var(--flow-green)] text-[10px] shrink-0">✓</span>
+                      <Check size={10} className="text-[var(--nothing-green)] shrink-0" />
                     )}
-                    <span className="font-bold truncate">{friendlyName}</span>
-                    {inputSummary && <span className="text-zinc-500 truncate ml-1 font-mono text-[10px]">{inputSummary}</span>}
+                    <span className="truncate">{friendlyName}</span>
+                    {inputSummary && <span className="text-zinc-600 truncate ml-2 font-mono lowercase tracking-normal font-normal">{inputSummary}</span>}
                   </summary>
                   {hasDetails && (
-                    <div className="px-3 py-2 text-[11px] font-mono space-y-1.5 bg-zinc-900 text-zinc-400 max-h-[200px] overflow-auto">
+                    <div className="px-4 py-3 text-[11px] font-mono space-y-2 bg-black text-zinc-400 max-h-[250px] overflow-auto border-t border-white/5">
                       {toolInput && (
                         <div>
-                          <span className="text-zinc-500">Input: </span>
-                          <pre className="whitespace-pre-wrap break-words text-zinc-300">{typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput, null, 2)}</pre>
+                          <span className="text-zinc-600 uppercase text-[9px] tracking-widest block mb-1">Input Data</span>
+                          <pre className="whitespace-pre-wrap break-words text-zinc-300 bg-white/[0.02] p-2">{typeof toolInput === "string" ? toolInput : JSON.stringify(toolInput, null, 2)}</pre>
                         </div>
                       )}
                       {toolOutput && (
                         <div>
-                          <span className="text-zinc-500">Output: </span>
-                          <pre className={`whitespace-pre-wrap break-words ${toolErr ? "text-red-400" : "text-zinc-300"}`}>{truncateOutput(toolOutput)}</pre>
+                          <span className="text-zinc-600 uppercase text-[9px] tracking-widest block mb-1">System Output</span>
+                          <pre className={`whitespace-pre-wrap break-words p-2 ${toolErr ? "text-red-500 bg-red-500/5" : "text-zinc-300 bg-white/[0.02]"}`}>{truncateOutput(toolOutput)}</pre>
                         </div>
                       )}
                     </div>
@@ -991,10 +962,10 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
             const unique = [...new Map(sources.map((s) => [s.url, s])).values()];
             return (
               <Sources>
-                <SourcesTrigger count={unique.length} />
-                <SourcesContent>
+                <SourcesTrigger count={unique.length} className="!text-[10px] !uppercase !tracking-widest !font-bold !text-zinc-500" />
+                <SourcesContent className="!bg-zinc-950 !border-white/5 !rounded-none">
                   {unique.map((s) => (
-                    <Source key={s.url} href={s.url} title={s.title} />
+                    <Source key={s.url} href={s.url} title={s.title} className="!text-zinc-400 hover:!text-white" />
                   ))}
                 </SourcesContent>
               </Sources>
