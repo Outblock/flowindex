@@ -30,6 +30,9 @@ import { NFTDetailModal } from '../../components/NFTDetailModal';
 import { UsdValue } from '../../components/UsdValue';
 import { parseCadenceError } from '../../lib/parseCadenceError';
 import { sha256Hex, normalizedScriptHash } from '../../lib/normalizeScript';
+import { EVMTxDetail } from '@/components/evm/EVMTxDetail';
+import { getEVMTransaction } from '@/api/evm';
+import type { BSTransaction } from '@/types/blockscout';
 
 SyntaxHighlighter.registerLanguage('cadence', swift);
 SyntaxHighlighter.registerLanguage('json', json);
@@ -571,19 +574,41 @@ export const Route = createFileRoute('/txs/$txId')({
                     errorMessage: rawTx.error_message || rawTx.error,
                     arguments: rawTx.arguments
                 };
-                return { transaction: transformedTx, error: null as string | null };
+                return { transaction: transformedTx, evmTransaction: null as BSTransaction | null, isEVM: false, error: null as string | null };
             }
             // Backend's /flow/transaction/{id} already checks evm_tx_hashes
             // and evm_transactions tables for EVM hash → Cadence tx resolution.
-            // If it returned 404, the EVM hash isn't indexed yet.
-            if (res.status === 404) {
-                return { transaction: null, error: 'Transaction not found' };
+            // If it returned 404, the EVM hash isn't indexed yet — try Blockscout EVM proxy.
+            if (res.status === 404 || !res.ok) {
+                // Fallback: if txId looks like an EVM hash, try Blockscout proxy
+                if (/^0x[0-9a-fA-F]{64}$/.test(params.txId)) {
+                    try {
+                        const evmTx = await getEVMTransaction(params.txId);
+                        if (evmTx?.hash) {
+                            return { transaction: null, evmTransaction: evmTx as BSTransaction, isEVM: true, error: null as string | null };
+                        }
+                    } catch {
+                        // EVM fetch failed too — fall through to not-found
+                    }
+                }
+                return { transaction: null, evmTransaction: null as BSTransaction | null, isEVM: false, error: res.status === 404 ? 'Transaction not found' : 'Failed to load transaction details' };
             }
-            return { transaction: null, error: 'Failed to load transaction details' };
+            return { transaction: null, evmTransaction: null as BSTransaction | null, isEVM: false, error: 'Failed to load transaction details' };
         } catch (e) {
             const message = (e as any)?.message;
             console.error('Failed to load transaction data', { message });
-            return { transaction: null, error: 'Failed to load transaction details' };
+            // Also try EVM fallback on network errors
+            if (/^0x[0-9a-fA-F]{64}$/.test(params.txId)) {
+                try {
+                    const evmTx = await getEVMTransaction(params.txId);
+                    if (evmTx?.hash) {
+                        return { transaction: null, evmTransaction: evmTx as BSTransaction, isEVM: true, error: null as string | null };
+                    }
+                } catch {
+                    // EVM fetch failed too
+                }
+            }
+            return { transaction: null, evmTransaction: null as BSTransaction | null, isEVM: false, error: 'Failed to load transaction details' };
         }
     },
     head: ({ params }) => {
@@ -971,7 +996,13 @@ function TransactionDetail() {
     const { txId } = Route.useParams();
     const { tab: urlTab } = Route.useSearch();
     const navigate = useNavigate();
-    const { transaction, error: loaderError } = Route.useLoaderData();
+    const { transaction, evmTransaction, isEVM, error: loaderError } = Route.useLoaderData();
+
+    // EVM transaction — render dedicated EVM detail page
+    if (isEVM && evmTransaction) {
+        return <EVMTxDetail tx={evmTransaction} />;
+    }
+
     const error = transaction ? null : (loaderError || 'Transaction not found');
 
     // Derive enrichments locally from events + script (no backend call needed)
