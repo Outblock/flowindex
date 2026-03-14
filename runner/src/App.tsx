@@ -7,7 +7,7 @@ import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
 import { useSolidityLsp } from './editor/useSolidityLsp';
 import { compileSolidity, deploySolidity } from './flow/evmExecute';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, useSwitchChain } from 'wagmi';
 import { flowEvmMainnet, flowEvmTestnet } from './flow/evmChains';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
@@ -782,6 +782,14 @@ export default function App() {
   // EVM wallet state (wagmi)
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { switchChain } = useSwitchChain();
+
+  // Auto-switch EVM chain when Flow network changes
+  useEffect(() => {
+    if (!evmConnected) return;
+    const targetChainId = network === 'mainnet' ? flowEvmMainnet.id : flowEvmTestnet.id;
+    switchChain({ chainId: targetChainId });
+  }, [network, evmConnected, switchChain]);
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const validateCurrentParams = useCallback(() => {
