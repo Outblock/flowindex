@@ -65,6 +65,10 @@ interface MarkdownAnimateTextProps {
   codeStyle?: Record<string, React.CSSProperties> | null;
   customComponents?: Record<string, (props: Record<string, unknown>) => React.ReactNode>;
   imgHeight?: string;
+  /** When true, renders markdown without animation — identical component tree and plugins,
+   *  but `animateText` becomes a passthrough. Use this for completed (non-streaming) messages
+   *  to avoid visual inconsistency when switching from animated to static rendering. */
+  static?: boolean;
 }
 
 const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
@@ -76,6 +80,7 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
   codeStyle = null,
   customComponents = DEFAULT_CUSTOM_COMPONENTS,
   imgHeight = '20rem',
+  static: isStatic = false,
 }) => {
   // Serialize animation prop for stable useMemo dependency
   // (JSX array literals like animation={["a","b"]} create new refs each render)
@@ -136,7 +141,7 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
   const animateText = useCallback(
     (text: React.ReactNode) => {
       const items = Array.isArray(text) ? text : [text];
-      if (!animation) return items;
+      if (isStatic || !animation) return items;
 
       return items.map((item, index) => {
         if (typeof item === 'string') {
@@ -173,7 +178,7 @@ const MarkdownAnimateText: React.FC<MarkdownAnimateTextProps> = ({
         );
       });
     },
-    [animation, animationDuration, animationTimingFunction, sep, hidePartialCustomComponents, wrapStyle],
+    [isStatic, animation, animationDuration, animationTimingFunction, sep, hidePartialCustomComponents, wrapStyle],
   );
 
   // For passing single animation string to sub-components that only accept string

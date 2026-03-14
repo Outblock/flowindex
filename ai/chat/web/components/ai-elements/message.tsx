@@ -16,9 +16,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AnimatedMarkdown } from "@outblock/flowtoken";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import type { Components } from "react-markdown";
 import { Check, ChevronLeftIcon, ChevronRightIcon, Copy } from "lucide-react";
 import {
   createContext,
@@ -464,71 +461,6 @@ const mdComponents: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-/* ── Static markdown components for ReactMarkdown (completed messages) ── */
-const staticMdComponents: Components = {
-  h1: ({ children }) => <h1 className="text-base font-bold text-white mt-3 mb-1">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-bold text-white mt-3 mb-1">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-[13px] font-bold text-white mt-2 mb-1">{children}</h3>,
-  h4: ({ children }) => <h4 className="text-[13px] font-semibold text-zinc-100 mt-2 mb-0.5">{children}</h4>,
-  p: ({ children }) => <p className="mb-2 last:mb-0"><AutoLinkText>{children}</AutoLinkText></p>,
-  strong: ({ children }) => <strong className="font-bold text-white">{children}</strong>,
-  em: ({ children }) => <em className="italic">{children}</em>,
-  a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--flow-green)] hover:underline">{children}</a>
-  ),
-  ul: ({ children }) => <ul className="ml-3 mb-2 space-y-0.5">{children}</ul>,
-  ol: ({ children }) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside">{children}</ol>,
-  li: ({ children }) => (
-    <li className="flex gap-1.5">
-      <span className="text-[var(--flow-green)] shrink-0 mt-[1px]">-</span>
-      <span className="flex-1"><AutoLinkText>{children}</AutoLinkText></span>
-    </li>
-  ),
-  blockquote: ({ children }) => (
-    <blockquote className="border-l-2 border-[var(--flow-green)]/40 pl-3 my-2 text-zinc-400 italic">{children}</blockquote>
-  ),
-  hr: () => <hr className="my-3 border-white/10" />,
-  table: ({ children }) => (
-    <div className="overflow-x-auto my-2 rounded-sm border border-white/10">
-      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => <thead className="bg-white/[0.03]">{children}</thead>,
-  th: ({ children }) => (
-    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-white/10 whitespace-nowrap">{children}</th>
-  ),
-  td: ({ children }) => (
-    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono"><AutoLinkText>{children}</AutoLinkText></td>
-  ),
-  code: ({ className, children }) => {
-    const match = /language-(\w+)/.exec(className || "");
-    const lang = match ? match[1] : "";
-    const codeString = String(children).replace(/\n$/, "");
-    if (lang || codeString.includes("\n")) {
-      return <MarkdownCodeBlock code={codeString} language={lang || "text"} />;
-    }
-    // Auto-link hex values in inline code
-    if (/^0x[0-9a-fA-F]{16,64}$/.test(codeString)) {
-      const { url } = classifyHex(codeString);
-      if (url) {
-        const short = codeString.length > 20 ? `${codeString.slice(0, 10)}...${codeString.slice(-8)}` : codeString;
-        return (
-          <a href={url} target="_blank" rel="noopener noreferrer"
-            className="text-[11px] bg-[var(--flow-green)]/10 px-1 py-0.5 rounded font-mono text-[var(--flow-green)] hover:underline"
-            title={codeString}
-          >{short}</a>
-        );
-      }
-    }
-    return (
-      <code className="text-[11px] bg-white/10 px-1 py-0.5 rounded font-mono text-purple-400">
-        {children}
-      </code>
-    );
-  },
-  pre: ({ children }) => <>{children}</>,
-};
-
 export type MessageResponseProps = HTMLAttributes<HTMLDivElement> & {
   children: string;
   streaming?: boolean;
@@ -543,20 +475,15 @@ export const MessageResponse = memo(
       )}
       {...props}
     >
-      {streaming ? (
-        <AnimatedMarkdown
-          content={children}
-          animation={["colorTransition", "blurIn"]}
-          animationDuration="0.6s"
-          animationTimingFunction="ease-out"
-          sep="diff"
-          customComponents={mdComponents}
-        />
-      ) : (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={staticMdComponents}>
-          {children}
-        </ReactMarkdown>
-      )}
+      <AnimatedMarkdown
+        content={children}
+        animation={["colorTransition", "blurIn"]}
+        animationDuration="0.6s"
+        animationTimingFunction="ease-out"
+        sep="diff"
+        customComponents={mdComponents}
+        static={!streaming}
+      />
     </div>
   ),
   (prevProps, nextProps) => prevProps.children === nextProps.children && prevProps.streaming === nextProps.streaming
