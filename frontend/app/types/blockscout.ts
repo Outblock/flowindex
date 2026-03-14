@@ -143,3 +143,60 @@ export interface BSPaginatedResponse<T> {
   items: T[];
   next_page_params: BSPageParams | null;
 }
+
+// --- Search Preview Types ---
+
+export interface CadenceTxPreview {
+  id: string;
+  status: string;
+  block_height: number;
+  timestamp: string;
+  authorizers: string[];
+  is_evm: boolean;
+}
+
+export interface EVMTxPreview {
+  hash: string;
+  status: string;
+  from: string;
+  to: string | null;
+  value: string;
+  method: string | null;
+  block_number: number;
+}
+
+export interface TxLink {
+  cadence_tx_id: string;
+  evm_hash: string;
+}
+
+export interface CadenceAddressPreview {
+  address: string;
+  contracts_count: number;
+  has_keys: boolean;
+}
+
+export interface EVMAddressPreview {
+  address: string;
+  balance: string;
+  is_contract: boolean;
+  is_verified: boolean;
+  tx_count: number;
+}
+
+export interface COALink {
+  flow_address: string;
+  evm_address: string;
+}
+
+export interface TxPreviewResponse {
+  cadence: CadenceTxPreview | null;
+  evm: EVMTxPreview | null;
+  link: TxLink | null;
+}
+
+export interface AddressPreviewResponse {
+  cadence: CadenceAddressPreview | null;
+  evm: EVMAddressPreview | null;
+  coa_link: COALink | null;
+}

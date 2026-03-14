@@ -9,6 +9,8 @@ import type {
   BSSearchResult,
   BSPageParams,
   BSPaginatedResponse,
+  TxPreviewResponse,
+  AddressPreviewResponse,
 } from '@/types/blockscout';
 
 async function evmFetch<T>(path: string, params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
@@ -87,4 +89,19 @@ export async function getEVMTransactionTokenTransfers(
 
 export async function searchEVM(query: string, signal?: AbortSignal): Promise<BSSearchResult> {
   return evmFetch<BSSearchResult>(`/search`, { q: query }, signal);
+}
+
+// --- Search Preview ---
+
+export async function fetchSearchPreview(
+  query: string,
+  type: 'tx' | 'address',
+  signal?: AbortSignal
+): Promise<TxPreviewResponse | AddressPreviewResponse> {
+  const baseUrl = await resolveApiBaseUrl();
+  const params = new URLSearchParams({ q: query, type });
+  const res = await fetch(`${baseUrl}/flow/search/preview?${params}`, { signal });
+  if (!res.ok) throw new Error(`Preview failed: ${res.status}`);
+  const json = await res.json();
+  return json.data ?? json;
 }
