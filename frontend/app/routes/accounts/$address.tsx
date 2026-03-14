@@ -30,6 +30,7 @@ import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { GlassCard, cn } from '@flowindex/flow-ui';
 import { EVMAccountPage } from '@/components/evm/EVMAccountPage';
+import { COAAccountPage } from '@/components/evm/COAAccountPage';
 import { COABadge } from '../../components/ui/COABadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { UsdValue } from '../../components/UsdValue';
@@ -254,8 +255,16 @@ function AccountDetail() {
         return () => { cancelled = true; };
     }, [address, normalizedAddress, account?.address]);
 
-    // EVM address — render the EVM account page instead of Cadence
+    // EVM address — render COA dual-view or plain EVM account page
     if (isEVM) {
+        if (isCOA && flowAddress) {
+            return (
+                <COAAccountPage
+                    evmAddress={evmAddress!}
+                    flowAddress={flowAddress}
+                />
+            );
+        }
         return (
             <EVMAccountPage
                 address={evmAddress!}
