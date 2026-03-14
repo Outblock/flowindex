@@ -1,4 +1,5 @@
 import type { Abi, WalletClient } from 'viem';
+import SolcWorker from './solcWorker?worker';
 
 export interface CompilationResult {
   success: boolean;
@@ -11,47 +12,36 @@ export interface CompilationResult {
   warnings: string[];
 }
 
+let worker: Worker | null = null;
+let nextId = 0;
+
+function getWorker(): Worker {
+  if (!worker) {
+    worker = new SolcWorker();
+  }
+  return worker;
+}
+
 export async function compileSolidity(source: string, fileName = 'Contract.sol'): Promise<CompilationResult> {
-  // Dynamic import to avoid loading solc WASM on startup
-  const solcModule = await import('solc');
-  const solc = solcModule.default || solcModule;
+  const w = getWorker();
+  const id = nextId++;
 
-  const input = {
-    language: 'Solidity',
-    sources: { [fileName]: { content: source } },
-    settings: {
-      outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object'] } },
-    },
-  };
-
-  const output = JSON.parse(solc.compile(JSON.stringify(input)));
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  if (output.errors) {
-    for (const err of output.errors) {
-      if (err.severity === 'error') errors.push(err.formattedMessage || err.message);
-      else warnings.push(err.formattedMessage || err.message);
+  return new Promise((resolve, reject) => {
+    function handler(e: MessageEvent) {
+      if (e.data.id !== id) return;
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      resolve(e.data as CompilationResult);
     }
-  }
-
-  if (errors.length > 0 || !output.contracts) {
-    return { success: false, contracts: [], errors, warnings };
-  }
-
-  const contracts: CompilationResult['contracts'] = [];
-  const fileContracts = output.contracts[fileName];
-  if (fileContracts) {
-    for (const [name, contract] of Object.entries(fileContracts) as [string, any][]) {
-      contracts.push({
-        name,
-        abi: contract.abi,
-        bytecode: `0x${contract.evm.bytecode.object}`,
-      });
+    function errorHandler(e: ErrorEvent) {
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      reject(new Error(e.message));
     }
-  }
-
-  return { success: true, contracts, errors, warnings };
+    w.addEventListener('message', handler);
+    w.addEventListener('error', errorHandler);
+    w.postMessage({ id, source, fileName });
+  });
 }
 
 export interface DeployResult {
