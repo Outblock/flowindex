@@ -877,7 +877,7 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
                   </div>
                 );
               }
-              return <MessageResponse key={i}>{part.text}</MessageResponse>;
+              return <MessageResponse key={i} streaming={isMessageStreaming}>{part.text}</MessageResponse>;
             }
 
             if (
