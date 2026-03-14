@@ -84,7 +84,7 @@ export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
  */
 export function sha3_256(hex: string): string {
   const sha = new SHA3(256);
-  sha.update(Buffer.from(hexToBytes(hex.replace(/^0x/, ''))));
+  sha.update(hexToBytes(hex.replace(/^0x/, '')) as any);
   const out = sha.digest() as ArrayBuffer | Uint8Array;
   const bytes = out instanceof Uint8Array ? out : new Uint8Array(out);
   return bytesToHex(bytes);
