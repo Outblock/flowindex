@@ -270,6 +270,7 @@ function AccountDetail() {
                 address={evmAddress!}
                 flowAddress={flowAddress ?? undefined}
                 isCOA={isCOA}
+                initialTab={searchTab}
             />
         );
     }

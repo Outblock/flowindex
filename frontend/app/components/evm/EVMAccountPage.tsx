@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Activity, ArrowRightLeft, Coins, Wallet, ExternalLink, FileCode2 } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { colorsFromAddress, avatarVariant } from '@/components/AddressLink';
@@ -18,14 +18,25 @@ interface EVMAccountPageProps {
   address: string;
   flowAddress?: string;
   isCOA: boolean;
+  initialTab?: string;
 }
 
 type EVMTab = 'transactions' | 'internal' | 'transfers' | 'holdings';
 
-export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPageProps) {
+const VALID_TABS: EVMTab[] = ['transactions', 'internal', 'transfers', 'holdings'];
+
+export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMAccountPageProps) {
+  const navigate = useNavigate();
   const [addressInfo, setAddressInfo] = useState<BSAddress | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<EVMTab>('transactions');
+  const [activeTab, setActiveTab] = useState<EVMTab>(
+    VALID_TABS.includes(initialTab as EVMTab) ? (initialTab as EVMTab) : 'transactions'
+  );
+
+  const handleTabChange = (tab: EVMTab) => {
+    setActiveTab(tab);
+    navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, tab }) } as any);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -35,8 +46,8 @@ export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPagePr
       .then((res) => {
         if (!cancelled) setAddressInfo(res);
       })
-      .catch(() => {
-        // Address info is supplementary; tabs still work without it
+      .catch((err) => {
+        console.warn('[EVMAccountPage] Failed to load address info:', err?.message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -75,7 +86,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPagePr
                   colors={colorsFromAddress(address)}
                 />
               </div>
-              <span>EVM Account</span>
+              <span>{addressInfo?.name || 'EVM Account'}</span>
               {isCOA && (
                 <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-semibold bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800/40 uppercase tracking-wider">
                   COA
@@ -85,6 +96,11 @@ export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPagePr
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40 uppercase tracking-wider">
                   <FileCode2 className="w-3 h-3" />
                   Contract
+                </span>
+              )}
+              {addressInfo?.is_verified && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-nothing-green/20 text-green-700 dark:text-nothing-green border border-green-200 dark:border-nothing-green/30 uppercase tracking-wider">
+                  Verified
                 </span>
               )}
             </div>
@@ -182,7 +198,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPagePr
           <div className="md:hidden sticky top-2 z-50">
             <select
               value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value as EVMTab)}
+              onChange={(e) => handleTabChange(e.target.value as EVMTab)}
               className="w-full px-4 py-3 text-sm font-bold uppercase tracking-wider bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-lg rounded-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat text-zinc-900 dark:text-white"
             >
               {tabs.map(({ id, label }) => (
@@ -199,7 +215,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA }: EVMAccountPagePr
                 return (
                   <button
                     key={id}
-                    onClick={() => setActiveTab(id)}
+                    onClick={() => handleTabChange(id)}
                     className={`relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap ${
                       isActive
                         ? 'text-white dark:text-zinc-900 bg-zinc-900 dark:bg-white shadow-md'

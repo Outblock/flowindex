@@ -81,7 +81,8 @@ export interface BSTokenTransfer {
   to: { hash: string; name?: string | null; is_contract: boolean };
   token: BSToken;
   total: { value: string; decimals: string } | null;
-  tx_hash: string;
+  tx_hash?: string;
+  transaction_hash?: string;
   type: string;
   method: string | null;
 }

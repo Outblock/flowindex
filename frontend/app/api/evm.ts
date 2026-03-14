@@ -58,7 +58,9 @@ export async function getEVMAddressTokenTransfers(
 export async function getEVMAddressTokenBalances(
   address: string, signal?: AbortSignal
 ): Promise<BSTokenBalance[]> {
-  return evmFetch<BSTokenBalance[]>(`/address/${address}/token`, undefined, signal);
+  const res = await evmFetch<BSTokenBalance[] | BSPaginatedResponse<BSTokenBalance>>(`/address/${address}/token`, undefined, signal);
+  // Blockscout may return { items: [...] } or plain array
+  return Array.isArray(res) ? res : (res as BSPaginatedResponse<BSTokenBalance>).items ?? [];
 }
 
 // --- Transaction endpoints ---
