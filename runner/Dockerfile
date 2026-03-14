@@ -17,10 +17,8 @@ RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')
 # Install all workspace deps
 RUN cd runner && bun install
 
-# Build shared packages (generate dist/ via tsup)
-RUN cd packages/flow-passkey && bun run build \
- && cd ../auth-core && bun run build \
- && cd ../auth-ui && bun run build
+# Build shared packages (nx resolves dependency order via tag:package)
+RUN bunx nx run-many -t build --projects=tag:package
 
 # Copy runner source and build
 COPY runner/ ./runner/

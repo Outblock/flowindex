@@ -18,11 +18,8 @@ RUN node -e "const p=require('./package.json');p.workspaces=['packages/*','ai/ch
 # Install all workspace deps
 RUN cd ai/chat/web && bun install
 
-# Build shared packages (generate dist/ via tsup)
-RUN cd packages/flow-passkey && bun run build \
- && cd ../auth-core && bun run build \
- && cd ../flowtoken && bun run build \
- && cd ../flow-ui && bun run build
+# Build shared packages (nx resolves dependency order via tag:package)
+RUN npx nx run-many -t build --projects=tag:package
 
 # Copy app source and build
 COPY ai/chat/web/ ./ai/chat/web/
