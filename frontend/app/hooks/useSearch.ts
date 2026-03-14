@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchAll, type SearchAllResponse } from '../api';
-import { searchEVM } from '@/api/evm';
+import { searchEVM, fetchSearchPreview } from '@/api/evm';
 import type { BSSearchItem } from '@/types/blockscout';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type SearchMode = 'idle' | 'quick-match' | 'fuzzy';
+export type SearchMode = 'idle' | 'quick-match' | 'fuzzy' | 'preview';
 
 export interface QuickMatchItem {
   type: string;
@@ -21,6 +21,10 @@ export interface SearchState {
   quickMatches: QuickMatchItem[];
   fuzzyResults: SearchAllResponse | null;
   evmResults: BSSearchItem[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  previewData: any | null;
+  previewType: 'tx' | 'address' | null;
+  previewLoading: boolean;
   isLoading: boolean;
   error: string | null;
 }
@@ -47,13 +51,13 @@ function detectPattern(query: string): { mode: SearchMode; matches: QuickMatchIt
 
   // 2. 0x + 64-hex → EVM transaction (deterministic)
   if (EVM_TX.test(q)) {
-    return { mode: 'idle', matches: [{ type: 'evm-tx', label: 'EVM Transaction', value: q, route: `/txs/evm/${q}` }] };
+    return { mode: 'preview', matches: [{ type: 'evm-tx', label: 'EVM Transaction', value: q, route: `/txs/evm/${q}` }] };
   }
 
   // 3. 64-hex → ambiguous: could be Cadence tx or EVM tx
   if (HEX_64.test(q)) {
     return {
-      mode: 'quick-match',
+      mode: 'preview',
       matches: [
         { type: 'cadence-tx', label: 'Cadence Transaction', value: q, route: `/txs/${q}` },
         { type: 'evm-tx', label: 'EVM Transaction', value: q, route: `/txs/evm/0x${q}` },
@@ -68,18 +72,18 @@ function detectPattern(query: string): { mode: SearchMode; matches: QuickMatchIt
 
   // 5a. 0x + 40-hex → EVM address (deterministic)
   if (EVM_ADDR.test(q)) {
-    return { mode: 'idle', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/${q}` }] };
+    return { mode: 'preview', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/${q}` }] };
   }
 
   // 5b. 40-hex (no 0x prefix) → EVM address (add 0x)
   if (HEX_40.test(q)) {
-    return { mode: 'idle', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/0x${q}` }] };
+    return { mode: 'preview', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/0x${q}` }] };
   }
 
   // 6. 16-hex (with optional 0x) → Flow account (deterministic)
   if (HEX_16.test(q)) {
     const addr = q.startsWith('0x') ? q.slice(2) : q;
-    return { mode: 'idle', matches: [{ type: 'flow-account', label: 'Flow Account', value: addr, route: `/accounts/0x${addr}` }] };
+    return { mode: 'preview', matches: [{ type: 'flow-account', label: 'Flow Account', value: addr, route: `/accounts/0x${addr}` }] };
   }
 
   return { mode: 'idle', matches: [] };
@@ -96,6 +100,9 @@ const INITIAL_STATE: SearchState = {
   quickMatches: [],
   fuzzyResults: null,
   evmResults: [],
+  previewData: null,
+  previewType: null,
+  previewLoading: false,
   isLoading: false,
   error: null,
 };
@@ -136,13 +143,48 @@ export function useSearch() {
     const { mode, matches } = detectPattern(q);
 
     if (mode === 'quick-match') {
-      setState({ mode: 'quick-match', quickMatches: matches, fuzzyResults: null, evmResults: [], isLoading: false, error: null });
+      setState({ mode: 'quick-match', quickMatches: matches, fuzzyResults: null, evmResults: [], previewData: null, previewType: null, previewLoading: false, isLoading: false, error: null });
+      return;
+    }
+
+    if (mode === 'preview') {
+      // Determine preview type from pattern
+      const isAddrType = matches[0]?.type === 'evm-addr' || matches[0]?.type === 'flow-account';
+      const previewType = isAddrType ? 'address' as const : 'tx' as const;
+
+      // Set loading state — keep matches for Enter fallback during loading
+      setState({
+        mode: 'preview',
+        quickMatches: matches,
+        fuzzyResults: null,
+        evmResults: [],
+        previewData: null,
+        previewType,
+        previewLoading: true,
+        isLoading: false,
+        error: null,
+      });
+
+      // Fire preview API immediately (no debounce)
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      fetchSearchPreview(q, previewType, controller.signal)
+        .then((data) => {
+          if (controller.signal.aborted) return;
+          setState((prev) => ({ ...prev, previewData: data, previewLoading: false }));
+        })
+        .catch((_err) => {
+          if (controller.signal.aborted) return;
+          setState((prev) => ({ ...prev, previewLoading: false, error: 'Preview unavailable' }));
+        });
+
       return;
     }
 
     // Deterministic single match → idle (Header handles direct-jump)
     if (matches.length > 0) {
-      setState({ mode: 'idle', quickMatches: matches, fuzzyResults: null, evmResults: [], isLoading: false, error: null });
+      setState({ mode: 'idle', quickMatches: matches, fuzzyResults: null, evmResults: [], previewData: null, previewType: null, previewLoading: false, isLoading: false, error: null });
       return;
     }
 
@@ -153,7 +195,7 @@ export function useSearch() {
     }
 
     // Show loading immediately, debounce the actual API call
-    setState({ mode: 'fuzzy', quickMatches: [], fuzzyResults: null, evmResults: [], isLoading: true, error: null });
+    setState({ mode: 'fuzzy', quickMatches: [], fuzzyResults: null, evmResults: [], previewData: null, previewType: null, previewLoading: false, isLoading: true, error: null });
 
     timerRef.current = setTimeout(async () => {
       const controller = new AbortController();
@@ -178,6 +220,9 @@ export function useSearch() {
             ? fuzzyResults
             : EMPTY_FUZZY,
           evmResults,
+          previewData: null,
+          previewType: null,
+          previewLoading: false,
           isLoading: false,
           error: null,
         });
@@ -188,6 +233,9 @@ export function useSearch() {
           quickMatches: [],
           fuzzyResults: null,
           evmResults: [],
+          previewData: null,
+          previewType: null,
+          previewLoading: false,
           isLoading: false,
           error: err instanceof Error ? err.message : 'Search failed',
         });
