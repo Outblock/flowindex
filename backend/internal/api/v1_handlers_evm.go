@@ -70,3 +70,7 @@ func (s *Server) handleFlowGetEVMAddressTokenTransfers(w http.ResponseWriter, r 
 	addr := normalizeAddr(mux.Vars(r)["address"])
 	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr+"/token-transfers")
 }
+
+func (s *Server) handleFlowEVMSearch(w http.ResponseWriter, r *http.Request) {
+	s.proxyBlockscout(w, r, "/api/v2/search")
+}
