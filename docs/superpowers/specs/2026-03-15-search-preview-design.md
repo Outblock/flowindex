@@ -33,8 +33,10 @@ Replace direct-navigation pattern matches with a preview panel inside the existi
 ## Backend: Unified Preview Endpoint
 
 ```
-GET /flow/v1/search/preview?q={query}&type={tx|address}
+GET /flow/search/preview?q={query}&type={tx|address}
 ```
+
+Note: Uses `/flow/search/preview` (no `/v1/`) to match existing `/flow/search` convention.
 
 ### type=tx
 
@@ -71,10 +73,17 @@ All top-level fields are nullable. `link` is present when a Cadence tx wraps an 
 
 **Backend logic:**
 1. Normalize hash: strip `0x`, lowercase
-2. Query local DB: `SELECT id, status, block_height, timestamp, authorizers, is_evm FROM raw.transactions WHERE id = $1` (also check `raw.tx_lookup` for EVM hash mapping)
-3. Query Blockscout: `GET /api/v2/transactions/0x{hash}` (via existing proxy, or direct DB if configured)
-4. If EVM hash found in `app.evm_tx_hashes`, resolve to parent Cadence tx ID for the `link` field
-5. If Cadence tx has `is_evm = true`, look up EVM hash from `app.evm_tx_hashes` for the `link` field
+2. Fire two lookups **in parallel** (goroutines):
+   - **Local DB**: `SELECT id, status, block_height, timestamp, authorizers, is_evm FROM raw.transactions WHERE id = $1`. Also check `raw.tx_lookup` for EVM hash → Cadence tx mapping.
+   - **Blockscout**: `GET /api/v2/transactions/0x{hash}` with a **2-second timeout**. If Blockscout times out or fails, return `evm: null` (graceful degradation).
+3. Build `link` field:
+   - If Cadence tx has `is_evm = true`: look up `app.evm_tx_hashes WHERE transaction_id = $1` to get the first EVM hash
+   - If EVM hash found in `app.evm_tx_hashes`: resolve to parent Cadence tx ID
+   - If a Cadence tx has multiple EVM hashes (multiple `event_index` entries), return only the first one. Multiple EVM executions per Cadence tx are rare; the link is for navigation, not exhaustive listing.
+
+**Value display:** `evm.value` is a raw wei string. Frontend converts to FLOW (divide by 1e18) using existing `formatWei()` from `@/lib/evmUtils`.
+
+**Method display:** `evm.method` comes from Blockscout's decoded function selector. If contract is not verified, Blockscout returns `null` or a raw 4-byte hex. Frontend shows the method name if available, otherwise hides it.
 
 ### type=address
 
@@ -85,9 +94,8 @@ Response:
 {
   "cadence": {
     "address": "0x1654653399040a61",
-    "balance": "100.50000000",
-    "keys_count": 2,
-    "contracts_count": 3
+    "contracts_count": 3,
+    "has_keys": true
   },
   "evm": {
     "address": "0xAbCd...1234",
@@ -107,36 +115,78 @@ All top-level fields are nullable. `coa_link` is present when a COA mapping exis
 
 **Backend logic:**
 1. Detect address type by length (16 hex = Flow, 40 hex = EVM)
-2. If Flow address: query `app.accounts` for balance/keys/contracts, then `app.coa_accounts` for linked EVM address
-3. If EVM address: query Blockscout `/api/v2/addresses/0x{addr}` for balance/contract/tx_count, then `app.coa_accounts` for linked Flow address
-4. If COA link found, also fetch the other side's basic info (Flow account or EVM address)
+2. Fire lookups **in parallel**:
+   - **COA link**: `app.coa_accounts` — check if address has a linked counterpart
+   - **Cadence data** (if Flow address or COA-linked Flow address): `SELECT COUNT(*) FROM app.smart_contracts WHERE address = $1` for contracts_count, `SELECT EXISTS(SELECT 1 FROM app.account_keys WHERE address = $1 AND revoked = false)` for has_keys. Note: `app.accounts` does not store balance/keys_count directly — we keep the Cadence preview lightweight with only DB-cheap fields. Full balance requires Flow Access Node RPC which is too slow for preview.
+   - **EVM data** (if EVM address or COA-linked EVM address): Blockscout `GET /api/v2/addresses/0x{addr}` with **2-second timeout**. Returns balance, is_contract, tx_count.
+3. If COA link found, also fetch the other side's basic info.
+
+**EVM balance display:** Frontend converts wei to FLOW using `formatWei()`.
 
 ## Frontend: Search State Changes
 
 ### New search mode: `preview`
 
-Add to `SearchState`:
+Add to `SearchState` (preserving all existing fields including `evmResults`):
 ```typescript
 type SearchMode = 'idle' | 'quick-match' | 'fuzzy' | 'preview';
 
-interface PreviewData {
-  type: 'tx' | 'address';
-  cadence: TxPreview | AddressPreview | null;
-  evm: EVMTxPreview | EVMAddressPreview | null;
-  link: TxLink | COALink | null;
+interface TxPreviewData {
+  type: 'tx';
+  cadence: {
+    id: string;
+    status: string;
+    block_height: number;
+    timestamp: string;
+    authorizers: string[];
+    is_evm: boolean;
+  } | null;
+  evm: {
+    hash: string;
+    status: string;
+    from: string;
+    to: string | null;
+    value: string;
+    method: string | null;
+    block_number: number;
+  } | null;
+  link: { cadence_tx_id: string; evm_hash: string } | null;
 }
+
+interface AddressPreviewData {
+  type: 'address';
+  cadence: {
+    address: string;
+    contracts_count: number;
+    has_keys: boolean;
+  } | null;
+  evm: {
+    address: string;
+    balance: string;
+    is_contract: boolean;
+    is_verified: boolean;
+    tx_count: number;
+  } | null;
+  coa_link: { flow_address: string; evm_address: string } | null;
+}
+
+type PreviewData = TxPreviewData | AddressPreviewData;
 
 interface SearchState {
   mode: SearchMode;
-  // ... existing fields ...
-  previewData: PreviewData | null;
-  previewLoading: boolean;
+  quickMatches: QuickMatchItem[];
+  fuzzyResults: SearchAllResponse | null;
+  evmResults: BSSearchItem[];          // preserved from existing implementation
+  previewData: PreviewData | null;     // NEW
+  previewLoading: boolean;             // NEW
+  isLoading: boolean;
+  error: string | null;
 }
 ```
 
 ### detectPattern changes
 
-Pattern matches that currently return `mode: 'idle'` change to `mode: 'preview'`:
+Pattern matches that currently return `mode: 'idle'` change to `mode: 'preview'`. Both `EVM_ADDR` (0x-prefixed) and `HEX_40` (bare) patterns collapse to the same behavior:
 
 ```
 EVM_TX (0x + 64 hex) → mode: 'preview', fire preview API (type=tx)
@@ -150,12 +200,16 @@ Block height (digits) and public key (128 hex) remain `mode: 'idle'` with direct
 
 ### Preview API call
 
-When mode becomes `preview`, immediately fire:
+When mode becomes `preview`, immediately fire (no debounce — pattern is deterministic):
 ```typescript
-const res = await fetch(`${baseUrl}/flow/v1/search/preview?q=${query}&type=${type}`);
+const res = await fetch(`${baseUrl}/flow/search/preview?q=${query}&type=${type}`);
 ```
 
-Show skeleton loading in the dropdown while waiting. No debounce needed (pattern is deterministic).
+Show skeleton loading in the dropdown while waiting.
+
+### Enter key during loading
+
+If the user presses Enter while preview is loading, **fall back to direct navigation** (same behavior as current). This preserves the paste-and-Enter workflow. Once preview data arrives, Enter selects the first preview item instead.
 
 ## Frontend: SearchDropdown Preview Rendering
 
@@ -173,10 +227,12 @@ Show skeleton loading in the dropdown while waiting. No debounce needed (pattern
 └─────────────────────────────────────────────┘
 ```
 
-- Each section is a clickable row (navigates to `/txs/{id}` or `/txs/{evmHash}`)
-- `[parent]` badge shown when the EVM tx is wrapped by the Cadence tx (or vice versa)
+- Each section is a separate item in `flatItems` (for keyboard ↑↓ navigation)
+- Cadence section navigates to `/txs/{cadence_tx_id}`
+- EVM section navigates to `/txs/{evm_hash}`
+- `[parent]` badge shown when `link` is present (the EVM tx is wrapped by the Cadence tx)
 - If only one side found, show only that section
-- If neither found, show "Transaction not found"
+- If neither found, show "Transaction not found" with the hash displayed for copy
 
 ### Address Preview Layout
 
@@ -187,12 +243,13 @@ Show skeleton loading in the dropdown while waiting. No debounce needed (pattern
 │ 42 txns  [Contract]               → view   │
 ├─────────────────────────────────────────────┤
 │ LINKED FLOW ADDRESS (COA)                   │
-│ 0x1654...0a61  Balance: 100.5 FLOW         │
-│ 2 keys  3 contracts               → view   │
+│ 0x1654...0a61                              │
+│ 3 contracts                        → view   │
 └─────────────────────────────────────────────┘
 ```
 
 - Primary address shown first, linked address second
+- Each section is a separate item in `flatItems`
 - COA badge on the linked section
 - If no COA link, show only the primary address section
 - If address not found at all, show "Address not found"
@@ -202,7 +259,7 @@ Show skeleton loading in the dropdown while waiting. No debounce needed (pattern
 Follow existing SearchDropdown patterns:
 - `SectionLabel` for section headers
 - Green left border on active/selected item
-- Keyboard navigation (↑↓) works across preview sections
+- Keyboard navigation (↑↓) works across preview sections — each section is one `flatItem`
 - Same dark theme (zinc-900 bg, zinc-200 text)
 - Skeleton loading: 2 card placeholders while preview loads
 
@@ -211,4 +268,6 @@ Follow existing SearchDropdown patterns:
 - Changing fuzzy search behavior
 - Adding preview for block height or public key searches
 - Direct Blockscout DB connection (use existing API proxy for now; can switch to DB later)
-- Caching preview results (queries are unique hashes/addresses)
+- Caching preview results (queries are unique hashes/addresses — cache hit rate would be very low)
+- Showing Flow account balance in Cadence preview (requires Flow Access Node RPC, too slow for preview)
+- Handling multiple EVM hashes per Cadence tx (return first only; rare edge case)
