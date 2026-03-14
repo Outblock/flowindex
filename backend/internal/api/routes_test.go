@@ -92,12 +92,22 @@ var specExcludedRoutes = map[string]bool{
 	// Alias: /contract/{id}/version/{id} same as /contract/{id}/{id}
 	"/flow/contract/{identifier}/version/{id}": true,
 	// Analytics aliases (content blockers block "analytics")
-	"/analytics/daily": true,
-	"/analytics/daily/module/{module}":   true,
-	"/analytics/transfers/daily":         true,
-	"/analytics/big-transfers":           true,
-	"/analytics/top-contracts":           true,
-	"/analytics/token-volume":            true,
+	"/analytics/daily":                  true,
+	"/analytics/daily/module/{module}":  true,
+	"/analytics/transfers/daily":        true,
+	"/analytics/big-transfers":          true,
+	"/analytics/top-contracts":          true,
+	"/analytics/token-volume":           true,
+	// EVM proxy routes (proxied to Blockscout, not our own API)
+	"/flow/evm/transaction/{hash}/internal-transactions": true,
+	"/flow/evm/transaction/{hash}/logs":                  true,
+	"/flow/evm/transaction/{hash}/token-transfers":       true,
+	"/flow/evm/address/{address}/transactions":           true,
+	"/flow/evm/address/{address}/internal-transactions":  true,
+	"/flow/evm/address/{address}/token-transfers":        true,
+	"/flow/evm/address/{address}":                        true,
+	"/flow/evm/search":                                   true,
+	"/flow/search/preview":                               true,
 }
 
 // TestAllRoutesInSpec ensures every registered public route has an OpenAPI spec entry.
