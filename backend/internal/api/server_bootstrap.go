@@ -126,6 +126,7 @@ type Server struct {
 	httpServer         *http.Server
 	startBlock         uint64
 	blockscoutURL      string // e.g. "https://evm.flowindex.dev"
+	blockscoutAPIKey   string // optional API key for Blockscout rate limit bypass
 	backfillProgress   *BackfillProgress
 	priceCache         *market.PriceCache
 	webhookHandlers      WebhookRouteRegistrar
@@ -162,7 +163,8 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 		repo:          repo,
 		client:        client,
 		startBlock:    startBlock,
-		blockscoutURL: bsURL,
+		blockscoutURL:    bsURL,
+		blockscoutAPIKey: os.Getenv("BLOCKSCOUT_API_KEY"),
 		priceCache:    market.NewPriceCache(),
 	}
 	for _, opt := range opts {

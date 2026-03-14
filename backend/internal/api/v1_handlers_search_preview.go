@@ -197,6 +197,9 @@ func (s *Server) handleSearchPreviewTx(w http.ResponseWriter, r *http.Request, q
 		defer cancel()
 
 		url := fmt.Sprintf("%s/api/v2/transactions/0x%s", s.blockscoutURL, hash)
+		if s.blockscoutAPIKey != "" {
+			url += "?apikey=" + s.blockscoutAPIKey
+		}
 		req, err := http.NewRequestWithContext(bsCtx, http.MethodGet, url, nil)
 		if err != nil {
 			return
@@ -401,7 +404,7 @@ func (s *Server) handleSearchPreviewAddress(w http.ResponseWriter, r *http.Reque
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			evmInfo := fetchBlockscoutAddress(ctx, s.blockscoutURL, addr)
+			evmInfo := fetchBlockscoutAddress(ctx, s.blockscoutURL, s.blockscoutAPIKey, addr)
 			if evmInfo != nil {
 				mu.Lock()
 				evmData = evmInfo
@@ -416,7 +419,7 @@ func (s *Server) handleSearchPreviewAddress(w http.ResponseWriter, r *http.Reque
 	if coaLink != nil {
 		if isFlow && coaLink.COAAddress != nil && evmData == nil {
 			// We have a Flow address with a COA link, fetch EVM data for the COA
-			evmInfo := fetchBlockscoutAddress(ctx, s.blockscoutURL, *coaLink.COAAddress)
+			evmInfo := fetchBlockscoutAddress(ctx, s.blockscoutURL, s.blockscoutAPIKey, *coaLink.COAAddress)
 			if evmInfo != nil {
 				evmData = evmInfo
 			}
@@ -462,7 +465,7 @@ func (s *Server) handleSearchPreviewAddress(w http.ResponseWriter, r *http.Reque
 // Blockscout helpers
 // ---------------------------------------------------------------------------
 
-func fetchBlockscoutAddress(ctx context.Context, blockscoutURL, addr string) *SearchPreviewAddrEVM {
+func fetchBlockscoutAddress(ctx context.Context, blockscoutURL, apiKey, addr string) *SearchPreviewAddrEVM {
 	if blockscoutURL == "" {
 		return nil
 	}
@@ -471,6 +474,9 @@ func fetchBlockscoutAddress(ctx context.Context, blockscoutURL, addr string) *Se
 	defer cancel()
 
 	url := fmt.Sprintf("%s/api/v2/addresses/0x%s", blockscoutURL, strings.TrimPrefix(addr, "0x"))
+	if apiKey != "" {
+		url += "?apikey=" + apiKey
+	}
 	req, err := http.NewRequestWithContext(bsCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil

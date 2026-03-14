@@ -17,6 +17,14 @@ func (s *Server) proxyBlockscout(w http.ResponseWriter, r *http.Request, upstrea
 	if q := r.URL.RawQuery; q != "" {
 		target += "?" + q
 	}
+	// Append API key for rate limit bypass
+	if s.blockscoutAPIKey != "" {
+		sep := "?"
+		if r.URL.RawQuery != "" {
+			sep = "&"
+		}
+		target += sep + "apikey=" + s.blockscoutAPIKey
+	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
 	if err != nil {
