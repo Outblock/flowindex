@@ -35,3 +35,23 @@ func (s *Server) handleFlowGetEVMToken(w http.ResponseWriter, r *http.Request) {
 	}
 	s.proxyBlockscout(w, r, "/api/v2/tokens/0x"+address)
 }
+
+func (s *Server) handleFlowGetEVMAddress(w http.ResponseWriter, r *http.Request) {
+	addr := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr)
+}
+
+func (s *Server) handleFlowGetEVMAddressTransactions(w http.ResponseWriter, r *http.Request) {
+	addr := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr+"/transactions")
+}
+
+func (s *Server) handleFlowGetEVMAddressInternalTxs(w http.ResponseWriter, r *http.Request) {
+	addr := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr+"/internal-transactions")
+}
+
+func (s *Server) handleFlowGetEVMAddressTokenTransfers(w http.ResponseWriter, r *http.Request) {
+	addr := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr+"/token-transfers")
+}
