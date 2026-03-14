@@ -1624,7 +1624,7 @@ export default function App() {
               )}
             </button>
           )}
-          <h1 className="text-sm font-semibold tracking-tight">{isMobile ? 'Runner' : 'Cadence Runner'}</h1>
+          <h1 className="text-sm font-semibold tracking-tight">{isMobile ? 'Runner' : 'Flow Runner'}</h1>
           <nav className="flex items-center gap-1 ml-3">
             <span className="px-3 py-1 text-xs rounded-md bg-zinc-800 text-zinc-100">Editor</span>
             <a href="/deploy" className="px-3 py-1 text-xs rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors">Deploy</a>
