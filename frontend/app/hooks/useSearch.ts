@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { searchAll, type SearchAllResponse } from '../api';
+import { searchEVM } from '@/api/evm';
+import type { BSSearchItem } from '@/types/blockscout';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,6 +20,7 @@ export interface SearchState {
   mode: SearchMode;
   quickMatches: QuickMatchItem[];
   fuzzyResults: SearchAllResponse | null;
+  evmResults: BSSearchItem[];
   isLoading: boolean;
   error: string | null;
 }
@@ -30,6 +33,7 @@ const HEX_128 = /^[0-9a-fA-F]{128}$/;
 const EVM_TX = /^0x[0-9a-fA-F]{64}$/;
 const HEX_64 = /^[0-9a-fA-F]{64}$/;
 const DIGITS = /^\d+$/;
+const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;    // 0x-prefixed EVM address
 const HEX_40 = /^[0-9a-fA-F]{40}$/;
 const HEX_16 = /^(0x)?[0-9a-fA-F]{16}$/;
 
@@ -62,9 +66,14 @@ function detectPattern(query: string): { mode: SearchMode; matches: QuickMatchIt
     return { mode: 'idle', matches: [{ type: 'block', label: 'Block', value: q, route: `/blocks/${q}` }] };
   }
 
-  // 5. 40-hex → COA address (route resolved async by Header)
+  // 5a. 0x + 40-hex → EVM address (deterministic)
+  if (EVM_ADDR.test(q)) {
+    return { mode: 'idle', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/${q}` }] };
+  }
+
+  // 5b. 40-hex (no 0x prefix) → EVM address (add 0x)
   if (HEX_40.test(q)) {
-    return { mode: 'idle', matches: [{ type: 'coa', label: 'COA Address', value: q, route: '' }] };
+    return { mode: 'idle', matches: [{ type: 'evm-addr', label: 'EVM Address', value: q, route: `/accounts/0x${q}` }] };
   }
 
   // 6. 16-hex (with optional 0x) → Flow account (deterministic)
@@ -86,6 +95,7 @@ const INITIAL_STATE: SearchState = {
   mode: 'idle',
   quickMatches: [],
   fuzzyResults: null,
+  evmResults: [],
   isLoading: false,
   error: null,
 };
@@ -126,13 +136,13 @@ export function useSearch() {
     const { mode, matches } = detectPattern(q);
 
     if (mode === 'quick-match') {
-      setState({ mode: 'quick-match', quickMatches: matches, fuzzyResults: null, isLoading: false, error: null });
+      setState({ mode: 'quick-match', quickMatches: matches, fuzzyResults: null, evmResults: [], isLoading: false, error: null });
       return;
     }
 
     // Deterministic single match → idle (Header handles direct-jump)
     if (matches.length > 0) {
-      setState({ mode: 'idle', quickMatches: matches, fuzzyResults: null, isLoading: false, error: null });
+      setState({ mode: 'idle', quickMatches: matches, fuzzyResults: null, evmResults: [], isLoading: false, error: null });
       return;
     }
 
@@ -143,24 +153,31 @@ export function useSearch() {
     }
 
     // Show loading immediately, debounce the actual API call
-    setState({ mode: 'fuzzy', quickMatches: [], fuzzyResults: null, isLoading: true, error: null });
+    setState({ mode: 'fuzzy', quickMatches: [], fuzzyResults: null, evmResults: [], isLoading: true, error: null });
 
     timerRef.current = setTimeout(async () => {
       const controller = new AbortController();
       abortRef.current = controller;
 
       try {
-        const results = await searchAll(q, 3, controller.signal);
+        const [localResult, evmResult] = await Promise.allSettled([
+          searchAll(q, 3, controller.signal),
+          searchEVM(q, controller.signal),
+        ]);
 
         // Don't update state if this request was aborted
         if (controller.signal.aborted) return;
 
+        const fuzzyResults = localResult.status === 'fulfilled' ? localResult.value : { contracts: [], tokens: [], nft_collections: [] };
+        const evmResults = evmResult.status === 'fulfilled' ? (evmResult.value.items ?? []) : [];
+
         setState({
           mode: 'fuzzy',
           quickMatches: [],
-          fuzzyResults: results.contracts.length || results.tokens.length || results.nft_collections.length
-            ? results
+          fuzzyResults: fuzzyResults.contracts.length || fuzzyResults.tokens.length || fuzzyResults.nft_collections.length
+            ? fuzzyResults
             : EMPTY_FUZZY,
+          evmResults,
           isLoading: false,
           error: null,
         });
@@ -170,6 +187,7 @@ export function useSearch() {
           mode: 'fuzzy',
           quickMatches: [],
           fuzzyResults: null,
+          evmResults: [],
           isLoading: false,
           error: err instanceof Error ? err.message : 'Search failed',
         });
