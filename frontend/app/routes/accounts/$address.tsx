@@ -29,6 +29,7 @@ import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { GlassCard, cn } from '@flowindex/flow-ui';
+import { EVMAccountPage } from '@/components/evm/EVMAccountPage';
 import { COABadge } from '../../components/ui/COABadge';
 import { QRCodeSVG } from 'qrcode.react';
 import { UsdValue } from '../../components/UsdValue';
@@ -65,22 +66,25 @@ export const Route = createFileRoute('/accounts/$address')({
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
 
-            // Detect COA (EVM) addresses: longer than Flow's 18 chars (0x + 16 hex)
-            // and have 10+ leading zeros after 0x — redirect to the linked Flow address.
+            // Detect EVM addresses (40 hex chars) — render EVM account page
             const hexOnly = normalized.replace(/^0x/, '');
-            const isCOA = hexOnly.length > 16 && /^0{10,}/.test(hexOnly);
-            if (isCOA) {
+            if (hexOnly.length === 40) {
                 const base = await resolveApiBaseUrl();
                 const coaRes = await fetch(`${base}/flow/v1/coa/${normalized}`).catch(() => null);
+                let flowAddress: string | null = null;
                 if (coaRes?.ok) {
                     const json = await coaRes.json().catch(() => null);
-                    const flowAddr = json?.data?.[0]?.flow_address;
-                    if (flowAddr) {
-                        throw redirect({ to: '/accounts/$address', params: { address: flowAddr }, search: search as any });
-                    }
+                    flowAddress = json?.data?.[0]?.flow_address ?? null;
                 }
-                // COA address with no known Flow mapping — return early with helpful state
-                return { account: null, initialTransactions: [], initialNextCursor: '', isCOA: true };
+                return {
+                    account: null,
+                    initialTransactions: [],
+                    initialNextCursor: '',
+                    isEVM: true,
+                    isCOA: !!flowAddress,
+                    evmAddress: normalized,
+                    flowAddress,
+                };
             }
 
             await ensureHeyApiConfigured();
@@ -110,12 +114,12 @@ export const Route = createFileRoute('/accounts/$address')({
 
             // Transactions are loaded client-side by AccountActivityTab to avoid
             // blocking the entire page render on a potentially slow query.
-            return { account: initialAccount, initialTransactions: [], initialNextCursor: '', isCOA: false };
+            return { account: initialAccount, initialTransactions: [], initialNextCursor: '', isEVM: false, isCOA: false, evmAddress: null, flowAddress: null };
         } catch (e) {
             // Re-throw redirects (e.g. COA → Flow address redirect)
             if (isRedirect(e)) throw e;
             console.error("Failed to load account data", e);
-            return { account: null, initialTransactions: [], initialNextCursor: '', isCOA: false };
+            return { account: null, initialTransactions: [], initialNextCursor: '', isEVM: false, isCOA: false, evmAddress: null, flowAddress: null };
         }
     },
     head: ({ params }) => ({
@@ -149,7 +153,7 @@ function AccountDetailPending() {
 function AccountDetail() {
     const { address } = Route.useParams();
     const { tab: searchTab, subtab: searchSubTab } = Route.useSearch();
-    const { account: initialAccount, initialTransactions, initialNextCursor, isCOA } = Route.useLoaderData();
+    const { account: initialAccount, initialTransactions, initialNextCursor, isEVM, isCOA, evmAddress, flowAddress } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -181,8 +185,9 @@ function AccountDetail() {
         }).catch(() => {});
     }, []);
 
-    // Client-side on-chain data (balance, staking, storage, COA)
+    // Client-side on-chain data (balance, staking, storage, COA) — skip for EVM addresses
     useEffect(() => {
+        if (isEVM) return;
         setOnChainData(null);
         const load = async () => {
             try {
@@ -214,8 +219,9 @@ function AccountDetail() {
         load();
     }, [normalizedAddress]);
 
-    // Refresh account on route change
+    // Refresh account on route change — skip for EVM addresses
     useEffect(() => {
+        if (isEVM) return;
         if (account?.address === normalizedAddress) return;
 
         let cancelled = false;
@@ -247,6 +253,17 @@ function AccountDetail() {
         refresh();
         return () => { cancelled = true; };
     }, [address, normalizedAddress, account?.address]);
+
+    // EVM address — render the EVM account page instead of Cadence
+    if (isEVM) {
+        return (
+            <EVMAccountPage
+                address={evmAddress!}
+                flowAddress={flowAddress ?? undefined}
+                isCOA={isCOA}
+            />
+        );
+    }
 
     if (error || !account) {
         return (
