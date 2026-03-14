@@ -2,10 +2,10 @@
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "default",
   "rsc": false,
-  "tsx": false,
+  "tsx": true,
   "tailwind": {
     "config": "tailwind.config.js",
-    "css": "src/index.css",
+    "css": "app/index.css",
     "baseColor": "slate",
     "cssVariables": true,
     "prefix": ""
@@ -13,7 +13,9 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
-    "utils": "@/lib/utils"
+    "utils": "@/lib/utils",
+    "hooks": "@/hooks",
+    "ui": "@/components/ui"
   },
   "registries": {
     "@react-bits": "https://reactbits.dev/r/{name}.json",
