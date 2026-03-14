@@ -36,6 +36,21 @@ func (s *Server) handleFlowGetEVMToken(w http.ResponseWriter, r *http.Request) {
 	s.proxyBlockscout(w, r, "/api/v2/tokens/0x"+address)
 }
 
+func (s *Server) handleFlowGetEVMTransactionInternalTxs(w http.ResponseWriter, r *http.Request) {
+	hash := strings.ToLower(strings.TrimPrefix(mux.Vars(r)["hash"], "0x"))
+	s.proxyBlockscout(w, r, "/api/v2/transactions/0x"+hash+"/internal-transactions")
+}
+
+func (s *Server) handleFlowGetEVMTransactionLogs(w http.ResponseWriter, r *http.Request) {
+	hash := strings.ToLower(strings.TrimPrefix(mux.Vars(r)["hash"], "0x"))
+	s.proxyBlockscout(w, r, "/api/v2/transactions/0x"+hash+"/logs")
+}
+
+func (s *Server) handleFlowGetEVMTransactionTokenTransfers(w http.ResponseWriter, r *http.Request) {
+	hash := strings.ToLower(strings.TrimPrefix(mux.Vars(r)["hash"], "0x"))
+	s.proxyBlockscout(w, r, "/api/v2/transactions/0x"+hash+"/token-transfers")
+}
+
 func (s *Server) handleFlowGetEVMAddress(w http.ResponseWriter, r *http.Request) {
 	addr := normalizeAddr(mux.Vars(r)["address"])
 	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+addr)
