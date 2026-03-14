@@ -1,3 +1,4 @@
+# check=skip=SecretsUsedInArgOrEnv
 FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
 

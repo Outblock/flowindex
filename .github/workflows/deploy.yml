@@ -56,7 +56,6 @@ on:
         default: false
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PROJECT_ID: flowindex-mainnet
   REGION: us-central1
   REGISTRY: us-central1-docker.pkg.dev/flowindex-mainnet/flowindex
@@ -94,8 +93,9 @@ jobs:
           BEFORE_SHA="${{ github.event.before }}"
           AFTER_SHA="${{ github.sha }}"
 
-          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            BEFORE_SHA="$(git hash-object -t tree /dev/null)"
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            # SHA missing after rebase/force-push — diff against parent instead
+            BEFORE_SHA="$(git rev-parse HEAD~1 2>/dev/null || git hash-object -t tree /dev/null)"
           fi
 
           changed() {
@@ -170,21 +170,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push backend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: backend/Dockerfile
@@ -235,21 +235,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push frontend
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: frontend/Dockerfile
@@ -305,18 +305,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Generate Supabase anon key
         id: supabase-keys
@@ -346,7 +346,7 @@ jobs:
           echo "service_key=$SERVICE_KEY" >> "$GITHUB_OUTPUT"
 
       - name: Build & push runner
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: runner/Dockerfile
@@ -411,12 +411,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
@@ -616,21 +616,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push docs
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: devportal/Dockerfile
@@ -667,21 +667,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push ai-chat
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ai/chat/Dockerfile
@@ -744,21 +744,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push wallet
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: wallet/Dockerfile
@@ -808,21 +808,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push studio
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: studio
           file: studio/Dockerfile
@@ -996,21 +996,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push ${{ matrix.name }} image (cached)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: sim-workflow
           file: sim-workflow/${{ matrix.dockerfile }}
@@ -1042,12 +1042,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Upload Sim Studio seed SQL
         run: |
@@ -1289,21 +1289,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push simulator (emulator)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: simulate/emulator
           file: simulate/emulator/Dockerfile
@@ -1318,7 +1318,7 @@ jobs:
           cache-to: type=gha,scope=simulator,mode=max
 
       - name: Build & push simulator-api
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: simulate/api
           file: simulate/api/Dockerfile
@@ -1369,21 +1369,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push simulate-landing
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: simulate/frontend/Dockerfile
