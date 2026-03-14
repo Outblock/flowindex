@@ -4,8 +4,11 @@ import { Loader2, Code2, List, Copy, Check, Sparkles } from 'lucide-react';
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 import type { FlowNetwork } from '../flow/networks';
+import type { DeployedContract } from '../flow/evmContract';
+import type { Chain } from 'viem/chains';
 
 const CodegenPanel = lazy(() => import('./CodegenPanel'));
+const ContractInteraction = lazy(() => import('./ContractInteraction'));
 
 interface ResultPanelProps {
   results: ExecutionResult[];
@@ -15,6 +18,8 @@ interface ResultPanelProps {
   filename?: string;
   codeType?: 'script' | 'transaction' | 'contract';
   onFixWithAI?: (errorMessage: string) => void;
+  deployedContract?: DeployedContract;
+  chain?: Chain;
 }
 
 function txExplorerUrl(txId: string, network?: FlowNetwork): string | null {
@@ -25,7 +30,7 @@ function txExplorerUrl(txId: string, network?: FlowNetwork): string | null {
   return `${base}/txs/${txId}`;
 }
 
-type Tab = 'result' | 'events' | 'logs' | 'codegen';
+type Tab = 'result' | 'events' | 'logs' | 'codegen' | 'interact';
 type ViewMode = 'tree' | 'raw';
 
 function Badge({ children, variant }: { children: React.ReactNode; variant: 'success' | 'error' | 'info' }) {
@@ -248,7 +253,7 @@ function DataDisplay({ data, isError, onFixWithAI }: { data: any; isError?: bool
   );
 }
 
-export default function ResultPanel({ results, loading, network, code, filename, codeType, onFixWithAI }: ResultPanelProps) {
+export default function ResultPanel({ results, loading, network, code, filename, codeType, onFixWithAI, deployedContract, chain }: ResultPanelProps) {
   const [tab, setTab] = useState<Tab>('result');
 
   const lastResult = results.length > 0 ? results[results.length - 1] : null;
@@ -259,6 +264,7 @@ export default function ResultPanel({ results, loading, network, code, filename,
     { key: 'events', label: 'Events', count: allEvents.length },
     { key: 'logs', label: 'Logs', count: results.length },
     { key: 'codegen', label: 'Codegen' },
+    ...(deployedContract ? [{ key: 'interact' as Tab, label: 'Interact' }] : []),
   ];
 
   return (
@@ -308,8 +314,24 @@ export default function ResultPanel({ results, loading, network, code, filename,
         </div>
       )}
 
+      {/* Interact tab — contract interaction panel */}
+      {tab === 'interact' && deployedContract && chain && (
+        <div className="flex-1 min-h-0 overflow-auto">
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full gap-2 text-zinc-500 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading interaction panel...
+              </div>
+            }
+          >
+            <ContractInteraction contract={deployedContract} chain={chain} />
+          </Suspense>
+        </div>
+      )}
+
       {/* Content */}
-      {tab !== 'codegen' && (
+      {tab !== 'codegen' && tab !== 'interact' && (
       <div className="flex-1 overflow-auto p-3 font-mono text-xs">
         {results.length === 0 && !loading ? (
           <div className="flex items-center justify-center h-full text-zinc-600 text-sm">

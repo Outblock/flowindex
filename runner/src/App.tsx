@@ -6,7 +6,8 @@ import CadenceEditor from './editor/CadenceEditor';
 import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
 import { useSolidityLsp } from './editor/useSolidityLsp';
-import { compileSolidity, deploySolidity } from './flow/evmExecute';
+import { compileSolidity, compileSolidityMultiFile, deploySolidity, detectPragmaVersion } from './flow/evmExecute';
+import type { DeployedContract } from './flow/evmContract';
 import { useAccount, useWalletClient, useSwitchChain } from 'wagmi';
 import { flowEvmMainnet, flowEvmTestnet } from './flow/evmChains';
 import ResultPanel from './components/ResultPanel';
@@ -783,6 +784,10 @@ export default function App() {
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const { switchChain } = useSwitchChain();
+  const [deployedContract, setDeployedContract] = useState<DeployedContract | null>(null);
+
+  // Active EVM chain based on network selection
+  const evmChain = network === 'mainnet' ? flowEvmMainnet : flowEvmTestnet;
 
   // Auto-switch EVM chain when Flow network changes
   useEffect(() => {
@@ -935,9 +940,24 @@ export default function App() {
     if (loading) return;
     setLoading(true);
     setResults([]);
+    setDeployedContract(null);
 
     try {
-      const compilation = await compileSolidity(activeCode, project.activeFile);
+      // Auto-detect solc version from pragma (for display only; bundled compiler handles 0.8.x)
+      const pragmaVersion = detectPragmaVersion(activeCode);
+
+      // Collect all .sol files for multi-file compilation
+      const solFiles = project.files.filter(f => f.path.endsWith('.sol'));
+      let compilation;
+      if (solFiles.length > 1) {
+        const allSolSources: Record<string, string> = {};
+        for (const f of solFiles) {
+          allSolSources[f.path] = f.content;
+        }
+        compilation = await compileSolidityMultiFile(project.activeFile, allSolSources);
+      } else {
+        compilation = await compileSolidity(activeCode, project.activeFile);
+      }
 
       if (!compilation.success) {
         setResults([{
@@ -951,7 +971,8 @@ export default function App() {
         console.warn('[Solidity]', compilation.warnings.join('\n'));
       }
 
-      const contract = compilation.contracts[0];
+      // Prefer contract from the active file, fallback to first
+      const contract = compilation.contracts.find(c => c.sourceFile === project.activeFile) || compilation.contracts[0];
       if (!contract) {
         setResults([{ type: 'error', data: 'No contracts found in source' }]);
         return;
@@ -964,6 +985,8 @@ export default function App() {
           contractName: contract.name,
           abi: contract.abi,
           bytecodeSize: Math.floor(contract.bytecode.length / 2) + ' bytes',
+          ...(pragmaVersion ? { solcVersion: pragmaVersion } : {}),
+          ...(compilation.contracts.length > 1 ? { totalContracts: compilation.contracts.length } : {}),
         }, null, 2),
       };
 
@@ -972,6 +995,14 @@ export default function App() {
         setResults([compileResult, { type: 'log', data: 'Deploying to Flow EVM...' }]);
         try {
           const result = await deploySolidity(walletClient, contract.abi, contract.bytecode, contract.name);
+          const chainId = walletClient.chain?.id ?? evmChain.id;
+          setDeployedContract({
+            address: result.contractAddress,
+            name: result.contractName,
+            abi: contract.abi,
+            deployTxHash: result.transactionHash,
+            chainId,
+          });
           setResults([compileResult, {
             type: 'tx_sealed',
             data: JSON.stringify({
@@ -993,7 +1024,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [activeCode, loading, project.activeFile, evmConnected, walletClient]);
+  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain]);
 
   const handleRun = useCallback(async () => {
     if (loading) return;
@@ -1994,7 +2025,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} onFixWithAI={handleFixWithAI} />
+                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} onFixWithAI={handleFixWithAI} deployedContract={deployedContract ?? undefined} chain={isSolidityFile ? evmChain : undefined} />
                 </div>
               </div>
             </>

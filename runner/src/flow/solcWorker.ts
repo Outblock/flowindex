@@ -58,11 +58,22 @@ async function loadCdnSolc(version: string) {
 
   // Save and restore Module so loading a CDN version doesn't clobber the bundled one
   const savedModule = (self as any).Module;
-  (self as any).Module = {};
-  // eslint-disable-next-line no-eval
-  (0, eval)(script);
 
-  const soljson = (self as any).Module;
+  // Wait for Emscripten runtime initialization via a Promise
+  const soljson = await new Promise<any>((resolve) => {
+    (self as any).Module = {
+      onRuntimeInitialized() {
+        resolve((self as any).Module);
+      },
+    };
+    // eslint-disable-next-line no-eval
+    (0, eval)(script);
+    // Some builds initialize synchronously — check if cwrap is already available
+    if (typeof (self as any).Module?.cwrap === 'function') {
+      resolve((self as any).Module);
+    }
+  });
+
   // Restore previous Module
   (self as any).Module = savedModule;
 
