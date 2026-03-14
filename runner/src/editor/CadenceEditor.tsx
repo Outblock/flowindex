@@ -32,15 +32,24 @@ export default function CadenceEditor({
   const [tmReady, setTmReady] = useState(false);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
 
+  // Detect language from file extension
+  const isSolidity = path?.endsWith('.sol') ?? false;
+  const language = isSolidity ? 'sol' : CADENCE_LANGUAGE_ID;
+  const theme = isSolidity
+    ? (darkMode ? 'vs-dark' : 'vs')
+    : (darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME);
+
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     monacoRef.current = monaco;
-    // Register Monarch as fallback first — TextMate will override once WASM loads
-    registerCadenceLanguage(monaco);
-    registerCadenceThemes(monaco);
+    if (!isSolidity) {
+      // Register Monarch as fallback first — TextMate will override once WASM loads
+      registerCadenceLanguage(monaco);
+      registerCadenceThemes(monaco);
+      // Load TextMate grammar async (overrides Monarch tokenizer)
+      activateCadenceTextmate(monaco).then(() => setTmReady(true)).catch(console.error);
+    }
     onMonacoReady?.(monaco);
-    // Load TextMate grammar async (overrides Monarch tokenizer)
-    activateCadenceTextmate(monaco).then(() => setTmReady(true)).catch(console.error);
-  }, [onMonacoReady]);
+  }, [onMonacoReady, isSolidity]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -105,8 +114,8 @@ export default function CadenceEditor({
 
   return (
     <Editor
-      language={CADENCE_LANGUAGE_ID}
-      theme={darkMode ? CADENCE_DARK_THEME : CADENCE_LIGHT_THEME}
+      language={language}
+      theme={theme}
       value={code}
       path={path}
       keepCurrentModel={true}
