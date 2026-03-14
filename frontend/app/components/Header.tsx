@@ -217,7 +217,7 @@ function Header() {
         {/* Search Bar */}
         <form
           onSubmit={handleSearch}
-          className="flex-1 md:max-w-2xl relative"
+          className="flex-1 md:max-w-3xl relative"
         >
           <div className="relative group" ref={searchWrapRef}>
             <input
