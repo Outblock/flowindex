@@ -1223,7 +1223,7 @@ export default function AIChatWidget({ authToken }: { authToken?: string | null 
   const [sessions, setSessions] = useState<WidgetSession[]>([]);
   const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [showSessions, setShowSessions] = useState(false);
-  const [shareToast, setShareToast] = useState(false);
+  const [shareToast, setShareToast] = useState<string | false>(false);
   const savedMsgCountRef = useRef(0);
 
   // Fetch recent sessions when authToken changes
@@ -1571,7 +1571,7 @@ export default function AIChatWidget({ authToken }: { authToken?: string | null 
             className="fixed bottom-6 right-6 z-[70] w-12 h-12 bg-nothing-green text-black rounded-sm shadow-lg shadow-nothing-green/20 hover:shadow-nothing-green/40 hover:scale-105 transition-all flex items-center justify-center"
             aria-label="Open AI Chat"
           >
-            <AnimatedBotMessageSquare size={20} animate="blink" loop loopDelay={5000} animateOnHover="wink" />
+            <AnimatedBotMessageSquare size={26} animate="blink" loop loopDelay={5000} animateOnHover="wink" />
           </motion.button>
         )}
       </AnimatePresence>
@@ -1668,6 +1668,38 @@ export default function AIChatWidget({ authToken }: { authToken?: string | null 
                       <button
                         onClick={async () => {
                           try {
+                            // Ensure session exists in DB before sharing
+                            // (may not exist if user logged in mid-conversation or save failed)
+                            const getTextContent = (msg: any) =>
+                              msg.parts?.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('') || '';
+                            const firstUser = messages.find(m => m.role === 'user');
+                            const title = firstUser ? getTextContent(firstUser).slice(0, 80) : 'Chat';
+                            // Send a minimal "ensure session" call — messages endpoint auto-creates session
+                            const checkRes = await fetch(`${AI_CHAT_URL}/api/sessions/${sessionId}`, {
+                              headers: { Authorization: `Bearer ${authToken}` },
+                            });
+                            if (!checkRes.ok) {
+                              // Session doesn't exist — save all messages to create it
+                              const allMsgs: { role: string; content: string }[] = [];
+                              for (let i = 0; i < messages.length - 1; i += 2) {
+                                const u = messages[i];
+                                const a = messages[i + 1];
+                                if (u?.role === 'user' && a?.role === 'assistant') {
+                                  allMsgs.push({ role: 'user', content: getTextContent(u) });
+                                  allMsgs.push({ role: 'assistant', content: getTextContent(a) });
+                                }
+                              }
+                              if (allMsgs.length > 0) {
+                                await fetch(`${AI_CHAT_URL}/api/sessions/${sessionId}/messages`, {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${authToken}`,
+                                  },
+                                  body: JSON.stringify({ messages: allMsgs, title, source: 'widget' }),
+                                });
+                              }
+                            }
                             const res = await fetch(`${AI_CHAT_URL}/api/sessions/${sessionId}/share`, {
                               method: 'POST',
                               headers: { Authorization: `Bearer ${authToken}` },
@@ -1675,10 +1707,16 @@ export default function AIChatWidget({ authToken }: { authToken?: string | null 
                             if (res.ok) {
                               const { share_url } = await res.json();
                               await navigator.clipboard.writeText(share_url);
-                              setShareToast(true);
+                              setShareToast('Link copied!');
+                              setTimeout(() => setShareToast(false), 2000);
+                            } else {
+                              setShareToast('Share failed');
                               setTimeout(() => setShareToast(false), 2000);
                             }
-                          } catch { /* silent */ }
+                          } catch {
+                            setShareToast('Share failed');
+                            setTimeout(() => setShareToast(false), 2000);
+                          }
                         }}
                         className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-sm transition-colors"
                         title="Share conversation"
@@ -1690,8 +1728,8 @@ export default function AIChatWidget({ authToken }: { authToken?: string | null 
                         </svg>
                       </button>
                       {shareToast && (
-                        <div className="absolute top-full right-0 mt-1 z-50 bg-nothing-green text-black text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm whitespace-nowrap shadow-lg">
-                          Link copied!
+                        <div className={`absolute top-full right-0 mt-1 z-50 text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-sm whitespace-nowrap shadow-lg ${shareToast === 'Link copied!' ? 'bg-nothing-green text-black' : 'bg-red-500 text-white'}`}>
+                          {shareToast}
                         </div>
                       )}
                     </div>
