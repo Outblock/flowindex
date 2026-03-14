@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight, Coins, FileCode, ImageIcon } from 'lucide-react';
+import { ArrowRight, Coins, FileCode, ImageIcon, Hexagon } from 'lucide-react';
 import type { SearchState, QuickMatchItem } from '../hooks/useSearch';
 import type {
   SearchAllResponse,
@@ -14,6 +14,7 @@ import type {
   SearchTokenResult,
   SearchNFTCollectionResult,
 } from '../api';
+import type { BSSearchItem } from '@/types/blockscout';
 
 // ---------------------------------------------------------------------------
 // Public handle exposed via ref
@@ -45,30 +46,47 @@ interface FlatItem {
   label: string;
 }
 
+function evmItemRoute(item: BSSearchItem): string {
+  if (item.type === 'address' || item.type === 'contract') return `/accounts/${item.address}`;
+  if (item.type === 'transaction') return `/txs/${item.address}`;
+  if (item.type === 'token') return `/accounts/${item.address}`;
+  return `/accounts/${item.address}`;
+}
+
 function getFlatItems(state: SearchState): FlatItem[] {
   if (state.mode === 'quick-match') {
     return state.quickMatches.map((m) => ({ route: m.route, label: m.label }));
   }
 
-  if (state.mode === 'fuzzy' && state.fuzzyResults) {
+  if (state.mode === 'fuzzy') {
     const items: FlatItem[] = [];
-    for (const c of state.fuzzyResults.contracts) {
-      items.push({
-        route: `/contracts/A.${c.address}.${c.name}`,
-        label: c.name,
-      });
+    if (state.fuzzyResults) {
+      for (const c of state.fuzzyResults.contracts) {
+        items.push({
+          route: `/contracts/A.${c.address}.${c.name}`,
+          label: c.name,
+        });
+      }
+      for (const t of state.fuzzyResults.tokens) {
+        items.push({
+          route: `/tokens/A.${t.address}.${t.contract_name}`,
+          label: t.name,
+        });
+      }
+      for (const n of state.fuzzyResults.nft_collections) {
+        items.push({
+          route: `/nfts/A.${n.address}.${n.contract_name}`,
+          label: n.name,
+        });
+      }
     }
-    for (const t of state.fuzzyResults.tokens) {
-      items.push({
-        route: `/tokens/A.${t.address}.${t.contract_name}`,
-        label: t.name,
-      });
-    }
-    for (const n of state.fuzzyResults.nft_collections) {
-      items.push({
-        route: `/nfts/A.${n.address}.${n.contract_name}`,
-        label: n.name,
-      });
+    if (state.evmResults) {
+      for (const item of state.evmResults) {
+        items.push({
+          route: evmItemRoute(item),
+          label: item.name || item.address || '?',
+        });
+      }
     }
     return items;
   }
@@ -272,7 +290,8 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
           state.fuzzyResults &&
           !state.fuzzyResults.contracts.length &&
           !state.fuzzyResults.tokens.length &&
-          !state.fuzzyResults.nft_collections.length && (
+          !state.fuzzyResults.nft_collections.length &&
+          !(state.evmResults && state.evmResults.length > 0) && (
             <div className="px-3 py-4 text-center text-sm text-zinc-500">
               No results found
             </div>
@@ -282,12 +301,13 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
         {state.mode === 'fuzzy' &&
           !state.isLoading &&
           !state.error &&
-          state.fuzzyResults &&
-          (state.fuzzyResults.contracts.length > 0 ||
-            state.fuzzyResults.tokens.length > 0 ||
-            state.fuzzyResults.nft_collections.length > 0) && (
+          ((state.fuzzyResults &&
+            (state.fuzzyResults.contracts.length > 0 ||
+              state.fuzzyResults.tokens.length > 0 ||
+              state.fuzzyResults.nft_collections.length > 0)) ||
+            (state.evmResults && state.evmResults.length > 0)) && (
             <>
-              {state.fuzzyResults.contracts.length > 0 && (
+              {state.fuzzyResults && state.fuzzyResults.contracts.length > 0 && (
                 <>
                   <SectionLabel label="Contracts" />
                   {state.fuzzyResults.contracts.map((c: SearchContractResult) => {
@@ -314,7 +334,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                 </>
               )}
 
-              {state.fuzzyResults.tokens.length > 0 && (
+              {state.fuzzyResults && state.fuzzyResults.tokens.length > 0 && (
                 <>
                   <SectionLabel label="Tokens" />
                   {state.fuzzyResults.tokens.map((t: SearchTokenResult) => {
@@ -340,7 +360,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                 </>
               )}
 
-              {state.fuzzyResults.nft_collections.length > 0 && (
+              {state.fuzzyResults && state.fuzzyResults.nft_collections.length > 0 && (
                 <>
                   <SectionLabel label="NFT Collections" />
                   {state.fuzzyResults.nft_collections.map(
@@ -372,6 +392,38 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                       );
                     },
                   )}
+                </>
+              )}
+
+              {/* EVM Results */}
+              {state.evmResults && state.evmResults.length > 0 && (
+                <>
+                  <SectionLabel label="EVM" />
+                  {state.evmResults.map((item: BSSearchItem, i: number) => {
+                    const idx = globalIdx++;
+                    const route = evmItemRoute(item);
+                    const displayLabel = item.name || item.address || '?';
+                    const sublabel = item.symbol
+                      ? item.symbol
+                      : item.address
+                        ? `${item.address.slice(0, 8)}...${item.address.slice(-6)}`
+                        : undefined;
+                    return (
+                      <ResultRow
+                        key={`evm-${i}-${item.address}`}
+                        idx={idx}
+                        isActive={activeIndex === idx}
+                        icon={<Hexagon className="h-4 w-4 text-blue-400" />}
+                        label={
+                          <HighlightMatch text={displayLabel} query={highlightQuery} />
+                        }
+                        sublabel={sublabel}
+                        badge="EVM"
+                        badgeClass="bg-blue-500/10 text-blue-400"
+                        onClick={() => goTo(route)}
+                      />
+                    );
+                  })}
                 </>
               )}
             </>

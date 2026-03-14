@@ -183,27 +183,9 @@ function Header() {
         navigate({ to: '/txs/$txId', params: { txId: query }, search: { tab: undefined } });
       }
     } else if (/^(0x)?[a-fA-F0-9]{40}$/.test(query)) {
-      // COA (EVM) address (with or without 0x prefix)
-      const coaAddress = query.startsWith('0x') ? query : `0x${query}`;
-      // COA (EVM) address -> resolve to Flow address via /flow/coa/{address}
-      try {
-        const baseUrl = await resolveApiBaseUrl();
-        const res = await fetch(`${baseUrl}/flow/coa/${encodeURIComponent(coaAddress)}`);
-        if (res.ok) {
-          const payload = await res.json();
-          const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
-          const flowAddress = items?.[0]?.flow_address;
-          if (flowAddress) {
-            navigate({ to: '/accounts/$address', params: { address: flowAddress } });
-          } else {
-            navigate({ to: '/accounts/$address', params: { address: coaAddress } });
-          }
-        } else {
-          navigate({ to: '/accounts/$address', params: { address: coaAddress } });
-        }
-      } catch {
-        navigate({ to: '/accounts/$address', params: { address: coaAddress } });
-      }
+      // EVM address (with or without 0x prefix) — navigate directly
+      const evmAddress = query.startsWith('0x') ? query : `0x${query}`;
+      navigate({ to: '/accounts/$address', params: { address: evmAddress } });
     } else if (/^(0x)?[a-fA-F0-9]{16}$/.test(query)) {
       const address = query.startsWith('0x') ? query : `0x${query}`;
       navigate({ to: '/accounts/$address', params: { address } });
