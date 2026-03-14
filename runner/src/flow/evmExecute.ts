@@ -113,28 +113,34 @@ export async function deploySolidity(
   const [account] = await walletClient.getAddresses();
   if (!account) throw new Error('No EVM account connected');
 
-  const hash = await walletClient.deployContract({
-    abi,
-    bytecode,
-    account,
-    chain: walletClient.chain,
-  });
+  try {
+    const hash = await walletClient.deployContract({
+      abi,
+      bytecode,
+      account,
+      chain: walletClient.chain,
+    });
 
-  // Wait for receipt to get contract address
-  const { createPublicClient, http } = await import('viem');
-  const publicClient = createPublicClient({
-    chain: walletClient.chain,
-    transport: http(),
-  });
+    // Wait for receipt to get contract address
+    const { createPublicClient, http } = await import('viem');
+    const publicClient = createPublicClient({
+      chain: walletClient.chain,
+      transport: http(),
+    });
 
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (!receipt.contractAddress) {
-    throw new Error(`Deploy tx ${hash} did not create a contract`);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (!receipt.contractAddress) {
+      throw new Error(`Deploy tx ${hash} did not create a contract`);
+    }
+
+    return {
+      contractAddress: receipt.contractAddress,
+      transactionHash: hash,
+      contractName,
+    };
+  } catch (err: any) {
+    const revertData = extractRevertData(err);
+    const parsed = revertData ? parseRevertReason(revertData, abi) : null;
+    throw new Error(parsed?.message || err.shortMessage || err.message);
   }
-
-  return {
-    contractAddress: receipt.contractAddress,
-    transactionHash: hash,
-    contractName,
-  };
 }
