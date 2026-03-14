@@ -1,5 +1,6 @@
 import type { Abi, WalletClient } from 'viem';
 import SolcWorker from './solcWorker?worker';
+import { parseRevertReason, extractRevertData } from './evmRevert';
 
 export interface CompilationResult {
   success: boolean;
@@ -7,6 +8,8 @@ export interface CompilationResult {
     name: string;
     abi: Abi;
     bytecode: `0x${string}`;
+    /** Which source file this contract was defined in */
+    sourceFile?: string;
   }>;
   errors: string[];
   warnings: string[];
@@ -22,7 +25,26 @@ function getWorker(): Worker {
   return worker;
 }
 
-export async function compileSolidity(source: string, fileName = 'Contract.sol'): Promise<CompilationResult> {
+/**
+ * Extract the solc version from a pragma directive.
+ * e.g. `pragma solidity ^0.8.24;` -> "0.8.24"
+ *      `pragma solidity >=0.8.0 <0.9.0;` -> "0.8.0"
+ * Returns undefined if no pragma found.
+ */
+export function detectPragmaVersion(source: string): string | undefined {
+  const match = source.match(/pragma\s+solidity\s+[\^~>=<]*\s*(\d+\.\d+\.\d+)/);
+  return match?.[1];
+}
+
+/**
+ * Compile a single Solidity source file.
+ * Optionally specify a solc version (otherwise uses the bundled compiler).
+ */
+export async function compileSolidity(
+  source: string,
+  fileName = 'Contract.sol',
+  solcVersion?: string,
+): Promise<CompilationResult> {
   const w = getWorker();
   const id = nextId++;
 
@@ -40,7 +62,39 @@ export async function compileSolidity(source: string, fileName = 'Contract.sol')
     }
     w.addEventListener('message', handler);
     w.addEventListener('error', errorHandler);
-    w.postMessage({ id, source, fileName });
+    w.postMessage({ id, source, fileName, solcVersion });
+  });
+}
+
+/**
+ * Compile multiple Solidity source files together.
+ * @param primaryFile - The main .sol filename (used for display/reference)
+ * @param allSolFiles - All .sol files keyed by path (e.g. {"Contract.sol": "...", "lib/Utils.sol": "..."})
+ * @param solcVersion - Optional solc version override (e.g. "0.8.24")
+ */
+export async function compileSolidityMultiFile(
+  primaryFile: string,
+  allSolFiles: Record<string, string>,
+  solcVersion?: string,
+): Promise<CompilationResult> {
+  const w = getWorker();
+  const id = nextId++;
+
+  return new Promise((resolve, reject) => {
+    function handler(e: MessageEvent) {
+      if (e.data.id !== id) return;
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      resolve(e.data as CompilationResult);
+    }
+    function errorHandler(e: ErrorEvent) {
+      w.removeEventListener('message', handler);
+      w.removeEventListener('error', errorHandler);
+      reject(new Error(e.message));
+    }
+    w.addEventListener('message', handler);
+    w.addEventListener('error', errorHandler);
+    w.postMessage({ id, source: '', fileName: primaryFile, sources: allSolFiles, solcVersion });
   });
 }
 
