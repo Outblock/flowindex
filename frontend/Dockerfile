@@ -18,8 +18,13 @@ RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')
 # Install all workspace deps
 RUN cd frontend && bun install
 
-# Build shared packages (nx resolves dependency order via tag:package)
-RUN bunx nx run-many -t build --projects=tag:package
+# Build shared packages (dependency order matters)
+RUN cd packages/event-decoder && bun run build \
+ && cd ../flow-ui && bun run build \
+ && cd ../flow-passkey && bun run build \
+ && cd ../auth-core && bun run build \
+ && cd ../auth-ui && bun run build \
+ && cd ../flowtoken && bun run build
 
 # Copy frontend source and build
 COPY frontend/ ./frontend/
