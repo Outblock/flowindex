@@ -53,6 +53,8 @@ Add to `blockscout_proxy.go` — all are transparent pass-throughs to Blockscout
 |---|---|
 | `GET /flow/evm/search?q=` | `/api/v2/search?q=` |
 
+Apply the same caching pattern as existing search (`cachedHandler(30*time.Second, ...)`) to the EVM search endpoint to limit traffic to Blockscout from keystroke-triggered searches.
+
 **Existing routes unchanged:**
 - `GET /flow/evm/transaction` (list) — already exists
 - `GET /flow/evm/transaction/{hash}` (detail) — already exists
@@ -84,13 +86,18 @@ if hexOnly.length <= 16:
   → Cadence address → existing CadenceAccountPage (NO CHANGES)
 
 if hexOnly.length == 40:
-  → EVM address → EVMAccountPage
-  → Additionally, fire GET /flow/v1/coa/{addr} as side query
-    → if COA found: enrich header with Flow address link + COA badge
-    → if not COA: show as plain EOA or contract
+  → EVM address → fire GET /flow/coa/{addr} to check COA status
+    → if COA found (has flow_address):
+        → COAAccountPage (dual Cadence + EVM view)
+    → if not COA:
+        → EVMAccountPage (pure EVM view)
 ```
 
-**Key change:** All 40-hex addresses route to EVMAccountPage. COA is an enrichment on top, not a separate routing branch. The old "10+ leading zeros" heuristic is removed. The `coa_accounts` table is the authoritative source for COA detection.
+**Key changes:**
+- All 40-hex addresses are treated as EVM. The old "10+ leading zeros" heuristic is removed.
+- The `coa_accounts` table (via `GET /flow/coa/{addr}`) is the authoritative source for COA detection.
+- **COAAccountPage** renders when the address is confirmed COA — it shows both Cadence tabs (using the linked Flow address) and EVM tabs. This gives COA users the full dual-chain view.
+- **EVMAccountPage** renders for pure EOA/contract addresses with no Cadence counterpart.
 
 ### TX Hash Detection
 
@@ -110,7 +117,7 @@ if hash is 64 hex without 0x prefix:
   → Cadence tx ID → existing CadenceTxDetail (NO CHANGES)
 ```
 
-Note: Cadence tx IDs are typically 64 hex without `0x`. EVM hashes always have `0x`. In practice, most lookups will be unambiguous. The parallel strategy handles the overlap case without double latency.
+Note: Cadence tx IDs are typically 64 hex without `0x`. EVM hashes always have `0x`. In practice, most lookups will be unambiguous. The parallel strategy handles the overlap case without double latency. The existing Cadence endpoint already resolves EVM hashes to Cadence transactions when a wrapper exists — the parallel Blockscout lookup is specifically for showing a native EVM detail page when no Cadence wrapper exists.
 
 ### Page Layouts
 
@@ -193,7 +200,7 @@ This avoids building a page-number abstraction on top of cursors. A new `LoadMor
 
 Existing search in `useSearch.ts` has a pattern-detection pipeline that short-circuits on deterministic matches (hex patterns). Integration:
 
-- **Hex pattern queries** (40-hex address, 64-hex hash): Already detected by `useSearch.ts`. Add a parallel Blockscout lookup alongside the existing Cadence lookup. For addresses, hit `/flow/evm/address/{addr}`. For tx hashes, hit `/flow/evm/transaction/{hash}`.
+- **Hex pattern queries** (40-hex address, 64-hex hash): Update `useSearch.ts` to add a new `EVM_ADDR` pattern matching `0x` + 40-hex (the current `HEX_40` only matches bare 40-hex without `0x`). Add parallel Blockscout lookups alongside existing Cadence lookups. Update the search label from "COA Address" to "EVM Address" for 40-hex matches — let the account page handle COA detection.
 - **Free-text queries**: Fire `/flow/evm/search?q=` in parallel with the existing local `/flow/search?q=`. Blockscout returns `{ items: [...] }` — transform to match local search result shape in a `mapBlockscoutSearchResult()` helper.
 - **Display**: Local results render first (faster). EVM results append when ready, each with an `[EVM]` badge. Blockscout timeout (>2s) shows local results only.
 
