@@ -15,6 +15,12 @@ import type {
   SearchNFTCollectionResult,
 } from '../api';
 import type { BSSearchItem } from '@/types/blockscout';
+import type {
+  TxPreviewResponse,
+  AddressPreviewResponse,
+} from '@/types/blockscout';
+import { formatWei, truncateHash } from '@/lib/evmUtils';
+import { formatRelativeTime } from '@/lib/time';
 
 // ---------------------------------------------------------------------------
 // Public handle exposed via ref
@@ -56,6 +62,24 @@ function evmItemRoute(item: BSSearchItem): string {
 function getFlatItems(state: SearchState): FlatItem[] {
   if (state.mode === 'quick-match') {
     return state.quickMatches.map((m) => ({ route: m.route, label: m.label }));
+  }
+
+  if (state.mode === 'preview') {
+    const items: FlatItem[] = [];
+    if (state.previewData && state.previewType === 'tx') {
+      const data = state.previewData as TxPreviewResponse;
+      if (data.cadence) items.push({ route: `/txs/${data.cadence.id}`, label: 'Cadence Transaction' });
+      if (data.evm) items.push({ route: `/txs/${data.evm.hash}`, label: 'EVM Transaction' });
+    } else if (state.previewData && state.previewType === 'address') {
+      const data = state.previewData as AddressPreviewResponse;
+      if (data.evm) items.push({ route: `/accounts/${data.evm.address}`, label: 'EVM Address' });
+      if (data.cadence) items.push({ route: `/accounts/${data.cadence.address}`, label: 'Flow Address' });
+    }
+    // Fallback to quickMatches during loading
+    if (items.length === 0) {
+      return state.quickMatches.map((m) => ({ route: m.route, label: m.label }));
+    }
+    return items;
   }
 
   if (state.mode === 'fuzzy') {
@@ -261,6 +285,232 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                 />
               );
             })}
+          </>
+        )}
+
+        {/* Preview mode */}
+        {state.mode === 'preview' && (
+          <>
+            {/* Preview loading */}
+            {state.previewLoading && (
+              <div className="space-y-2 p-3">
+                {[1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="h-16 animate-pulse rounded bg-white/5"
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Preview error */}
+            {!state.previewLoading && state.error && (
+              <div className="px-3 py-4 text-center text-sm text-zinc-500">
+                Preview unavailable
+              </div>
+            )}
+
+            {/* Preview tx results */}
+            {!state.previewLoading && !state.error && state.previewType === 'tx' && (() => {
+              const data = state.previewData as TxPreviewResponse | null;
+              if (!data || (!data.cadence && !data.evm)) {
+                return (
+                  <div className="px-3 py-4 text-center text-sm text-zinc-500">
+                    Transaction not found
+                  </div>
+                );
+              }
+              return (
+                <>
+                  {data.cadence && (() => {
+                    const idx = globalIdx++;
+                    return (
+                      <>
+                        <SectionLabel label="Cadence Transaction" />
+                        <button
+                          type="button"
+                          data-index={idx}
+                          onClick={() => goTo(`/txs/${data.cadence!.id}`)}
+                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                            activeIndex === idx
+                              ? 'border-l-nothing-green bg-nothing-green/5'
+                              : 'border-l-transparent hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                              data.cadence.status === 'SEALED'
+                                ? 'bg-nothing-green/10 text-nothing-green'
+                                : 'bg-yellow-500/10 text-yellow-400'
+                            }`}>
+                              {data.cadence.status}
+                            </span>
+                            <span className="text-xs text-zinc-400">
+                              Block #{data.cadence.block_height.toLocaleString()}
+                            </span>
+                            <span className="text-xs text-zinc-500">
+                              {formatRelativeTime(data.cadence.timestamp)}
+                            </span>
+                            {data.cadence.is_evm && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-blue-500/10 text-blue-400">
+                                EVM
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-mono text-xs text-zinc-400">
+                            {truncateHash(data.cadence.id, 10, 8)}
+                          </span>
+                        </button>
+                      </>
+                    );
+                  })()}
+
+                  {data.evm && (() => {
+                    const idx = globalIdx++;
+                    const sectionLabel = data.link
+                      ? 'EVM Transaction (linked)'
+                      : 'EVM Transaction';
+                    return (
+                      <>
+                        <SectionLabel label={sectionLabel} />
+                        <button
+                          type="button"
+                          data-index={idx}
+                          onClick={() => goTo(`/txs/${data.evm!.hash}`)}
+                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                            activeIndex === idx
+                              ? 'border-l-nothing-green bg-nothing-green/5'
+                              : 'border-l-transparent hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                              data.evm.status === 'ok'
+                                ? 'bg-nothing-green/10 text-nothing-green'
+                                : 'bg-red-500/10 text-red-400'
+                            }`}>
+                              {data.evm.status === 'ok' ? 'Success' : 'Failed'}
+                            </span>
+                            {data.evm.method && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-zinc-800 text-zinc-400">
+                                {data.evm.method}
+                              </span>
+                            )}
+                            <span className="text-xs text-zinc-400">
+                              {formatWei(data.evm.value)} FLOW
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-zinc-500">
+                            <span className="font-mono">{truncateHash(data.evm.from, 8, 6)}</span>
+                            <ArrowRight className="h-3 w-3 flex-shrink-0" />
+                            <span className="font-mono">{data.evm.to ? truncateHash(data.evm.to, 8, 6) : 'Contract Creation'}</span>
+                          </div>
+                        </button>
+                      </>
+                    );
+                  })()}
+                </>
+              );
+            })()}
+
+            {/* Preview address results */}
+            {!state.previewLoading && !state.error && state.previewType === 'address' && (() => {
+              const data = state.previewData as AddressPreviewResponse | null;
+              if (!data || (!data.cadence && !data.evm)) {
+                return (
+                  <div className="px-3 py-4 text-center text-sm text-zinc-500">
+                    Address not found
+                  </div>
+                );
+              }
+              return (
+                <>
+                  {data.evm && (() => {
+                    const idx = globalIdx++;
+                    return (
+                      <>
+                        <SectionLabel label="EVM Address" />
+                        <button
+                          type="button"
+                          data-index={idx}
+                          onClick={() => goTo(`/accounts/${data.evm!.address}`)}
+                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                            activeIndex === idx
+                              ? 'border-l-nothing-green bg-nothing-green/5'
+                              : 'border-l-transparent hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-zinc-200">
+                              {truncateHash(data.evm.address, 10, 8)}
+                            </span>
+                            <span className="text-xs text-zinc-400">
+                              {formatWei(data.evm.balance)} FLOW
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-500">
+                              {data.evm.tx_count.toLocaleString()} txns
+                            </span>
+                            {data.evm.is_contract && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-blue-500/10 text-blue-400">
+                                Contract
+                              </span>
+                            )}
+                            {data.evm.is_verified && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-nothing-green/10 text-nothing-green">
+                                Verified
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </>
+                    );
+                  })()}
+
+                  {data.cadence && (() => {
+                    const idx = globalIdx++;
+                    const sectionLabel = data.coa_link
+                      ? 'Linked Flow Address (COA)'
+                      : 'Flow Address';
+                    return (
+                      <>
+                        <SectionLabel label={sectionLabel} />
+                        <button
+                          type="button"
+                          data-index={idx}
+                          onClick={() => goTo(`/accounts/${data.cadence!.address}`)}
+                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                            activeIndex === idx
+                              ? 'border-l-nothing-green bg-nothing-green/5'
+                              : 'border-l-transparent hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-zinc-200">
+                              0x{data.cadence.address}
+                            </span>
+                            {data.coa_link && (
+                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-violet-500/10 text-violet-400">
+                                COA
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-500">
+                              {data.cadence.contracts_count} contract{data.cadence.contracts_count !== 1 ? 's' : ''}
+                            </span>
+                            {data.cadence.has_keys && (
+                              <span className="text-xs text-zinc-500">Has keys</span>
+                            )}
+                          </div>
+                        </button>
+                      </>
+                    );
+                  })()}
+                </>
+              );
+            })()}
           </>
         )}
 
