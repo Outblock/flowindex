@@ -4,7 +4,7 @@ FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 
 # Workspace root config + lockfile
-COPY package.json bun.lock ./
+COPY package.json bun.lock nx.json ./
 
 # Shared monorepo packages (needed for workspace:* resolution)
 COPY packages/ ./packages/
@@ -18,13 +18,8 @@ RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')
 # Install all workspace deps
 RUN cd frontend && bun install
 
-# Build shared packages (dependency order matters)
-RUN cd packages/event-decoder && bun run build \
- && cd ../flow-ui && bun run build \
- && cd ../flow-passkey && bun run build \
- && cd ../auth-core && bun run build \
- && cd ../auth-ui && bun run build \
- && cd ../flowtoken && bun run build
+# Build shared packages (nx resolves dependency order via tag:package)
+RUN bunx nx run-many -t build --projects=tag:package
 
 # Copy frontend source and build
 COPY frontend/ ./frontend/

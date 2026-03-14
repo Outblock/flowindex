@@ -3,7 +3,7 @@ FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
 
 # Workspace root config + lockfile
-COPY package.json bun.lock ./
+COPY package.json bun.lock nx.json ./
 
 # Shared monorepo packages (needed for workspace:* resolution)
 COPY packages/ ./packages/
@@ -17,11 +17,8 @@ RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')
 # Install all workspace deps
 RUN cd runner && bun install
 
-# Build shared packages (dependency order matters)
-RUN cd packages/flow-passkey && bun run build \
- && cd ../auth-core && bun run build \
- && cd ../auth-ui && bun run build \
- && cd ../flowtoken && bun run build
+# Build shared packages (nx resolves dependency order via tag:package)
+RUN bunx nx run-many -t build --projects=tag:package
 
 # Copy runner source and build
 COPY runner/ ./runner/
