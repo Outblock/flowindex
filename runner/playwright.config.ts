@@ -20,13 +20,18 @@ export default defineConfig({
       command: 'bun run dev -- --port 5199',
       port: 5199,
       timeout: 30_000,
-      reuseExistingServer: false,
+      reuseExistingServer: true,
     },
   ],
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: {
+        browserName: 'chromium',
+        launchOptions: {
+          args: ['--enable-features=WebAssemblyUnlimitedSyncCompilation'],
+        },
+      },
     },
   ],
 });

@@ -55,6 +55,13 @@ RUN FLOW_CLI_VERSION=v2.14.3 \
     && mv "$FLOW_BIN" /usr/local/bin/flow \
     && chmod +x /usr/local/bin/flow \
     && rm -f /tmp/flow-cli.tar.gz
+# Install Solidity Language Server (Rust binary)
+RUN SOL_LSP_VERSION=v0.1.32 \
+    && wget -qO /tmp/sol-lsp.tar.gz \
+    "https://github.com/mmsaki/solidity-language-server/releases/download/${SOL_LSP_VERSION}/solidity-language-server-x86_64-unknown-linux-gnu.tar.gz" \
+    && tar -xzf /tmp/sol-lsp.tar.gz -C /usr/local/bin/ \
+    && chmod +x /usr/local/bin/solidity-language-server \
+    && rm -f /tmp/sol-lsp.tar.gz
 # Copy frontend static files
 COPY --from=frontend-builder /app/runner/dist /usr/share/nginx/html
 # Copy server
@@ -66,6 +73,6 @@ COPY runner/nginx.conf /etc/nginx/templates/default.conf.template
 COPY runner/supervisord.conf /etc/supervisord.conf
 COPY runner/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-EXPOSE 80 3003
+EXPOSE 80 3003 3004
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-c", "/etc/supervisord.conf"]

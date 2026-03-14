@@ -334,6 +334,146 @@ transaction(amount: UFix64, recipient: Address) {
     }],
     activeFile: 'main.cdc',
   },
+  {
+    label: 'Simple Storage (Solidity)',
+    description: 'Store and retrieve a value on Flow EVM',
+    icon: 'database',
+    files: [{
+      path: 'SimpleStorage.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract SimpleStorage {
+    uint256 private storedValue;
+
+    event ValueChanged(uint256 newValue);
+
+    function set(uint256 value) public {
+        storedValue = value;
+        emit ValueChanged(value);
+    }
+
+    function get() public view returns (uint256) {
+        return storedValue;
+    }
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'SimpleStorage.sol',
+  },
+  {
+    label: 'ERC-20 Token (Solidity)',
+    description: 'Basic ERC-20 token on Flow EVM',
+    icon: 'coins',
+    files: [{
+      path: 'MyToken.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract MyToken {
+    string public name;
+    string public symbol;
+    uint8 public decimals = 18;
+    uint256 public totalSupply;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    constructor(string memory _name, string memory _symbol, uint256 _initialSupply) {
+        name = _name;
+        symbol = _symbol;
+        totalSupply = _initialSupply * 10 ** decimals;
+        balanceOf[msg.sender] = totalSupply;
+        emit Transfer(address(0), msg.sender, totalSupply);
+    }
+
+    function transfer(address to, uint256 amount) public returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+        require(balanceOf[from] >= amount, "Insufficient balance");
+        require(allowance[from][msg.sender] >= amount, "Insufficient allowance");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+        return true;
+    }
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'MyToken.sol',
+  },
+  {
+    label: 'Cross-VM (Cadence + EVM)',
+    description: 'Call a Solidity contract from Cadence via EVM.run()',
+    icon: 'arrow-left-right',
+    files: [
+      {
+        path: 'Counter.sol',
+        content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Counter {
+    uint256 public count;
+
+    function increment() public {
+        count += 1;
+    }
+
+    function getCount() public view returns (uint256) {
+        return count;
+    }
+}
+`,
+        language: 'sol',
+      },
+      {
+        path: 'call_evm.cdc',
+        content: `import EVM from 0xe467b9dd11fa00df
+
+/// Call a deployed Solidity contract on Flow EVM from Cadence.
+/// Replace the evmContractAddress with your deployed Counter address.
+access(all) fun main(): [UInt8] {
+    // The EVM address of the deployed Counter contract
+    let evmContractAddress = EVM.addressFromString("0x0000000000000000000000000000000000000000")
+
+    // ABI-encoded calldata for getCount() — selector: 0xa87d942c
+    let calldata: [UInt8] = [0xa8, 0x7d, 0x94, 0x2c]
+
+    let result = EVM.run(
+        tx: nil,
+        coinbase: evmContractAddress,
+        callerAddress: evmContractAddress,
+        data: calldata,
+        gasLimit: 300000,
+        value: EVM.Balance(attoflow: 0)
+    )
+
+    return result.data
+}
+`,
+      },
+    ],
+    activeFile: 'call_evm.cdc',
+    folders: [],
+  },
 ];
 
 function defaultProject(): ProjectState {

@@ -5,6 +5,11 @@ import axios from 'axios';
 import CadenceEditor from './editor/CadenceEditor';
 import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
+import { useSolidityLsp } from './editor/useSolidityLsp';
+import { compileSolidity, compileSolidityMultiFile, deploySolidity, detectPragmaVersion } from './flow/evmExecute';
+import type { DeployedContract } from './flow/evmContract';
+import { useAccount, useWalletClient, useSwitchChain } from 'wagmi';
+import { flowEvmMainnet, flowEvmTestnet } from './flow/evmChains';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
 import WalletButton from './components/WalletButton';
@@ -763,6 +768,34 @@ export default function App() {
 
   const { notifyChange, goToDefinition, loadingDeps, activeMode, lspError, wasmProgress } = useLsp(monacoInstance, project, network, lspMode, handleDependency);
 
+  // Solidity LSP — only activated when .sol files exist
+  const hasSolFiles = project.files.some(f => f.path.endsWith('.sol'));
+  const {
+    notifyChange: notifySolChange,
+    goToDefinition: goToSolDefinition,
+    isReady: solLspReady,
+  } = useSolidityLsp(monacoInstance, project, hasSolFiles);
+
+  // File language detection
+  const isSolidityFile = project.activeFile.endsWith('.sol');
+  const activeFileLanguage = isSolidityFile ? 'sol' as const : 'cadence' as const;
+
+  // EVM wallet state (wagmi)
+  const { address: evmAddress, isConnected: evmConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const { switchChain } = useSwitchChain();
+  const [deployedContract, setDeployedContract] = useState<DeployedContract | null>(null);
+
+  // Active EVM chain based on network selection
+  const evmChain = network === 'mainnet' ? flowEvmMainnet : flowEvmTestnet;
+
+  // Auto-switch EVM chain when Flow network changes
+  useEffect(() => {
+    if (!evmConnected) return;
+    const targetChainId = network === 'mainnet' ? flowEvmMainnet.id : flowEvmTestnet.id;
+    switchChain({ chainId: targetChainId });
+  }, [network, evmConnected, switchChain]);
+
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const validateCurrentParams = useCallback(() => {
     const errors = validateCadenceParams(scriptParams, paramValues);
@@ -821,8 +854,13 @@ export default function App() {
 
   const handleCodeChange = useCallback((value: string) => {
     setProject((prev) => updateFileContent(prev, prev.activeFile, value));
-    notifyChange(project.activeFile, value);
-  }, [project.activeFile, notifyChange]);
+    // Route LSP notifications by file type
+    if (project.activeFile.endsWith('.sol')) {
+      notifySolChange(project.activeFile, value);
+    } else {
+      notifyChange(project.activeFile, value);
+    }
+  }, [project.activeFile, notifyChange, notifySolChange]);
 
   /** Execute the transaction/script directly (no simulation gate). */
   const handleRunDirect = useCallback(async () => {
@@ -897,8 +935,106 @@ export default function App() {
     setLoading(false);
   }, [activeCode, codeType, paramValues, selectedSigner, signWithLocalKey, promptForPassword, passkeySign, network, validateCurrentParams]);
 
+  /** Compile Solidity source and display results. */
+  const handleRunSolidity = useCallback(async () => {
+    if (loading) return;
+    setLoading(true);
+    setResults([]);
+    setDeployedContract(null);
+
+    try {
+      // Auto-detect solc version from pragma (for display only; bundled compiler handles 0.8.x)
+      const pragmaVersion = detectPragmaVersion(activeCode);
+
+      // Collect all .sol files for multi-file compilation
+      const solFiles = project.files.filter(f => f.path.endsWith('.sol'));
+      let compilation;
+      if (solFiles.length > 1) {
+        const allSolSources: Record<string, string> = {};
+        for (const f of solFiles) {
+          allSolSources[f.path] = f.content;
+        }
+        compilation = await compileSolidityMultiFile(project.activeFile, allSolSources);
+      } else {
+        compilation = await compileSolidity(activeCode, project.activeFile);
+      }
+
+      if (!compilation.success) {
+        setResults([{
+          type: 'error',
+          data: compilation.errors.join('\n'),
+        }]);
+        return;
+      }
+
+      if (compilation.warnings.length > 0) {
+        console.warn('[Solidity]', compilation.warnings.join('\n'));
+      }
+
+      // Prefer contract from the active file, fallback to first
+      const contract = compilation.contracts.find(c => c.sourceFile === project.activeFile) || compilation.contracts[0];
+      if (!contract) {
+        setResults([{ type: 'error', data: 'No contracts found in source' }]);
+        return;
+      }
+
+      const compileResult: ExecutionResult = {
+        type: 'script_result',
+        data: JSON.stringify({
+          compiled: true,
+          contractName: contract.name,
+          abi: contract.abi,
+          bytecodeSize: Math.floor(contract.bytecode.length / 2) + ' bytes',
+          ...(pragmaVersion ? { solcVersion: pragmaVersion } : {}),
+          ...(compilation.contracts.length > 1 ? { totalContracts: compilation.contracts.length } : {}),
+        }, null, 2),
+      };
+
+      // Deploy if wallet connected
+      if (evmConnected && walletClient) {
+        setResults([compileResult, { type: 'log', data: 'Deploying to Flow EVM...' }]);
+        try {
+          const result = await deploySolidity(walletClient, contract.abi, contract.bytecode, contract.name);
+          const chainId = walletClient.chain?.id ?? evmChain.id;
+          setDeployedContract({
+            address: result.contractAddress,
+            name: result.contractName,
+            abi: contract.abi,
+            deployTxHash: result.transactionHash,
+            chainId,
+          });
+          setResults([compileResult, {
+            type: 'tx_sealed',
+            data: JSON.stringify({
+              deployed: true,
+              contractName: result.contractName,
+              contractAddress: result.contractAddress,
+              transactionHash: result.transactionHash,
+            }, null, 2),
+            txId: result.transactionHash,
+          }]);
+        } catch (deployErr: any) {
+          setResults([compileResult, { type: 'error', data: `Deploy failed: ${deployErr.message}` }]);
+        }
+      } else {
+        setResults([compileResult]);
+      }
+    } catch (err: any) {
+      setResults([{ type: 'error', data: err.message }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain]);
+
   const handleRun = useCallback(async () => {
     if (loading) return;
+
+    // Solidity files: compile instead of running Cadence
+    if (isSolidityFile) {
+      handleRunSolidity();
+      return;
+    }
+
     if (!validateCurrentParams()) return;
 
     // If no signer and this requires signing, open connect modal (skip for emulator)
@@ -957,7 +1093,7 @@ export default function App() {
     }
 
     handleRunDirect();
-  }, [activeCode, codeType, paramValues, loading, selectedSigner, autoSign, network, simulateBeforeSend, handleRunDirect, scriptParams, validateCurrentParams]);
+  }, [activeCode, codeType, paramValues, loading, selectedSigner, autoSign, network, simulateBeforeSend, handleRunDirect, scriptParams, validateCurrentParams, isSolidityFile, handleRunSolidity]);
 
   // Auto-retry run after connecting wallet from the modal
   useEffect(() => {
@@ -1606,14 +1742,20 @@ export default function App() {
             <button
               onClick={handleRun}
               disabled={loading || activeFileEntry?.readOnly}
-              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors"
+              className={`flex items-center gap-1.5 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors ${
+                isSolidityFile
+                  ? 'bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:text-orange-400'
+                  : 'bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500'
+              }`}
             >
               {loading ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Play className="w-3.5 h-3.5" />
               )}
-              {codeType === 'script' ? 'Run Script' : codeType === 'contract' ? 'Deploy' : 'Send Transaction'}
+              {isSolidityFile
+                ? (evmConnected ? 'Compile & Deploy' : 'Compile')
+                : codeType === 'script' ? 'Run Script' : codeType === 'contract' ? 'Deploy' : 'Send Transaction'}
               <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
                 <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
                   {navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}
@@ -1883,7 +2025,7 @@ export default function App() {
                   />
                 </div>
                 <div className="flex-1 min-h-0">
-                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} onFixWithAI={handleFixWithAI} />
+                  <ResultPanel results={results} loading={loading} network={network} code={activeCode} filename={project.activeFile} codeType={codeType} onFixWithAI={handleFixWithAI} deployedContract={deployedContract ?? undefined} chain={isSolidityFile ? evmChain : undefined} />
                 </div>
               </div>
             </>
@@ -1950,14 +2092,22 @@ export default function App() {
         <button
           onClick={handleRun}
           disabled={loading || activeFileEntry?.readOnly}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg shadow-emerald-900/40 transition-colors"
+          className={`fixed bottom-5 right-5 z-40 flex items-center gap-2 text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg transition-colors ${
+            isSolidityFile
+              ? 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700 disabled:bg-orange-800 disabled:text-orange-400 shadow-orange-900/40'
+              : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 shadow-emerald-900/40'
+          }`}
         >
           {loading ? (
             <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
             <Play className="w-5 h-5" fill="currentColor" />
           )}
-          <span className="text-sm">{codeType === 'script' ? 'Run' : codeType === 'contract' ? 'Deploy' : 'Send'}</span>
+          <span className="text-sm">
+            {isSolidityFile
+              ? 'Compile'
+              : codeType === 'script' ? 'Run' : codeType === 'contract' ? 'Deploy' : 'Send'}
+          </span>
         </button>
       )}
 

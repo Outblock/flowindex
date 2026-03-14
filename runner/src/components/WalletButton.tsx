@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { fcl } from '../flow/fclConfig';
-import { Wallet, LogOut, ChevronDown, Key as KeyIcon, ExternalLink } from 'lucide-react';
+import { Wallet, LogOut, ChevronDown, Key as KeyIcon, ExternalLink, Globe } from 'lucide-react';
 import Avatar from 'boring-avatars';
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
 import type { FlowNetwork } from '../flow/networks';
 
@@ -23,6 +25,7 @@ interface WalletButtonProps {
   accountsMap?: Record<string, KeyAccount[]>;
   selectedLocalAccount?: { key: LocalKey; account: KeyAccount } | null;
   network?: FlowNetwork;
+  activeFileLanguage?: 'cadence' | 'sol';
   onOpenKeyManager?: () => void;
   onSelectLocalAccount?: (key: LocalKey, account: KeyAccount) => void;
   onDisconnectLocal?: () => void;
@@ -34,6 +37,7 @@ export default function WalletButton({
   accountsMap = {},
   selectedLocalAccount,
   network = 'mainnet',
+  activeFileLanguage,
   onOpenKeyManager,
   onSelectLocalAccount,
   onDisconnectLocal,
@@ -42,6 +46,11 @@ export default function WalletButton({
   const [fclUser, setFclUser] = useState<{ addr?: string | null }>({});
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // EVM wallet state (wagmi)
+  const { address: evmAddress, isConnected: evmConnected } = useAccount();
+  const { connect: connectEvm } = useConnect();
+  const { disconnect: disconnectEvm } = useDisconnect();
 
   useEffect(() => {
     const unsub = fcl.currentUser.subscribe(setFclUser);
@@ -58,16 +67,27 @@ export default function WalletButton({
 
   const fclConnected = !!fclUser?.addr;
   const localConnected = !!selectedLocalAccount;
-  const connected = fclConnected || localConnected;
+  const flowConnected = fclConnected || localConnected;
 
-  const displayAddress = fclConnected
+  // When editing Solidity and EVM wallet is connected, prefer showing EVM address
+  const showEvmWallet = evmConnected && activeFileLanguage === 'sol';
+
+  const flowDisplayAddress = fclConnected
     ? fclUser.addr!
     : localConnected
       ? selectedLocalAccount!.account.flowAddress
       : null;
 
+  const displayAddress = showEvmWallet
+    ? evmAddress!
+    : flowDisplayAddress;
+
+  const connected = flowConnected || evmConnected;
+
   const truncated = displayAddress
-    ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}`
+    ? displayAddress.length > 16
+      ? `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}`
+      : `${displayAddress.slice(0, 6)}...${displayAddress.slice(-4)}`
     : null;
 
   if (!connected) {
@@ -97,9 +117,29 @@ export default function WalletButton({
               <Wallet className="w-3.5 h-3.5" />
               FCL Wallet
             </button>
+            <button
+              onClick={() => { connectEvm({ connector: injected() }); setOpen(false); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+            >
+              <Globe className="w-3.5 h-3.5 text-orange-400" />
+              EVM Wallet
+            </button>
           </div>
         )}
       </div>
+    );
+  }
+
+  // Show EVM wallet with orange accent when connected and editing Solidity
+  if (showEvmWallet) {
+    return (
+      <button
+        onClick={() => onViewAccount?.(displayAddress!)}
+        className="flex items-center gap-1.5 text-xs text-orange-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-2 py-1 transition-colors"
+      >
+        <Globe className="w-3.5 h-3.5" />
+        <span className="font-mono">{truncated}</span>
+      </button>
     );
   }
 

@@ -5,6 +5,7 @@
  * private keys never leave the client.
  */
 
+import { keccak256 } from 'viem';
 import type { WalletCore } from '@outblock/wallet-core-lite';
 
 // ---------------------------------------------------------------------------
@@ -592,4 +593,37 @@ function normalizeHashAlgo(val: unknown): 'SHA2_256' | 'SHA3_256' {
   // Flow SDK:      1=SHA2_256, 3=SHA3_256
   if (s === '1') return 'SHA2_256';
   return 'SHA3_256';
+}
+
+// ---------------------------------------------------------------------------
+// EVM address derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive an EVM address from a secp256k1 uncompressed public key hex string.
+ *
+ * EVM address = last 20 bytes of keccak256(uncompressed_pubkey_without_04_prefix).
+ * The 04 prefix (if present) is stripped before hashing, leaving the raw 64-byte
+ * x||y coordinates.
+ *
+ * @param publicKeyHex  Uncompressed secp256k1 public key hex (with or without 04 prefix)
+ * @returns EVM address as checksummed hex string (0x-prefixed, 42 chars)
+ */
+export function evmAddressFromSecp256k1(publicKeyHex: string): string {
+  // Strip 04 uncompressed prefix if present
+  const rawHex = publicKeyHex.startsWith('04') && publicKeyHex.length === 130
+    ? publicKeyHex.slice(2)
+    : publicKeyHex;
+
+  const hash = keccak256(`0x${rawHex}` as `0x${string}`);
+  // Take last 20 bytes (40 hex chars) and add 0x prefix
+  return `0x${hash.slice(-40)}`;
+}
+
+/**
+ * Convenience wrapper: get the EVM address for a LocalKey.
+ * Uses the key's secp256k1 public key to derive the address.
+ */
+export function getEvmAddress(key: LocalKey): string {
+  return evmAddressFromSecp256k1(key.publicKeySecp256k1);
 }
