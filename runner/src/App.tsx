@@ -6,8 +6,8 @@ import CadenceEditor from './editor/CadenceEditor';
 import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
 import { useSolidityLsp } from './editor/useSolidityLsp';
-import { compileSolidity } from './flow/evmExecute';
-import { useAccount } from 'wagmi';
+import { compileSolidity, deploySolidity } from './flow/evmExecute';
+import { useAccount, useWalletClient } from 'wagmi';
 import { flowEvmMainnet, flowEvmTestnet } from './flow/evmChains';
 import ResultPanel from './components/ResultPanel';
 import ParamPanel from './components/ParamPanel';
@@ -781,6 +781,7 @@ export default function App() {
 
   // EVM wallet state (wagmi)
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
 
   const scriptParams = useMemo(() => parseMainParams(activeCode), [activeCode]);
   const validateCurrentParams = useCallback(() => {
@@ -948,7 +949,7 @@ export default function App() {
         return;
       }
 
-      setResults([{
+      const compileResult: ExecutionResult = {
         type: 'script_result',
         data: JSON.stringify({
           compiled: true,
@@ -956,13 +957,35 @@ export default function App() {
           abi: contract.abi,
           bytecodeSize: Math.floor(contract.bytecode.length / 2) + ' bytes',
         }, null, 2),
-      }]);
+      };
+
+      // Deploy if wallet connected
+      if (evmConnected && walletClient) {
+        setResults([compileResult, { type: 'log', data: 'Deploying to Flow EVM...' }]);
+        try {
+          const result = await deploySolidity(walletClient, contract.abi, contract.bytecode, contract.name);
+          setResults([compileResult, {
+            type: 'tx_sealed',
+            data: JSON.stringify({
+              deployed: true,
+              contractName: result.contractName,
+              contractAddress: result.contractAddress,
+              transactionHash: result.transactionHash,
+            }, null, 2),
+            txId: result.transactionHash,
+          }]);
+        } catch (deployErr: any) {
+          setResults([compileResult, { type: 'error', data: `Deploy failed: ${deployErr.message}` }]);
+        }
+      } else {
+        setResults([compileResult]);
+      }
     } catch (err: any) {
       setResults([{ type: 'error', data: err.message }]);
     } finally {
       setLoading(false);
     }
-  }, [activeCode, loading, project.activeFile]);
+  }, [activeCode, loading, project.activeFile, evmConnected, walletClient]);
 
   const handleRun = useCallback(async () => {
     if (loading) return;

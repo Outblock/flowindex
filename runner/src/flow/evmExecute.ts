@@ -1,6 +1,6 @@
-import type { Abi } from 'viem';
+import type { Abi, WalletClient } from 'viem';
 
-interface CompilationResult {
+export interface CompilationResult {
   success: boolean;
   contracts: Array<{
     name: string;
@@ -52,4 +52,45 @@ export async function compileSolidity(source: string, fileName = 'Contract.sol')
   }
 
   return { success: true, contracts, errors, warnings };
+}
+
+export interface DeployResult {
+  contractAddress: `0x${string}`;
+  transactionHash: `0x${string}`;
+  contractName: string;
+}
+
+export async function deploySolidity(
+  walletClient: WalletClient,
+  abi: Abi,
+  bytecode: `0x${string}`,
+  contractName: string,
+): Promise<DeployResult> {
+  const [account] = await walletClient.getAddresses();
+  if (!account) throw new Error('No EVM account connected');
+
+  const hash = await walletClient.deployContract({
+    abi,
+    bytecode,
+    account,
+    chain: walletClient.chain,
+  });
+
+  // Wait for receipt to get contract address
+  const { createPublicClient, http } = await import('viem');
+  const publicClient = createPublicClient({
+    chain: walletClient.chain,
+    transport: http(),
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (!receipt.contractAddress) {
+    throw new Error(`Deploy tx ${hash} did not create a contract`);
+  }
+
+  return {
+    contractAddress: receipt.contractAddress,
+    transactionHash: hash,
+    contractName,
+  };
 }
