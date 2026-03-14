@@ -69,7 +69,7 @@ function getFlatItems(state: SearchState): FlatItem[] {
     if (state.previewData && state.previewType === 'tx') {
       const data = state.previewData as TxPreviewResponse;
       if (data.cadence) items.push({ route: `/txs/${data.cadence.id}`, label: 'Cadence Transaction' });
-      if (data.evm) items.push({ route: `/txs/${data.evm.hash}`, label: 'EVM Transaction' });
+      if (data.evm) items.push({ route: `/txs/${data.evm.hash}?view=evm`, label: 'EVM Transaction' });
     } else if (state.previewData && state.previewType === 'address') {
       const data = state.previewData as AddressPreviewResponse;
       if (data.evm) items.push({ route: `/accounts/${data.evm.address}`, label: 'EVM Address' });
@@ -346,7 +346,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                               {data.cadence.status}
                             </span>
                             <span className="text-xs text-zinc-400">
-                              Block #{data.cadence.block_height.toLocaleString()}
+                              Block #{(data.cadence.block_height ?? 0).toLocaleString()}
                             </span>
                             <span className="text-xs text-zinc-500">
                               {formatRelativeTime(data.cadence.timestamp)}
@@ -358,7 +358,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                             )}
                           </div>
                           <span className="font-mono text-xs text-zinc-400">
-                            {truncateHash(data.cadence.id, 10, 8)}
+                            <HighlightMatch text={data.cadence.id} query={highlightQuery} />
                           </span>
                         </button>
                       </>
@@ -376,7 +376,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                         <button
                           type="button"
                           data-index={idx}
-                          onClick={() => goTo(`/txs/${data.evm!.hash}`)}
+                          onClick={() => goTo(`/txs/${data.evm!.hash}?view=evm`)}
                           className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
                             activeIndex === idx
                               ? 'border-l-nothing-green bg-nothing-green/5'
@@ -400,6 +400,9 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                               {formatWei(data.evm.value)} FLOW
                             </span>
                           </div>
+                          <span className="font-mono text-xs text-zinc-400">
+                            <HighlightMatch text={data.evm.hash} query={highlightQuery} />
+                          </span>
                           <div className="flex items-center gap-1 text-xs text-zinc-500">
                             <span className="font-mono">{truncateHash(data.evm.from, 8, 6)}</span>
                             <ArrowRight className="h-3 w-3 flex-shrink-0" />
@@ -442,7 +445,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                         >
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs text-zinc-200">
-                              {truncateHash(data.evm.address, 10, 8)}
+                              <HighlightMatch text={data.evm.address} query={highlightQuery} />
                             </span>
                             <span className="text-xs text-zinc-400">
                               {formatWei(data.evm.balance)} FLOW
@@ -450,7 +453,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-zinc-500">
-                              {data.evm.tx_count.toLocaleString()} txns
+                              {(data.evm.tx_count ?? 0).toLocaleString()} txns
                             </span>
                             {data.evm.is_contract && (
                               <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-blue-500/10 text-blue-400">
@@ -498,7 +501,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-zinc-500">
-                              {data.cadence.contracts_count} contract{data.cadence.contracts_count !== 1 ? 's' : ''}
+                              {data.cadence.contracts_count ?? 0} contract{(data.cadence.contracts_count ?? 0) !== 1 ? 's' : ''}
                             </span>
                             {data.cadence.has_keys && (
                               <span className="text-xs text-zinc-500">Has keys</span>

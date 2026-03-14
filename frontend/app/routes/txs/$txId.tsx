@@ -551,9 +551,24 @@ export const Route = createFileRoute('/txs/$txId')({
     component: TransactionDetail,
     validateSearch: (search: Record<string, unknown>) => ({
         tab: (search.tab as string) || undefined,
+        view: (search.view as string) || undefined,
     }),
-    loader: async ({ params }) => {
+    loader: async ({ params, search }) => {
         try {
+            const forceEVM = (search as any)?.view === 'evm';
+
+            // If ?view=evm, skip Cadence lookup and go straight to EVM
+            if (forceEVM && /^0x[0-9a-fA-F]{64}$/.test(params.txId)) {
+                try {
+                    const evmTx = await getEVMTransaction(params.txId);
+                    if (evmTx?.hash) {
+                        return { transaction: null, evmTransaction: evmTx as BSTransaction, isEVM: true, error: null as string | null };
+                    }
+                } catch {
+                    // Fall through to normal flow
+                }
+            }
+
             const baseUrl = await resolveApiBaseUrl();
             const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
             if (res.ok) {
