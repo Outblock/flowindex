@@ -109,6 +109,7 @@ export async function deploySolidity(
   abi: Abi,
   bytecode: `0x${string}`,
   contractName: string,
+  constructorArgs?: unknown[],
 ): Promise<DeployResult> {
   const [account] = await walletClient.getAddresses();
   if (!account) throw new Error('No EVM account connected');
@@ -119,6 +120,7 @@ export async function deploySolidity(
       bytecode,
       account,
       chain: walletClient.chain,
+      args: constructorArgs,
     });
 
     // Wait for receipt to get contract address
