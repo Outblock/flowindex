@@ -258,7 +258,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
     let globalIdx = 0;
 
     return (
-      <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-sm border border-white/10 bg-zinc-900 shadow-2xl">
+      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-sm border border-white/10 bg-zinc-900 shadow-2xl">
         {/* Quick-match mode */}
         {state.mode === 'quick-match' && (
           <>
@@ -357,7 +357,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                               </span>
                             )}
                           </div>
-                          <span className="font-mono text-xs text-zinc-400">
+                          <span className="font-mono text-xs text-zinc-400 truncate block">
                             <HighlightMatch text={data.cadence.id} query={highlightQuery} />
                           </span>
                         </button>
@@ -400,7 +400,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                               {formatWei(data.evm.value)} FLOW
                             </span>
                           </div>
-                          <span className="font-mono text-xs text-zinc-400">
+                          <span className="font-mono text-xs text-zinc-400 truncate block">
                             <HighlightMatch text={data.evm.hash} query={highlightQuery} />
                           </span>
                           <div className="flex items-center gap-1 text-xs text-zinc-500">
@@ -444,7 +444,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-zinc-200">
+                            <span className="font-mono text-xs text-zinc-200 truncate">
                               <HighlightMatch text={data.evm.address} query={highlightQuery} />
                             </span>
                             <span className="text-xs text-zinc-400">

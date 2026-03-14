@@ -217,12 +217,12 @@ function Header() {
         {/* Search Bar */}
         <form
           onSubmit={handleSearch}
-          className="flex-1 md:max-w-xl relative"
+          className="flex-1 md:max-w-3xl relative"
         >
           <div className="relative group" ref={searchWrapRef}>
             <input
               type="text"
-              placeholder="Search by block / tx / address / contract name"
+              placeholder="Search by block / tx / address / public key / contract"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -245,7 +245,7 @@ function Header() {
                   searchState.reset();
                 }
               }}
-              className="w-full px-5 py-3 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 text-zinc-900 dark:text-white text-sm placeholder-zinc-500 focus:border-nothing-green/50 focus:bg-white dark:focus:bg-black/50 focus:outline-none rounded-sm transition-all"
+              className="w-full px-4 py-3 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 text-zinc-900 dark:text-white text-xs md:text-sm placeholder-zinc-500 focus:border-nothing-green/50 focus:bg-white dark:focus:bg-black/50 focus:outline-none rounded-sm transition-all"
             />
             <button
               type="submit"
