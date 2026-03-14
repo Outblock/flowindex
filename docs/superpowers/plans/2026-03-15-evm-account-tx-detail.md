@@ -10,6 +10,32 @@
 
 **Spec:** `docs/superpowers/specs/2026-03-15-evm-account-tx-detail-design.md`
 
+### Import Conventions (reference for all tasks)
+
+These are the correct imports used throughout the plan. If any task code differs from these, follow these:
+
+```typescript
+// CopyButton — NOT from '../ui/CopyButton'
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
+
+// Relative time — NO TimeAgo component exists. Use the function:
+import { formatRelativeTime } from '@/lib/time';
+// Usage: <span>{formatRelativeTime(tx.timestamp)}</span>
+
+// Address display — use existing AddressLink for consistent look:
+import { AddressLink } from '@/components/AddressLink';
+// Usage: <AddressLink address={addr} showAvatar={false} />
+
+// API base URL
+import { resolveApiBaseUrl } from '@/api';
+
+// EVM API client (created in Task 6)
+import { getEVMAddress, getEVMAddressTransactions, ... } from '@/api/evm';
+
+// Blockscout types (created in Task 5)
+import type { BSAddress, BSTransaction, ... } from '@/types/blockscout';
+```
+
 ---
 
 ## Chunk 1: Backend Proxy Routes
@@ -217,12 +243,12 @@ func (s *Server) handleFlowGetEVMAddress(w http.ResponseWriter, r *http.Request)
 
 	// Try to enrich with COA mapping
 	if resp.StatusCode == http.StatusOK && s.repo != nil {
-		flowAddr, _ := s.repo.GetFlowAddressByCOA(addr)
-		if flowAddr != "" {
+		coaRow, _ := s.repo.GetFlowAddressByCOA(r.Context(), addr)
+		if coaRow != nil && coaRow.FlowAddress != "" {
 			// Inject flow_address into JSON response
 			var parsed map[string]interface{}
 			if json.Unmarshal(body, &parsed) == nil {
-				parsed["flow_address"] = "0x" + flowAddr
+				parsed["flow_address"] = "0x" + coaRow.FlowAddress
 				parsed["is_coa"] = true
 				if enriched, err := json.Marshal(parsed); err == nil {
 					body = enriched
@@ -428,7 +454,7 @@ git commit -m "feat(frontend): add Blockscout API v2 TypeScript types"
 - [ ] **Step 1: Create EVM API client module**
 
 ```typescript
-import { resolveApiBaseUrl } from '../api';
+import { resolveApiBaseUrl } from '@/api';
 import type {
   BSAddress,
   BSTransaction,
@@ -439,7 +465,7 @@ import type {
   BSSearchResult,
   BSPageParams,
   BSPaginatedResponse,
-} from '../types/blockscout';
+} from '@/types/blockscout';
 
 async function evmFetch<T>(path: string, params?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   const baseUrl = await resolveApiBaseUrl();
@@ -547,7 +573,7 @@ Blockscout uses cursor-based pagination. Instead of adapting the existing page-n
 - [ ] **Step 1: Create component**
 
 ```typescript
-import type { BSPageParams } from '../types/blockscout';
+import type { BSPageParams } from '@/types/blockscout';
 
 interface LoadMorePaginationProps {
   nextPageParams: BSPageParams | null;
@@ -675,7 +701,7 @@ loader: async ({ params, search }: any) => {
         if (hexOnly.length === 40) {
             const base = await resolveApiBaseUrl();
             // Check if this is a COA (has linked Flow address)
-            const coaRes = await fetch(`${base}/flow/coa/${normalized}`).catch(() => null);
+            const coaRes = await fetch(`${base}/flow/v1/coa/${normalized}`).catch(() => null);
             let flowAddress: string | null = null;
             if (coaRes?.ok) {
                 const json = await coaRes.json().catch(() => null);
@@ -720,7 +746,7 @@ function AccountPage() {
 }
 ```
 
-Add import at top: `import { EVMAccountPage } from '../components/evm/EVMAccountPage';`
+Add import at top: `import { EVMAccountPage } from '@/components/evm/EVMAccountPage';`
 
 - [ ] **Step 3: Verify frontend builds**
 
@@ -745,10 +771,10 @@ git commit -m "feat(frontend): detect EVM addresses in account route loader"
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Copy, ExternalLink } from 'lucide-react';
-import { getEVMAddress } from '../../api/evm';
-import type { BSAddress } from '../../types/blockscout';
-import { formatWei, truncateHash } from '../../lib/evmUtils';
-import { CopyButton } from '../ui/CopyButton';
+import { getEVMAddress } from '@/api/evm';
+import type { BSAddress } from '@/types/blockscout';
+import { formatWei, truncateHash } from '@/lib/evmUtils';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { EVMTransactionList } from './EVMTransactionList';
 import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
@@ -889,11 +915,11 @@ git commit -m "feat(frontend): create EVMAccountPage with header, tabs, and skel
 ```typescript
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
-import { getEVMAddressTransactions } from '../../api/evm';
-import type { BSTransaction, BSPageParams } from '../../types/blockscout';
-import { formatWei, truncateHash, txStatusLabel } from '../../lib/evmUtils';
-import { LoadMorePagination } from '../LoadMorePagination';
-import { TimeAgo } from '../ui/TimeAgo';
+import { getEVMAddressTransactions } from '@/api/evm';
+import type { BSTransaction, BSPageParams } from '@/types/blockscout';
+import { formatWei, truncateHash, txStatusLabel } from '@/lib/evmUtils';
+import { LoadMorePagination } from '@/components/LoadMorePagination';
+import { formatRelativeTime } from '@/lib/time';
 
 interface EVMTransactionListProps {
   address: string;
@@ -996,7 +1022,7 @@ export function EVMTransactionList({ address }: EVMTransactionListProps) {
                     {tx.block_number}
                   </td>
                   <td className="py-2.5 pr-4 text-zinc-500">
-                    <TimeAgo date={tx.timestamp} />
+                    {formatRelativeTime(tx.timestamp)}
                   </td>
                   <td className="py-2.5 pr-4 font-mono">
                     <Link
@@ -1061,10 +1087,10 @@ git commit -m "feat(frontend): create EVMTransactionList with load-more paginati
 ```typescript
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
-import { getEVMAddressInternalTxs } from '../../api/evm';
-import type { BSInternalTransaction, BSPageParams } from '../../types/blockscout';
-import { formatWei, truncateHash, internalTxTypeLabel } from '../../lib/evmUtils';
-import { LoadMorePagination } from '../LoadMorePagination';
+import { getEVMAddressInternalTxs, getEVMTransactionInternalTxs } from '@/api/evm';
+import type { BSInternalTransaction, BSPageParams } from '@/types/blockscout';
+import { formatWei, truncateHash, internalTxTypeLabel } from '@/lib/evmUtils';
+import { LoadMorePagination } from '@/components/LoadMorePagination';
 
 interface EVMInternalTxListProps {
   address?: string;
@@ -1086,7 +1112,7 @@ export function EVMInternalTxList({ address, txHash }: EVMInternalTxListProps) {
     const fetchFn = address
       ? () => getEVMAddressInternalTxs(address)
       : txHash
-      ? () => import('../../api/evm').then(m => m.getEVMTransactionInternalTxs(txHash))
+      ? () => getEVMTransactionInternalTxs(txHash)
       : null;
 
     if (!fetchFn) return;
@@ -1109,7 +1135,7 @@ export function EVMInternalTxList({ address, txHash }: EVMInternalTxListProps) {
       const fetchFn = address
         ? () => getEVMAddressInternalTxs(address, params)
         : txHash
-        ? () => import('../../api/evm').then(m => m.getEVMTransactionInternalTxs(txHash, params))
+        ? () => getEVMTransactionInternalTxs(txHash, params)
         : null;
       if (!fetchFn) return;
       const res = await fetchFn();
@@ -1225,11 +1251,11 @@ git commit -m "feat(frontend): create EVMInternalTxList component"
 ```typescript
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
-import { getEVMAddressTokenTransfers } from '../../api/evm';
-import type { BSTokenTransfer, BSPageParams } from '../../types/blockscout';
-import { formatWei, truncateHash } from '../../lib/evmUtils';
-import { LoadMorePagination } from '../LoadMorePagination';
-import { TimeAgo } from '../ui/TimeAgo';
+import { getEVMAddressTokenTransfers, getEVMTransactionTokenTransfers } from '@/api/evm';
+import type { BSTokenTransfer, BSPageParams } from '@/types/blockscout';
+import { formatWei, truncateHash } from '@/lib/evmUtils';
+import { LoadMorePagination } from '@/components/LoadMorePagination';
+import { formatRelativeTime } from '@/lib/time';
 
 interface EVMTokenTransfersProps {
   address?: string;
@@ -1251,7 +1277,7 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
     const fetchFn = address
       ? () => getEVMAddressTokenTransfers(address)
       : txHash
-      ? () => import('../../api/evm').then(m => m.getEVMTransactionTokenTransfers(txHash))
+      ? () => getEVMTransactionTokenTransfers(txHash)
       : null;
 
     if (!fetchFn) return;
@@ -1271,7 +1297,7 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
       const fetchFn = address
         ? () => getEVMAddressTokenTransfers(address, params)
         : txHash
-        ? () => import('../../api/evm').then(m => m.getEVMTransactionTokenTransfers(txHash, params))
+        ? () => getEVMTransactionTokenTransfers(txHash, params)
         : null;
       if (!fetchFn) return;
       const res = await fetchFn();
@@ -1323,7 +1349,7 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
                       {truncateHash(transfer.tx_hash)}
                     </Link>
                   </td>
-                  <td className="py-2.5 pr-4 text-zinc-500"><TimeAgo date={transfer.timestamp} /></td>
+                  <td className="py-2.5 pr-4 text-zinc-500">{formatRelativeTime(transfer.timestamp)}</td>
                   <td className="py-2.5 pr-4 font-mono">
                     <Link to="/accounts/$address" params={{ address: transfer.from.hash }} className="text-green-600 dark:text-green-400 hover:underline">
                       {truncateHash(transfer.from.hash)}
@@ -1359,9 +1385,9 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
 ```typescript
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { getEVMAddressTokenBalances } from '../../api/evm';
-import type { BSTokenBalance } from '../../types/blockscout';
-import { formatWei } from '../../lib/evmUtils';
+import { getEVMAddressTokenBalances } from '@/api/evm';
+import type { BSTokenBalance } from '@/types/blockscout';
+import { formatWei } from '@/lib/evmUtils';
 
 interface EVMTokenHoldingsProps {
   address: string;
@@ -1473,10 +1499,14 @@ if (!transaction && /^0x[0-9a-fA-F]{64}$/.test(txId)) {
     const evmRes = await fetch(`${baseUrl}/flow/evm/transaction/${txId}`);
     if (evmRes.ok) {
       const evmTx = await evmRes.json();
-      return { transaction: null, evmTransaction: evmTx, isEVM: true };
+      return { transaction: null, evmTransaction: evmTx, isEVM: true, error: null };
     }
   } catch {}
 }
+
+// Note: For better performance, consider firing both Cadence and EVM lookups
+// in parallel with Promise.allSettled when the hash is 0x-prefixed.
+// The sequential approach above is simpler but adds latency for EVM-only txs.
 ```
 
 - [ ] **Step 2: Add EVM rendering branch in the component**
@@ -1489,7 +1519,7 @@ if (data.isEVM && data.evmTransaction) {
 }
 ```
 
-Add import: `import { EVMTxDetail } from '../../components/evm/EVMTxDetail';`
+Add import: `import { EVMTxDetail } from '@/components/evm/EVMTxDetail';`
 
 - [ ] **Step 3: Commit**
 
@@ -1508,10 +1538,10 @@ git commit -m "feat(frontend): add EVM transaction fallback in tx route loader"
 ```typescript
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { BSTransaction } from '../../types/blockscout';
-import { formatWei, formatGas, truncateHash, txStatusLabel } from '../../lib/evmUtils';
-import { CopyButton } from '../ui/CopyButton';
-import { TimeAgo } from '../ui/TimeAgo';
+import type { BSTransaction } from '@/types/blockscout';
+import { formatWei, formatGas, truncateHash, txStatusLabel } from '@/lib/evmUtils';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
+import { formatRelativeTime } from '@/lib/time';
 import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMLogsList } from './EVMLogsList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
@@ -1552,7 +1582,7 @@ export function EVMTxDetail({ tx }: EVMTxDetailProps) {
           </div>
           <div className="flex gap-2">
             <span className="text-zinc-500 w-28 shrink-0">Timestamp:</span>
-            <TimeAgo date={tx.timestamp} />
+            {formatRelativeTime(tx.timestamp)}
           </div>
           <div className="flex gap-2">
             <span className="text-zinc-500 w-28 shrink-0">Type:</span>
@@ -1688,10 +1718,10 @@ git commit -m "feat(frontend): create EVMTxDetail page with overview, decoded in
 ```typescript
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
-import { getEVMTransactionLogs } from '../../api/evm';
-import type { BSLog, BSPageParams } from '../../types/blockscout';
-import { truncateHash } from '../../lib/evmUtils';
-import { LoadMorePagination } from '../LoadMorePagination';
+import { getEVMTransactionLogs } from '@/api/evm';
+import type { BSLog, BSPageParams } from '@/types/blockscout';
+import { truncateHash } from '@/lib/evmUtils';
+import { LoadMorePagination } from '@/components/LoadMorePagination';
 
 interface EVMLogsListProps {
   txHash: string;
@@ -1863,7 +1893,7 @@ setState({
 });
 ```
 
-Add `searchEVM` import: `import { searchEVM } from '../api/evm';`
+Add `searchEVM` import: `import { searchEVM } from '@/api/evm';`
 
 - [ ] **Step 3: Update SearchState type to include EVM results**
 
@@ -1961,20 +1991,20 @@ This is the dual-view page for Cadence Owned Accounts — shows both Cadence and
 ```typescript
 import { useState, useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CopyButton } from '../ui/CopyButton';
+import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { EVMTransactionList } from './EVMTransactionList';
 import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
 import { EVMTokenHoldings } from './EVMTokenHoldings';
-import { getEVMAddress } from '../../api/evm';
-import type { BSAddress } from '../../types/blockscout';
-import { formatWei } from '../../lib/evmUtils';
+import { getEVMAddress } from '@/api/evm';
+import type { BSAddress } from '@/types/blockscout';
+import { formatWei } from '@/lib/evmUtils';
 
 // Import existing Cadence tab components
-import { AccountActivityTab } from '../account/AccountActivityTab';
-import { AccountTokensTab } from '../account/AccountTokensTab';
-import { AccountNFTsTab } from '../account/AccountNFTsTab';
-import { AccountContractsTab } from '../account/AccountContractsTab';
+import { AccountActivityTab } from '@/components/account/AccountActivityTab';
+import { AccountTokensTab } from '@/components/account/AccountTokensTab';
+import { AccountNFTsTab } from '@/components/account/AccountNFTsTab';
+import { AccountContractsTab } from '@/components/account/AccountContractsTab';
 
 type ViewMode = 'cadence' | 'evm';
 type CadenceTab = 'activity' | 'tokens' | 'nfts' | 'contracts';
@@ -2081,7 +2111,7 @@ export function COAAccountPage({ evmAddress, flowAddress, cadenceAccount }: COAA
               ))}
             </div>
           </div>
-          {cadenceTab === 'activity' && <AccountActivityTab address={flowAddress} initialTransactions={[]} />}
+          {cadenceTab === 'activity' && <AccountActivityTab address={flowAddress} initialTransactions={[]} initialNextCursor="" />}
           {cadenceTab === 'tokens' && <AccountTokensTab address={flowAddress} />}
           {cadenceTab === 'nfts' && <AccountNFTsTab address={flowAddress} />}
           {cadenceTab === 'contracts' && <AccountContractsTab address={flowAddress} />}
@@ -2149,7 +2179,7 @@ if (data.isEVM) {
 }
 ```
 
-Add import: `import { COAAccountPage } from '../components/evm/COAAccountPage';`
+Add import: `import { COAAccountPage } from '@/components/evm/COAAccountPage';`
 
 - [ ] **Step 3: Verify full frontend build**
 
