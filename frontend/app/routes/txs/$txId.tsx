@@ -998,11 +998,6 @@ function TransactionDetail() {
     const navigate = useNavigate();
     const { transaction, evmTransaction, isEVM, error: loaderError } = Route.useLoaderData();
 
-    // EVM transaction — render dedicated EVM detail page
-    if (isEVM && evmTransaction) {
-        return <EVMTxDetail tx={evmTransaction} />;
-    }
-
     const error = transaction ? null : (loaderError || 'Transaction not found');
 
     // Derive enrichments locally from events + script (no backend call needed)
@@ -1369,6 +1364,11 @@ function TransactionDetail() {
         }
         return formatted;
     };
+
+    // EVM transaction — render dedicated EVM detail page (after all hooks)
+    if (isEVM && evmTransaction) {
+        return <EVMTxDetail tx={evmTransaction} />;
+    }
 
     if (error || !transaction) {
         return (
