@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { AnimatedMarkdown } from "@outblock/flowtoken";
-import "@outblock/flowtoken/styles.css";
 import { Check, ChevronLeftIcon, ChevronRightIcon, Copy } from "lucide-react";
 import {
   createContext,
