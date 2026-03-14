@@ -12,6 +12,8 @@ import { buildSkillsPrompt, createLoadSkillTool } from "@/lib/skills";
 
 const CADENCE_MCP_URL =
   process.env.CADENCE_MCP_URL || "https://cadence-mcp.up.railway.app/mcp";
+const FLOW_EVM_MCP_URL =
+  process.env.FLOW_EVM_MCP_URL || "https://flow-evm-mcp.up.railway.app/mcp";
 
 // Mode -> model + thinking config (mirrors main chat)
 const MODE_CONFIG = {
@@ -166,8 +168,8 @@ const walletTools = {
   }),
 };
 
-const SYSTEM_PROMPT = `You are a Cadence programming assistant embedded in Cadence Runner.
-Your primary job is to help users write, edit, and debug Cadence smart contract code for Flow.
+const SYSTEM_PROMPT = `You are a Cadence & Solidity programming assistant embedded in Cadence Runner.
+Your primary job is to help users write, edit, and debug smart contract code for Flow — both Cadence and Solidity (Flow EVM).
 
 ## CRITICAL: Always use editor tools for code changes
 
@@ -222,6 +224,16 @@ Always call \`get_wallet_info\` first to check if a signer is available before a
   - MetadataViews: 0x1d7e57aa55817448
   - FlowToken: 0x1654653399040a61
   - FUSD: 0x3c5959b568896393
+
+## Solidity / Flow EVM guidelines
+
+- Flow EVM is a full EVM environment on Flow — Solidity contracts deploy and run natively.
+- Flow EVM Mainnet chain ID: 747, Testnet chain ID: 545.
+- Use \`pragma solidity ^0.8.24;\` or later. The runner bundles solc 0.8.24.
+- .sol files compile client-side via solc WASM. When an EVM wallet is connected, contracts auto-deploy.
+- After deployment, the Interact tab lets users call read/write functions on the deployed contract.
+- You have Flow EVM MCP tools to query on-chain EVM data (balances, transactions, contracts, tokens, etc.).
+- For cross-VM patterns, users can call Solidity contracts from Cadence via \`EVM.run()\`.
 
 Keep responses concise and implementation-focused.${buildSkillsPrompt()}`;
 
@@ -305,12 +317,16 @@ export async function POST(req: Request) {
     projectFiles: sanitizeProjectFiles(projectFiles),
   })}`;
 
-  const cadenceMcp = await safeMcpTools(CADENCE_MCP_URL);
+  const [cadenceMcp, flowEvmMcp] = await Promise.all([
+    safeMcpTools(CADENCE_MCP_URL),
+    safeMcpTools(FLOW_EVM_MCP_URL),
+  ]);
 
   const allTools = {
     ...editorTools,
     ...walletTools,
     ...cadenceMcp.tools,
+    ...flowEvmMcp.tools,
     loadSkill: createLoadSkillTool(),
   };
 
@@ -340,7 +356,10 @@ export async function POST(req: Request) {
     tools: allTools,
     stopWhen: stepCountIs(10),
     onFinish: async () => {
-      await cadenceMcp.client?.close();
+      await Promise.all([
+        cadenceMcp.client?.close(),
+        flowEvmMcp.client?.close(),
+      ]);
     },
   });
 
