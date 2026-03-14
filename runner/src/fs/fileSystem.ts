@@ -19,8 +19,9 @@ export interface ProjectState {
 
 const STORAGE_KEY = 'runner:project';
 
-export const DEFAULT_CODE = `// Welcome to Cadence Runner
+export const DEFAULT_CODE = `// Welcome to Flow Runner — Cadence & Solidity
 // Press Ctrl/Cmd+Enter to execute
+// Create a .sol file to write Solidity for Flow EVM
 
 access(all) fun main(): String {
     return "Hello, Flow!"

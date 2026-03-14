@@ -286,8 +286,9 @@ export function useLsp(
         setActiveMode(useServerLsp ? 'server' : 'wasm');
         console.log(`[LSP] Cadence Language Server ready (${lspMode}${lspMode === 'auto' ? ` → ${useServerLsp ? 'server' : 'wasm'}` : ''})`);
 
-        // Open existing documents
+        // Open existing Cadence documents (skip .sol files — handled by Solidity LSP)
         for (const file of project.files) {
+          if (file.path.endsWith('.sol')) continue;
           const uri = `file:///${file.path}`;
           adapter.openDocument(uri, file.content);
           openDocsRef.current.add(uri);
@@ -338,8 +339,9 @@ export function useLsp(
 
     const currentPaths = new Set(project.files.map((f) => f.path));
 
-    // Open new documents
+    // Open new Cadence documents (skip .sol files)
     for (const file of project.files) {
+      if (file.path.endsWith('.sol')) continue;
       const uri = `file:///${file.path}`;
       if (!openDocsRef.current.has(uri)) {
         adapter.openDocument(uri, file.content);

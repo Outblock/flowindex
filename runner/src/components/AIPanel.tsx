@@ -2079,22 +2079,47 @@ export default function AIPanel({
             </div>
 
             {/* Templates */}
-            <div className="pt-2 border-t border-zinc-800">
-              <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Templates</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {getTemplates((network || 'mainnet') as FlowNetwork).map((template) => (
-                  <button
-                    key={template.label}
-                    onClick={() => onLoadTemplate(template)}
-                    className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-zinc-700/30 hover:border-zinc-600 text-left transition-colors"
-                    title={template.description}
-                  >
-                    <span className="text-[10px] text-zinc-300 font-medium leading-tight">{template.label}</span>
-                    <span className="text-[9px] text-zinc-600 leading-tight truncate">{template.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {(() => {
+              const allTemplates = getTemplates((network || 'mainnet') as FlowNetwork);
+              const cadenceTemplates = allTemplates.filter(t => !t.activeFile.endsWith('.sol'));
+              const solidityTemplates = allTemplates.filter(t => t.activeFile.endsWith('.sol'));
+              return (
+                <div className="pt-2 border-t border-zinc-800 space-y-3">
+                  <div>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Cadence</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {cadenceTemplates.map((template) => (
+                        <button
+                          key={template.label}
+                          onClick={() => onLoadTemplate(template)}
+                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-zinc-700/30 hover:border-emerald-700/40 text-left transition-colors"
+                          title={template.description}
+                        >
+                          <span className="text-[10px] text-zinc-300 font-medium leading-tight">{template.label}</span>
+                          <span className="text-[9px] text-zinc-600 leading-tight truncate">{template.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Solidity <span className="text-orange-500/70">EVM</span></p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {solidityTemplates.map((template) => (
+                        <button
+                          key={template.label}
+                          onClick={() => onLoadTemplate(template)}
+                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-orange-700/30 hover:border-orange-600/50 text-left transition-colors"
+                          title={template.description}
+                        >
+                          <span className="text-[10px] text-zinc-300 font-medium leading-tight">{template.label}</span>
+                          <span className="text-[9px] text-zinc-600 leading-tight truncate">{template.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <>
