@@ -2,6 +2,7 @@
 import { type Abi, type AbiFunction, createPublicClient, http } from 'viem';
 import type { WalletClient } from 'viem';
 import type { Chain } from 'viem/chains';
+import { parseRevertReason, extractRevertData } from './evmRevert';
 
 export interface ContractCallResult {
   success: boolean;
@@ -78,7 +79,13 @@ export async function callContractWrite(
       error: receipt.status === 'reverted' ? 'Transaction reverted' : undefined,
     };
   } catch (err: any) {
-    return { success: false, error: err.shortMessage || err.message };
+    const revertData = extractRevertData(err);
+    const parsed = revertData ? parseRevertReason(revertData, contract.abi) : null;
+    return {
+      success: false,
+      error: parsed?.message || err.shortMessage || err.message,
+      revertReason: parsed?.message,
+    };
   }
 }
 
