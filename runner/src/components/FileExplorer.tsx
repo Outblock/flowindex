@@ -99,7 +99,7 @@ function InlineFolderInput({
         if (e.key === 'Enter') {
           const name = value.trim();
           if (name) {
-            const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
+            const path = name.endsWith('.cdc') || name.endsWith('.sol') ? name : `${name}.cdc`;
             onSubmit(`${folderPath}/${path}`);
           } else {
             onCancel();
@@ -111,13 +111,13 @@ function InlineFolderInput({
       onBlur={() => {
         const name = value.trim();
         if (name) {
-          const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
+          const path = name.endsWith('.cdc') || name.endsWith('.sol') ? name : `${name}.cdc`;
           onSubmit(`${folderPath}/${path}`);
         } else {
           onCancel();
         }
       }}
-      placeholder="filename.cdc"
+      placeholder="filename.cdc or .sol"
       className="bg-zinc-800 text-zinc-200 text-xs rounded px-1 py-0 border border-zinc-500 focus:outline-none focus:border-emerald-500 w-full min-w-0 ml-1"
       onClick={(e) => e.stopPropagation()}
     />
@@ -276,6 +276,8 @@ function TreeItem({
     >
       {node.name.endsWith('.cdc') ? (
         <CadenceIcon className="w-3.5 h-3.5 shrink-0" />
+      ) : node.name.endsWith('.sol') ? (
+        <File className="w-3.5 h-3.5 shrink-0 text-blue-400" />
       ) : (
         <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
       )}
@@ -339,7 +341,7 @@ export default function FileExplorer({
     if (createMode === 'folder') {
       onCreateFolder(name);
     } else {
-      const path = name.endsWith('.cdc') ? name : `${name}.cdc`;
+      const path = name.endsWith('.cdc') || name.endsWith('.sol') ? name : `${name}.cdc`;
       onCreateFile(path);
     }
 
@@ -401,7 +403,7 @@ export default function FileExplorer({
               if (e.key === 'Escape') { setShowInput(false); setNewPath(''); }
             }}
             onBlur={() => { if (!newPath.trim()) setShowInput(false); }}
-            placeholder={createMode === 'folder' ? 'folder/name' : 'filename.cdc'}
+            placeholder={createMode === 'folder' ? 'folder/name' : 'filename.cdc or .sol'}
             className="w-full bg-zinc-800 text-zinc-200 text-xs rounded px-2 py-1 border border-zinc-600 focus:outline-none focus:border-zinc-500"
           />
         </div>
