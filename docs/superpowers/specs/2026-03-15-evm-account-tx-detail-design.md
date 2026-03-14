@@ -31,7 +31,7 @@ No new database tables. No data migration. The backend acts as a thin proxy to B
 
 ### Backend: New Proxy Routes
 
-Add to `blockscout_proxy.go` — all are transparent pass-throughs to Blockscout `/api/v2/`:
+Add to `blockscout_proxy.go` — all are transparent pass-throughs to Blockscout `/api/v2/`. Use `/flow/evm/transaction/` consistently (matching existing routes, NOT `/flow/evm/tx/`).
 
 **Address endpoints:**
 | FlowIndex Route | Blockscout Upstream |
@@ -40,15 +40,13 @@ Add to `blockscout_proxy.go` — all are transparent pass-throughs to Blockscout
 | `GET /flow/evm/address/{addr}/transactions` | `/api/v2/addresses/{addr}/transactions` |
 | `GET /flow/evm/address/{addr}/internal-transactions` | `/api/v2/addresses/{addr}/internal-transactions` |
 | `GET /flow/evm/address/{addr}/token-transfers` | `/api/v2/addresses/{addr}/token-transfers` |
-| `GET /flow/evm/address/{addr}/tokens` | `/api/v2/addresses/{addr}/tokens` |
 
-**Transaction endpoints:**
+**Transaction sub-resource endpoints** (extend existing `/flow/evm/transaction/{hash}`):
 | FlowIndex Route | Blockscout Upstream |
 |---|---|
-| `GET /flow/evm/tx/{hash}` | `/api/v2/transactions/{hash}` |
-| `GET /flow/evm/tx/{hash}/internal-transactions` | `/api/v2/transactions/{hash}/internal-transactions` |
-| `GET /flow/evm/tx/{hash}/logs` | `/api/v2/transactions/{hash}/logs` |
-| `GET /flow/evm/tx/{hash}/token-transfers` | `/api/v2/transactions/{hash}/token-transfers` |
+| `GET /flow/evm/transaction/{hash}/internal-transactions` | `/api/v2/transactions/{hash}/internal-transactions` |
+| `GET /flow/evm/transaction/{hash}/logs` | `/api/v2/transactions/{hash}/logs` |
+| `GET /flow/evm/transaction/{hash}/token-transfers` | `/api/v2/transactions/{hash}/token-transfers` |
 
 **Search endpoint:**
 | FlowIndex Route | Blockscout Upstream |
@@ -59,43 +57,60 @@ Add to `blockscout_proxy.go` — all are transparent pass-throughs to Blockscout
 - `GET /flow/evm/transaction` (list) — already exists
 - `GET /flow/evm/transaction/{hash}` (detail) — already exists
 - `GET /flow/evm/token` — already exists
-- `GET /flow/evm/address/{addr}/token` — already exists
+- `GET /flow/evm/address/{addr}/token` — already exists, serves as alias for `/tokens`
 
 ### Backend: Enrichment
 
-For address endpoints, the Go handler optionally enriches Blockscout responses:
-- **COA detection:** Check `coa_accounts` table — if EVM address is a COA, attach `flow_address` to the response.
-- **ABI decode:** For tx detail and logs, use local `evm_contracts.abi` to decode input data and log topics (existing `evm_execution_enrichment.go` logic).
+For detail endpoints only (not lists), the Go handler enriches Blockscout responses **in-place** by adding fields:
+- **COA detection:** On `GET /flow/evm/address/{addr}`, check `coa_accounts` table. If found, add `"flow_address": "0x..."` field to response JSON.
+- **ABI decode:** For `GET /flow/evm/transaction/{hash}`, use local `evm_contracts.abi` to decode input data (existing logic in `postgres_evm_metadata.go` and `evm_calldata.go`). Add `"decoded_input"` field if ABI available.
+
+List endpoints are pure pass-through — no enrichment, no DB queries.
 
 ## Frontend Design
 
 ### Routing Strategy
 
-Reuse existing routes (`/accounts/$address`, `/txs/$txId`). Detect address/hash type and render different components. **No new route files needed** — logic lives inside existing route components.
+Reuse existing routes (`/accounts/$address`, `/txs/$txId`). Detect address/hash type and render different components. The detection logic lives inside the existing route component loaders, which need modification to add EVM branches.
 
 ### Address Type Detection
 
-Already partially implemented in `accounts/$address.tsx`:
+The existing `accounts/$address.tsx` loader needs a new branch. Currently it only handles Cadence addresses and COA redirect. The new logic:
 
 ```
-Input address → normalizeAddress()
-  → 16 hex chars (0x + 16) → Cadence → existing CadenceAccountPage (NO CHANGES)
-  → 40 hex chars + 10+ leading zeros → COA
-      → GET /flow/v1/coa/{addr} → found → COAAccountPage (dual view)
-      → not found → EVMAccountPage
-  → 40 hex chars (other) → EOA or Contract → EVMAccountPage
+Input address → normalizeAddress() → strip 0x → hexOnly
+
+if hexOnly.length <= 16:
+  → Cadence address → existing CadenceAccountPage (NO CHANGES)
+
+if hexOnly.length == 40:
+  → EVM address → EVMAccountPage
+  → Additionally, fire GET /flow/v1/coa/{addr} as side query
+    → if COA found: enrich header with Flow address link + COA badge
+    → if not COA: show as plain EOA or contract
 ```
+
+**Key change:** All 40-hex addresses route to EVMAccountPage. COA is an enrichment on top, not a separate routing branch. The old "10+ leading zeros" heuristic is removed. The `coa_accounts` table is the authoritative source for COA detection.
 
 ### TX Hash Detection
 
-In `txs/$txId.tsx`:
+In `txs/$txId.tsx`, use format-based routing to avoid waterfall latency:
 
 ```
-Input hash
-  → Try local API: GET /flow/v1/transaction/{hash} → found → CadenceTxDetail (NO CHANGES)
-  → Not found → Try: GET /flow/evm/tx/{hash} → found → EVMTxDetail (new)
-  → Neither → 404
+Input hash → normalize
+
+if hash matches /^0x[0-9a-fA-F]{64}$/:
+  → Could be either Cadence or EVM. Fire both requests in parallel:
+    → GET /flow/v1/transaction/{hash}
+    → GET /flow/evm/transaction/{hash}
+  → Render whichever succeeds first. If both succeed, prefer Cadence (it's the canonical view).
+  → If neither → 404
+
+if hash is 64 hex without 0x prefix:
+  → Cadence tx ID → existing CadenceTxDetail (NO CHANGES)
 ```
+
+Note: Cadence tx IDs are typically 64 hex without `0x`. EVM hashes always have `0x`. In practice, most lookups will be unambiguous. The parallel strategy handles the overlap case without double latency.
 
 ### Page Layouts
 
@@ -111,16 +126,16 @@ Input hash
 │ [Transactions] [Internal Txs] [Token Transfers] │
 │ [Token Holdings] [Contract]                     │
 ├─────────────────────────────────────────────────┤
-│  (Tab Content — DataTable + Pagination)         │
+│  (Tab Content — DataTable + Load More)          │
 └─────────────────────────────────────────────────┘
 ```
 
 Tabs:
-- **Transactions** — EVM tx list (from/to/value/gas/status). DataTable with pagination.
+- **Transactions** — EVM tx list (from/to/value/gas/status). DataTable with "Load More" button.
 - **Internal Txs** — Internal transactions. DataTable showing type/call_type/from/to/value/gas.
 - **Token Transfers** — ERC-20/721/1155 transfers. Filterable by type.
 - **Token Holdings** — Current token balances from `address_current_token_balances`.
-- **Contract** — Only shown if `is_contract`. Display verified source, ABI, read/write methods (stretch goal).
+- **Contract** — Only shown if `is_contract`. Display verified source and ABI. Interactive read/write is a stretch goal.
 
 #### COAAccountPage
 
@@ -163,12 +178,50 @@ Tabs:
 - **Logs** — Event logs with topic decode (using local ABI when available).
 - **Token Transfers** — ERC-20/721/1155 transfers within this transaction.
 
+### Pagination Strategy
+
+Blockscout uses cursor-based pagination (`next_page_params` object), not offset/limit. The existing FlowIndex `Pagination` component assumes page numbers.
+
+**Decision:** EVM tables use a **"Load More" button** pattern instead of page numbers. This maps naturally to cursor-based pagination:
+- Initial load fetches first page.
+- "Load More" appends `next_page_params` as query parameters to fetch the next page.
+- Results accumulate in the table.
+
+This avoids building a page-number abstraction on top of cursors. A new `LoadMorePagination` component wraps this pattern, reusable across all EVM tables.
+
 ### Search Enhancement
 
-Existing search (`/flow/search?q=`) queries local DB only. Enhancement:
-- Fire a parallel request to `/flow/evm/search?q=` (Blockscout search proxy).
-- Merge results into the search dropdown.
-- EVM results display with an `[EVM]` badge to distinguish from Cadence results.
+Existing search in `useSearch.ts` has a pattern-detection pipeline that short-circuits on deterministic matches (hex patterns). Integration:
+
+- **Hex pattern queries** (40-hex address, 64-hex hash): Already detected by `useSearch.ts`. Add a parallel Blockscout lookup alongside the existing Cadence lookup. For addresses, hit `/flow/evm/address/{addr}`. For tx hashes, hit `/flow/evm/transaction/{hash}`.
+- **Free-text queries**: Fire `/flow/evm/search?q=` in parallel with the existing local `/flow/search?q=`. Blockscout returns `{ items: [...] }` — transform to match local search result shape in a `mapBlockscoutSearchResult()` helper.
+- **Display**: Local results render first (faster). EVM results append when ready, each with an `[EVM]` badge. Blockscout timeout (>2s) shows local results only.
+
+### Error & Loading States
+
+- **Blockscout down**: EVM components show an inline error banner ("EVM data temporarily unavailable"). Cadence pages are never affected — EVM errors are contained within EVM components only.
+- **Loading**: EVM components use skeleton loaders (matching existing FlowIndex skeleton patterns).
+- **Partial failure**: If enrichment fails (COA lookup, ABI decode) but Blockscout data loaded, show the page without enrichment. Never block the page on enrichment.
+
+### TypeScript Types
+
+Generate types from Blockscout's OpenAPI spec (available at `evm.flowindex.io/api-docs`). Place in `frontend/app/api/gen/blockscout/` alongside existing generated types. Key interfaces needed:
+
+- `BSAddress` — address detail (hash, balance, tx_count, is_contract, token, etc.)
+- `BSTransaction` — transaction detail (hash, from/to, value, gas, status, block, input, decoded_input, etc.)
+- `BSInternalTransaction` — internal tx (type, call_type, from/to, value, gas, trace_address, error)
+- `BSTokenTransfer` — token transfer (from/to, token, amount, token_id, type)
+- `BSLog` — event log (index, address, topics, data, decoded)
+- `BSTokenBalance` — address token balance (token, value, token_id)
+- `BSSearchResult` — search result item
+
+### External Link Migration
+
+The codebase has 15+ hardcoded references to `evm.flowindex.io` (in COABadge, TransactionRow, txs/$txId, etc.). Once EVM pages are live, migrate these to internal routes:
+- `evm.flowindex.io/address/{addr}` → `/accounts/{addr}`
+- `evm.flowindex.io/tx/{hash}` → `/txs/{hash}`
+
+**Deferred to post-launch.** Ship EVM pages first, then update links in a follow-up PR.
 
 ### New Frontend Components
 
@@ -177,21 +230,22 @@ Existing search (`/flow/search?q=`) queries local DB only. Enhancement:
 | `EVMAccountPage` | EVM address overview + tabs | AddressDisplay, COABadge, CopyButton |
 | `COAAccountPage` | Dual Cadence+EVM view | Existing Cadence tabs + EVM tabs |
 | `EVMAccountOverview` | Balance, tx count, contract info | AddressDisplay |
-| `EVMTransactionList` | Address tx history table | DataTable, Pagination, AddressDisplay, TimeAgo |
-| `EVMInternalTxList` | Internal txs table | DataTable, Pagination |
-| `EVMTokenTransfers` | Token transfer history | DataTable, Pagination |
+| `EVMTransactionList` | Address tx history table | DataTable, LoadMorePagination, AddressDisplay, TimeAgo |
+| `EVMInternalTxList` | Internal txs table | DataTable, LoadMorePagination |
+| `EVMTokenTransfers` | Token transfer history | DataTable, LoadMorePagination |
 | `EVMTokenHoldings` | Current token balances | DataTable |
 | `EVMTxDetail` | EVM transaction detail page | StatusBadge, AddressDisplay, CopyButton |
 | `EVMLogsList` | Transaction event logs | DataTable |
+| `LoadMorePagination` | Cursor-based pagination control | Button |
 
 ### Data Format
 
 Frontend consumes Blockscout `/api/v2/` JSON format directly (no transformation). Key format notes:
 - Addresses: `"0x..."` hex strings
-- Values: string representations of wei
+- Values: string representations of wei (use `formatEther()` from viem/ethers for display)
 - Hashes: `"0x..."` hex strings
 - Timestamps: ISO 8601 strings
-- Pagination: Blockscout uses cursor-based pagination (`next_page_params` object)
+- Pagination: `next_page_params` object — pass as query params to fetch next page
 
 ## Non-Goals (This Phase)
 
@@ -199,9 +253,10 @@ Frontend consumes Blockscout `/api/v2/` JSON format directly (no transformation)
 - **Contract read/write UI** — Showing verified source + ABI is in scope. Interactive read/write methods is a stretch goal.
 - **EVM block detail page** — Not needed; Flow blocks already show EVM execution.
 - **EVM token detail page** — Existing `/flow/evm/token/{address}` proxy may suffice; dedicated page deferred.
+- **External link migration** — Updating hardcoded `evm.flowindex.io` links to internal routes. Do in follow-up PR.
 
 ## Risks
 
-- **Blockscout API availability** — If Blockscout is down, EVM pages fail. Mitigation: show graceful error state, Cadence pages unaffected.
-- **Blockscout pagination format** — Uses cursor-based pagination (`next_page_params`), different from FlowIndex's offset/limit. Frontend EVM components must handle this.
-- **COA detection edge cases** — The "10+ leading zeros" heuristic may have false positives. Should validate against `coa_accounts` table as authoritative source.
+- **Blockscout API availability** — If Blockscout is down, EVM pages fail. Mitigation: inline error banner, Cadence pages unaffected.
+- **Blockscout pagination format** — Cursor-based, not page numbers. Mitigation: use "Load More" pattern with `LoadMorePagination` component.
+- **Blockscout response shape changes** — API v2 may change across Blockscout upgrades. Mitigation: generated TypeScript types catch breaking changes at build time.
