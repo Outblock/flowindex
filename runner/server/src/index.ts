@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { CadenceLSPClient } from './lspClient.js';
+import { SolidityLSPClient } from './solidityLspClient.js';
 import { DepsWorkspace, type FlowNetwork } from './depsWorkspace.js';
 import { hasAddressImports, extractAddressImports, rewriteToStringImports } from './importUtils.js';
 import { app as httpApp } from './http.js';
@@ -11,6 +12,8 @@ import { setBroadcast } from './github/webhook.js';
 const PORT = parseInt(process.env.LSP_PORT || '3002', 10);
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || '3003', 10);
 const FLOW_COMMAND = process.env.FLOW_COMMAND || 'flow';
+const SOL_LSP_PORT = parseInt(process.env.SOL_LSP_PORT || '3004', 10);
+const SOL_LSP_COMMAND = process.env.SOL_LSP_COMMAND || 'solidity-language-server';
 
 // One LSP client + workspace per network
 const clients = new Map<string, CadenceLSPClient>();
@@ -607,13 +610,146 @@ wss.on('connection', (socket: WebSocket) => {
   });
 });
 
+// ── Solidity LSP WebSocket Server ──────────────────────────────────────────
+
+// Shared single Solidity LSP client instance
+let solClient: SolidityLSPClient | null = null;
+
+async function getSolClient(): Promise<SolidityLSPClient> {
+  if (solClient) return solClient;
+  solClient = new SolidityLSPClient({ command: SOL_LSP_COMMAND });
+  await solClient.ensureInitialized();
+  return solClient;
+}
+
+interface SolConnectionState {
+  client: SolidityLSPClient;
+  openDocs: Set<string>; // URIs opened by this connection
+  notificationHandler: (method: string, params: any) => void;
+}
+
+const solWss = new WebSocketServer({ port: SOL_LSP_PORT, path: '/lsp-sol' });
+
+solWss.on('listening', () => {
+  console.log(`[Sol LSP Server] WebSocket listening on :${SOL_LSP_PORT}/lsp-sol`);
+});
+
+solWss.on('connection', (socket: WebSocket) => {
+  console.log('[Sol LSP Server] Client connected');
+  let state: SolConnectionState | null = null;
+
+  socket.on('message', async (raw) => {
+    let msg: any;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
+
+    // Init message: { type: "init" }
+    if (msg.type === 'init') {
+      try {
+        const client = await getSolClient();
+        const connectionState: SolConnectionState = {
+          client,
+          openDocs: new Set(),
+          notificationHandler: () => {},
+        };
+
+        const notificationHandler = (method: string, params: any) => {
+          if (socket.readyState === socket.OPEN) {
+            socket.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
+          }
+        };
+        connectionState.notificationHandler = notificationHandler;
+        client.on('notification', notificationHandler);
+
+        state = connectionState;
+        socket.send(JSON.stringify({ type: 'ready' }));
+        console.log('[Sol LSP Server] Initialized');
+      } catch (err: any) {
+        socket.send(JSON.stringify({ type: 'error', message: err.message }));
+      }
+      return;
+    }
+
+    // JSON-RPC messages — forward to Solidity LSP
+    if (!state) {
+      socket.send(JSON.stringify({ type: 'error', message: 'Send init message first' }));
+      return;
+    }
+
+    const { client } = state;
+
+    // Return cached initialize result
+    if (msg.method === 'initialize') {
+      const initResult = client.getInitializeResult();
+      socket.send(JSON.stringify({
+        jsonrpc: '2.0',
+        id: msg.id,
+        result: initResult ?? { capabilities: {} },
+      }));
+      return;
+    }
+
+    if (msg.method === 'initialized') {
+      return;
+    }
+
+    // Track open documents for cleanup
+    if (msg.method === 'textDocument/didOpen') {
+      const uri = msg.params?.textDocument?.uri;
+      if (uri) state.openDocs.add(uri);
+    }
+
+    if (msg.method === 'textDocument/didClose') {
+      const uri = msg.params?.textDocument?.uri;
+      if (uri) state.openDocs.delete(uri);
+    }
+
+    // Forward to LSP
+    if ('id' in msg && msg.id !== undefined) {
+      // Request — forward and relay response
+      try {
+        const result = await client.request(msg.method, msg.params);
+        socket.send(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
+      } catch (err: any) {
+        socket.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: msg.id,
+          error: { code: -32000, message: err.message },
+        }));
+      }
+    } else {
+      // Notification — just forward
+      client.notify(msg.method, msg.params);
+    }
+  });
+
+  socket.on('close', () => {
+    console.log('[Sol LSP Server] Client disconnected');
+    if (state) {
+      // Close documents opened by this connection
+      for (const uri of state.openDocs) {
+        state.client.notify('textDocument/didClose', { textDocument: { uri } });
+      }
+      state.client.removeListener('notification', state.notificationHandler);
+      state = null;
+    }
+  });
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('[LSP Server] Shutting down...');
   for (const client of clients.values()) {
     await client.shutdown();
   }
+  if (solClient) {
+    await solClient.shutdown();
+  }
   httpServer.close();
   wss.close();
+  solWss.close();
   process.exit(0);
 });

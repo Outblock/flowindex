@@ -24,6 +24,7 @@
     "@outblock/flowtoken": "workspace:*",
     "@outblock/wallet-core-lite": "^0.1.0",
     "@supabase/supabase-js": "^2.98.0",
+    "@tanstack/react-query": "^5.90.21",
     "ai": "^6.0.101",
     "axios": "^1.13.4",
     "boring-avatars": "^2.0.4",
@@ -45,9 +46,11 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^4.0.1",
     "tailwind-merge": "^2.2.0",
+    "viem": "^2.47.4",
     "vscode-jsonrpc": "8.2.1",
     "vscode-oniguruma": "^2.0.1",
-    "vscode-textmate": "^9.3.2"
+    "vscode-textmate": "^9.3.2",
+    "wagmi": "^3.5.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
