@@ -32,6 +32,7 @@ import { GlassCard, cn } from '@flowindex/flow-ui';
 import { EVMAccountPage } from '@/components/evm/EVMAccountPage';
 import { COAAccountPage } from '@/components/evm/COAAccountPage';
 import { COABadge } from '../../components/ui/COABadge';
+import { EVMViewEmbed } from '../../components/evm/EVMViewEmbed';
 import { QRCodeSVG } from 'qrcode.react';
 import { UsdValue } from '../../components/UsdValue';
 import { fetchNetworkStats } from '../../api/heyapi';
@@ -54,12 +55,14 @@ type AccountSubTab = (typeof VALID_SUBTABS)[number];
 export const Route = createFileRoute('/accounts/$address')({
     component: AccountDetail,
     pendingComponent: AccountDetailPending,
-    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab; subtab?: AccountSubTab } => {
+    validateSearch: (search: Record<string, unknown>): { tab?: AccountTab; subtab?: AccountSubTab; view?: string } => {
         const tab = search.tab as string;
         const subtab = search.subtab as string;
+        const view = search.view as string;
         return {
             tab: VALID_TABS.includes(tab as AccountTab) ? (tab as AccountTab) : undefined,
             subtab: VALID_SUBTABS.includes(subtab as AccountSubTab) ? (subtab as AccountSubTab) : undefined,
+            view: view === 'evm' ? 'evm' : undefined,
         };
     },
     loader: async ({ params, _search }: any) => {
@@ -153,7 +156,7 @@ function AccountDetailPending() {
 
 function AccountDetail() {
     const { address } = Route.useParams();
-    const { tab: searchTab, subtab: searchSubTab } = Route.useSearch();
+    const { tab: searchTab, subtab: searchSubTab, view: searchView } = Route.useSearch();
     const { account: initialAccount, initialTransactions, initialNextCursor, isEVM, isCOA, evmAddress, flowAddress } = Route.useLoaderData();
     const navigate = Route.useNavigate();
 
@@ -472,129 +475,170 @@ function AccountDetail() {
                     </div>
                 )}
 
-                {/* Overview Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-12">
-                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Coins className="h-12 w-12" />
-                        </div>
-                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Total Staked</p>
-                        <p className="text-2xl font-bold">
-                            <SafeNumberFlow value={stakedValue} />
-                        </p>
-                        {onChainData?.staking && (
-                            <p className="text-[10px] text-zinc-400 mt-2">
-                                {(onChainData.staking.nodeInfos?.length || 0)} node(s), {(onChainData.staking.delegatorInfos?.length || 0)} delegation(s)
-                            </p>
-                        )}
-                    </GlassCard>
-
-                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Database className="h-12 w-12" />
-                        </div>
-                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Storage Used</p>
-
-                        <div className="mt-2">
-                            <div className="flex justify-between items-baseline mb-2">
-                                <span className="text-2xl font-bold">
-                                    {Math.round(Number(onChainData?.storage?.storageUsedInMB || 0) * 100) / 100} <span className="text-xs font-normal text-zinc-500">MB</span>
-                                </span>
-                                <span className="text-xs text-zinc-500">
-                                    of {Math.round(Number(onChainData?.storage?.storageCapacityInMB || 0) * 100) / 100} MB
-                                </span>
-                            </div>
-
-                            <div className="h-2 w-full bg-zinc-100 dark:bg-white/10 rounded-full overflow-hidden">
-                                <motion.div
-                                    className="h-full bg-nothing-green"
-                                    initial={{ width: 0 }}
-                                    animate={{
-                                        width: `${Math.min((Number(onChainData?.storage?.storageUsedInMB || 0) / Number(onChainData?.storage?.storageCapacityInMB || 1)) * 100, 100)}%`
-                                    }}
-                                    transition={{ duration: 1, ease: "easeOut" }}
-                                />
-                            </div>
-                        </div>
-                    </GlassCard>
-
-                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Key className="h-12 w-12" />
-                        </div>
-                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Keys</p>
-                        <p className="text-2xl font-bold">
-                            {account.keys?.length || 0}
-                        </p>
-                    </GlassCard>
-
-                    <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <FileText className="h-12 w-12" />
-                        </div>
-                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Contracts</p>
-                        <p className="text-2xl font-bold">
-                            {account.contracts?.length || 0}
-                        </p>
-                    </GlassCard>
-                </div>
-
-                {/* Tabs & Content */}
-                <div className="space-y-6">
-                    {/* Mobile Tab Selector */}
-                    <div className="md:hidden sticky top-2 z-50">
-                        <select
-                            value={activeTab}
-                            onChange={(e) => setActiveTab(e.target.value as AccountTab)}
-                            className="w-full px-4 py-3 text-sm font-bold uppercase tracking-wider bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-lg rounded-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat text-zinc-900 dark:text-white"
+                {/* Cadence / EVM View Switcher — only for COA accounts */}
+                {onChainData?.coaAddress && (
+                    <div className="inline-flex items-center border border-zinc-200 dark:border-zinc-700 overflow-hidden mb-6">
+                        <button
+                            onClick={() => navigate({ search: { view: undefined } as any, replace: true })}
+                            className={cn(
+                                "px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors",
+                                searchView !== 'evm'
+                                    ? "bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green"
+                                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                            )}
                         >
-                            {tabs.map(({ id, label }) => (
-                                <option key={id} value={id}>{label}</option>
-                            ))}
-                        </select>
+                            Cadence
+                        </button>
+                        <button
+                            onClick={() => navigate({ search: { view: 'evm' } as any, replace: true })}
+                            className={cn(
+                                "px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors",
+                                searchView === 'evm'
+                                    ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
+                                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                            )}
+                        >
+                            EVM
+                        </button>
                     </div>
+                )}
 
-                    {/* Desktop Floating Tab Bar */}
-                    <div className="hidden md:block sticky top-4 z-50">
-                        <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
-                            {tabs.map(({ id, label, icon: Icon }) => {
-                                const isActive = activeTab === id;
-                                return (
-                                    <button
-                                        key={id}
-                                        onClick={() => setActiveTab(id)}
-                                        className={cn(
-                                            "relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
-                                            isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
-                                        )}
-                                    >
-                                        {isActive && (
-                                            <motion.div
-                                                layoutId="activeTab"
-                                                className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
-                                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                            />
-                                        )}
-                                        <Icon className="h-3.5 w-3.5" />
-                                        {label}
-                                    </button>
-                                );
-                            })}
+                {/* ── Cadence View ── */}
+                {searchView !== 'evm' && (
+                    <>
+                        {/* Overview Cards */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-12">
+                            <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Coins className="h-12 w-12" />
+                                </div>
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Total Staked</p>
+                                <p className="text-2xl font-bold">
+                                    <SafeNumberFlow value={stakedValue} />
+                                </p>
+                                {onChainData?.staking && (
+                                    <p className="text-[10px] text-zinc-400 mt-2">
+                                        {(onChainData.staking.nodeInfos?.length || 0)} node(s), {(onChainData.staking.delegatorInfos?.length || 0)} delegation(s)
+                                    </p>
+                                )}
+                            </GlassCard>
+
+                            <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Database className="h-12 w-12" />
+                                </div>
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Storage Used</p>
+
+                                <div className="mt-2">
+                                    <div className="flex justify-between items-baseline mb-2">
+                                        <span className="text-2xl font-bold">
+                                            {Math.round(Number(onChainData?.storage?.storageUsedInMB || 0) * 100) / 100} <span className="text-xs font-normal text-zinc-500">MB</span>
+                                        </span>
+                                        <span className="text-xs text-zinc-500">
+                                            of {Math.round(Number(onChainData?.storage?.storageCapacityInMB || 0) * 100) / 100} MB
+                                        </span>
+                                    </div>
+
+                                    <div className="h-2 w-full bg-zinc-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                        <motion.div
+                                            className="h-full bg-nothing-green"
+                                            initial={{ width: 0 }}
+                                            animate={{
+                                                width: `${Math.min((Number(onChainData?.storage?.storageUsedInMB || 0) / Number(onChainData?.storage?.storageCapacityInMB || 1)) * 100, 100)}%`
+                                            }}
+                                            transition={{ duration: 1, ease: "easeOut" }}
+                                        />
+                                    </div>
+                                </div>
+                            </GlassCard>
+
+                            <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Key className="h-12 w-12" />
+                                </div>
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Keys</p>
+                                <p className="text-2xl font-bold">
+                                    {account.keys?.length || 0}
+                                </p>
+                            </GlassCard>
+
+                            <GlassCard className="p-3 md:p-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <FileText className="h-12 w-12" />
+                                </div>
+                                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Contracts</p>
+                                <p className="text-2xl font-bold">
+                                    {account.contracts?.length || 0}
+                                </p>
+                            </GlassCard>
                         </div>
-                    </div>
 
-                    <div className="min-h-[500px]">
-                        {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
-                        {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} staking={onChainData?.staking} tokens={onChainData?.tokens} />}
-                        {activeTab === 'tokens' && <AccountTokensTab address={address} coaAddress={onChainData?.coaAddress} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
-                        {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
-                        {activeTab === 'staking' && <AccountStakingTab address={address} />}
-                        {activeTab === 'keys' && <AccountKeysTab account={account} />}
-                        {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
-                        {activeTab === 'storage' && <AccountStorageTab address={address} />}
-                        {activeTab === 'linked' && <AccountLinkedAccountsTab address={address} />}
-                    </div>
-                </div>
+                        {/* Tabs & Content */}
+                        <div className="space-y-6">
+                            {/* Mobile Tab Selector */}
+                            <div className="md:hidden sticky top-2 z-50">
+                                <select
+                                    value={activeTab}
+                                    onChange={(e) => setActiveTab(e.target.value as AccountTab)}
+                                    className="w-full px-4 py-3 text-sm font-bold uppercase tracking-wider bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-zinc-200 dark:border-white/10 shadow-lg rounded-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2371717a%22%20stroke-width%3D%222%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E')] bg-[length:16px] bg-[right_12px_center] bg-no-repeat text-zinc-900 dark:text-white"
+                                >
+                                    {tabs.map(({ id, label }) => (
+                                        <option key={id} value={id}>{label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Desktop Floating Tab Bar */}
+                            <div className="hidden md:block sticky top-4 z-50">
+                                <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md shadow-lg border border-zinc-200 dark:border-white/10 p-1.5 inline-flex flex-wrap gap-1 max-w-full overflow-x-auto relative">
+                                    {tabs.map(({ id, label, icon: Icon }) => {
+                                        const isActive = activeTab === id;
+                                        return (
+                                            <button
+                                                key={id}
+                                                onClick={() => setActiveTab(id)}
+                                                className={cn(
+                                                    "relative px-4 py-2 text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-2 whitespace-nowrap z-10",
+                                                    isActive ? "text-white dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                                                )}
+                                            >
+                                                {isActive && (
+                                                    <motion.div
+                                                        layoutId="activeTab"
+                                                        className="absolute inset-0 bg-zinc-900 dark:bg-white -z-10 shadow-md"
+                                                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                                    />
+                                                )}
+                                                <Icon className="h-3.5 w-3.5" />
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="min-h-[500px]">
+                                {activeTab === 'activity' && <AccountActivityTab address={address} initialTransactions={initialTransactions} initialNextCursor={initialNextCursor} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
+                                {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} staking={onChainData?.staking} tokens={onChainData?.tokens} />}
+                                {activeTab === 'tokens' && <AccountTokensTab address={address} coaAddress={onChainData?.coaAddress} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
+                                {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
+                                {activeTab === 'staking' && <AccountStakingTab address={address} />}
+                                {activeTab === 'keys' && <AccountKeysTab account={account} />}
+                                {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
+                                {activeTab === 'storage' && <AccountStorageTab address={address} />}
+                                {activeTab === 'linked' && <AccountLinkedAccountsTab address={address} />}
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* ── EVM View ── */}
+                {searchView === 'evm' && onChainData?.coaAddress && (
+                    <EVMViewEmbed
+                        evmAddress={onChainData.coaAddress.startsWith('0x') ? onChainData.coaAddress : `0x${onChainData.coaAddress}`}
+                        flowAddress={normalizedAddress}
+                    />
+                )}
             </div>
         </div>
     );
