@@ -116,7 +116,7 @@ export function AddressLink({
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Open in Blockscout"
-                    className="text-[#5353D3] hover:text-[#4040B0] dark:text-[#7B7BE8] dark:hover:text-[#9B9BF0] transition-colors p-0.5 shrink-0 opacity-60 hover:opacity-100"
+                    className="text-zinc-400 hover:text-[#5353D3] dark:text-zinc-500 dark:hover:text-[#7B7BE8] transition-colors p-0.5 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <span className="inline-flex items-center gap-px">
