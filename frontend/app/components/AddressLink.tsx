@@ -2,6 +2,15 @@ import Avatar from 'boring-avatars';
 import { Link } from '@tanstack/react-router';
 import { normalizeAddress, formatShort } from './account/accountUtils';
 
+/** Blockscout logo icon (official symbol, simplified for inline use) */
+function BlockscoutIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 276 270" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+            <path fillRule="evenodd" clipRule="evenodd" d="M115.899 40C115.899 34.4772 111.422 30 105.899 30H82.2002C76.6774 30 72.2002 34.4772 72.2002 40V63.6984C72.2002 69.2213 67.7231 73.6984 62.2002 73.6984H40C34.4772 73.6984 30 78.1756 30 83.6984V229.753C30 235.275 34.4771 239.753 40 239.753H63.6985C69.2213 239.753 73.6985 235.275 73.6985 229.753V83.6985C73.6985 78.1756 78.1756 73.6985 83.6985 73.6985H105.899C111.422 73.6985 115.899 69.2213 115.899 63.6985V40ZM203.296 40C203.296 34.4772 198.818 30 193.296 30H169.597C164.074 30 159.597 34.4771 159.597 40V63.6985C159.597 69.2213 164.074 73.6985 169.597 73.6985H191.797C197.32 73.6985 201.797 78.1756 201.797 83.6985V229.753C201.797 235.275 206.275 239.753 211.797 239.753H235.496C241.019 239.753 245.496 235.275 245.496 229.753V83.6984C245.496 78.1756 241.019 73.6984 235.496 73.6984H213.296C207.773 73.6984 203.296 69.2212 203.296 63.6984V40ZM159.597 123.651C159.597 118.129 155.12 113.651 149.597 113.651H125.899C120.376 113.651 115.899 118.129 115.899 123.651V188.551C115.899 194.074 120.376 198.551 125.899 198.551H149.597C155.12 198.551 159.597 194.074 159.597 188.551V123.651Z" fill="currentColor"/>
+        </svg>
+    );
+}
+
 /** Derive 5 colors from an address.
  *  For COA addresses (long hex with leading zeros), use the non-zero suffix
  *  so avatars aren't all-black. */
@@ -30,6 +39,7 @@ interface Props {
     className?: string;
     showAvatar?: boolean;
     showTag?: boolean;
+    showBlockscoutLink?: boolean;
     neutral?: boolean;
     onClick?: (e: React.MouseEvent) => void;
 }
@@ -63,35 +73,60 @@ export function AddressLink({
     className = '',
     showAvatar = true,
     showTag = true,
+    showBlockscoutLink,
     neutral = false,
     onClick,
 }: Props) {
     const normalized = normalizeAddress(address);
     const colors = colorsFromAddress(normalized);
     const addrType = addressType(normalized);
+    const isEVM = addrType === 'coa' || addrType === 'eoa';
+    // Show Blockscout link for EVM addresses by default, unless explicitly set
+    const showBsLink = showBlockscoutLink ?? isEVM;
     const colorCls = neutral
         ? 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-        : 'text-nothing-green-dark dark:text-nothing-green';
+        : isEVM
+            ? 'text-[#5353D3] dark:text-[#7B7BE8]'
+            : 'text-nothing-green-dark dark:text-nothing-green';
     return (
-        <Link
-            to={`/accounts/${normalized}` as any}
-            className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
-            onClick={onClick}
-        >
-            {showAvatar && (
-                <Avatar
-                    size={size}
-                    name={normalized}
-                    variant={avatarVariant(normalized)}
-                    colors={colors}
-                />
+        <span className="inline-flex items-center gap-0.5">
+            <Link
+                to={`/accounts/${normalized}` as any}
+                className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
+                onClick={onClick}
+            >
+                {showAvatar && (
+                    <Avatar
+                        size={size}
+                        name={normalized}
+                        variant={avatarVariant(normalized)}
+                        colors={colors}
+                    />
+                )}
+                {formatShort(address, prefixLen, suffixLen)}
+                {showTag && addrType !== 'flow' && (
+                    <span className={`text-[9px] font-bold uppercase px-1 py-px rounded-sm leading-none ${TAG_CLASSES[addrType]}`}>
+                        {addrType}
+                    </span>
+                )}
+            </Link>
+            {showBsLink && (
+                <a
+                    href={`https://evm.flowindex.io/address/${normalized}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in Blockscout"
+                    className="text-zinc-400 hover:text-[#5353D3] dark:text-zinc-500 dark:hover:text-[#7B7BE8] transition-colors p-0.5 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <span className="inline-flex items-center gap-px">
+                        <BlockscoutIcon className="w-3 h-3" />
+                        <svg viewBox="0 0 8 8" fill="none" className="w-1.5 h-1.5 -mt-1.5 -ml-0.5">
+                            <path d="M1 7L7 1M7 1H2M7 1V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                    </span>
+                </a>
             )}
-            {formatShort(address, prefixLen, suffixLen)}
-            {showTag && addrType !== 'flow' && (
-                <span className={`text-[9px] font-bold uppercase px-1 py-px rounded-sm leading-none ${TAG_CLASSES[addrType]}`}>
-                    {addrType}
-                </span>
-            )}
-        </Link>
+        </span>
     );
 }

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect, isRedirect } from '@tanstack/react-router'
+import { createFileRoute, Link, isRedirect } from '@tanstack/react-router'
 import { buildMeta } from '../../lib/og/meta';
 import { useState, useEffect } from 'react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
@@ -62,7 +62,7 @@ export const Route = createFileRoute('/accounts/$address')({
             subtab: VALID_SUBTABS.includes(subtab as AccountSubTab) ? (subtab as AccountSubTab) : undefined,
         };
     },
-    loader: async ({ params, search }: any) => {
+    loader: async ({ params, _search }: any) => {
         try {
             const address = params.address;
             const normalized = address.toLowerCase().startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
@@ -255,21 +255,14 @@ function AccountDetail() {
         return () => { cancelled = true; };
     }, [address, normalizedAddress, account?.address]);
 
-    // EVM address — render COA dual-view or plain EVM account page
+    // EVM address — always render EVMAccountPage (COA shows linked Flow address as a link)
     if (isEVM) {
-        if (isCOA && flowAddress) {
-            return (
-                <COAAccountPage
-                    evmAddress={evmAddress!}
-                    flowAddress={flowAddress}
-                />
-            );
-        }
         return (
             <EVMAccountPage
                 address={evmAddress!}
                 flowAddress={flowAddress ?? undefined}
                 isCOA={isCOA}
+                initialTab={searchTab}
             />
         );
     }

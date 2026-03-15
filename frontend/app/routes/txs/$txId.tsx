@@ -551,9 +551,24 @@ export const Route = createFileRoute('/txs/$txId')({
     component: TransactionDetail,
     validateSearch: (search: Record<string, unknown>) => ({
         tab: (search.tab as string) || undefined,
+        view: (search.view as string) || undefined,
     }),
-    loader: async ({ params }) => {
+    loader: async ({ params, search }) => {
         try {
+            const forceEVM = (search as any)?.view === 'evm';
+
+            // If ?view=evm, skip Cadence lookup and go straight to EVM
+            if (forceEVM && /^0x[0-9a-fA-F]{64}$/.test(params.txId)) {
+                try {
+                    const evmTx = await getEVMTransaction(params.txId);
+                    if (evmTx?.hash) {
+                        return { transaction: null, evmTransaction: evmTx as BSTransaction, isEVM: true, error: null as string | null };
+                    }
+                } catch {
+                    // Fall through to normal flow
+                }
+            }
+
             const baseUrl = await resolveApiBaseUrl();
             const res = await fetch(`${baseUrl}/flow/transaction/${encodeURIComponent(params.txId)}?lite=true`);
             if (res.ok) {
@@ -998,11 +1013,6 @@ function TransactionDetail() {
     const navigate = useNavigate();
     const { transaction, evmTransaction, isEVM, error: loaderError } = Route.useLoaderData();
 
-    // EVM transaction — render dedicated EVM detail page
-    if (isEVM && evmTransaction) {
-        return <EVMTxDetail tx={evmTransaction} />;
-    }
-
     const error = transaction ? null : (loaderError || 'Transaction not found');
 
     // Derive enrichments locally from events + script (no backend call needed)
@@ -1369,6 +1379,11 @@ function TransactionDetail() {
         }
         return formatted;
     };
+
+    // EVM transaction — render dedicated EVM detail page (after all hooks)
+    if (isEVM && evmTransaction) {
+        return <EVMTxDetail tx={evmTransaction} />;
+    }
 
     if (error || !transaction) {
         return (

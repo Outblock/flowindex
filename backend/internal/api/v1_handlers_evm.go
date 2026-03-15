@@ -62,6 +62,13 @@ func (s *Server) handleFlowGetEVMAddress(w http.ResponseWriter, r *http.Request)
 	if q := r.URL.RawQuery; q != "" {
 		target += "?" + q
 	}
+	if s.blockscoutAPIKey != "" {
+		sep := "?"
+		if strings.Contains(target, "?") {
+			sep = "&"
+		}
+		target += sep + "apikey=" + s.blockscoutAPIKey
+	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
 	if err != nil {

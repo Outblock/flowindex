@@ -136,15 +136,20 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
               const amount = transfer.total?.value
                 ? formatWei(transfer.total.value, decimals)
                 : '-';
+              const txHash = transfer.tx_hash || transfer.transaction_hash || '';
               return (
-                <tr key={`${transfer.tx_hash}-${transfer.log_index}-${idx}`} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                <tr key={`${txHash}-${transfer.log_index}-${idx}`} className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
                   <td className="py-3 px-2">
+                    {txHash ? (
                     <Link
-                      to={`/txs/${transfer.tx_hash}` as any}
+                      to={`/txs/${txHash}` as any}
                       className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
                     >
-                      {truncateHash(transfer.tx_hash)}
+                      {truncateHash(txHash)}
                     </Link>
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
                   </td>
                   <td className="py-3 px-2 text-zinc-500" title={transfer.timestamp}>
                     {formatRelativeTime(transfer.timestamp)}

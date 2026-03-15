@@ -81,7 +81,8 @@ export interface BSTokenTransfer {
   to: { hash: string; name?: string | null; is_contract: boolean };
   token: BSToken;
   total: { value: string; decimals: string } | null;
-  tx_hash: string;
+  tx_hash?: string;
+  transaction_hash?: string;
   type: string;
   method: string | null;
 }
@@ -186,7 +187,8 @@ export interface EVMAddressPreview {
 
 export interface COALink {
   flow_address: string;
-  evm_address: string;
+  coa_address?: string;   // backend field name
+  evm_address?: string;   // alias used in spec
 }
 
 export interface TxPreviewResponse {
@@ -198,5 +200,6 @@ export interface TxPreviewResponse {
 export interface AddressPreviewResponse {
   cadence: CadenceAddressPreview | null;
   evm: EVMAddressPreview | null;
-  coa_link: COALink | null;
+  link: COALink | null;
+  coa_link?: COALink | null; // backwards compat alias
 }
