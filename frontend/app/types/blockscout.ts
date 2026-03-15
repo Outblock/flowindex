@@ -187,7 +187,8 @@ export interface EVMAddressPreview {
 
 export interface COALink {
   flow_address: string;
-  evm_address: string;
+  coa_address?: string;   // backend field name
+  evm_address?: string;   // alias used in spec
 }
 
 export interface TxPreviewResponse {
@@ -199,5 +200,6 @@ export interface TxPreviewResponse {
 export interface AddressPreviewResponse {
   cadence: CadenceAddressPreview | null;
   evm: EVMAddressPreview | null;
-  coa_link: COALink | null;
+  link: COALink | null;
+  coa_link?: COALink | null; // backwards compat alias
 }

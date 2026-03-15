@@ -435,7 +435,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
               }
 
               const searchedFlow = state.quickMatches[0]?.type === 'flow-account';
-              const hasCOALink = !!data.coa_link;
+              const hasCOALink = !!(data.link || data.coa_link);
 
               // Render a Cadence address card
               const renderCadence = (isPrimary: boolean) => {
