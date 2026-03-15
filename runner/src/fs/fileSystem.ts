@@ -475,6 +475,238 @@ access(all) fun main(): [UInt8] {
     activeFile: 'call_evm.cdc',
     folders: [],
   },
+  {
+    label: 'ERC-721 NFT (Solidity)',
+    description: 'Minimal NFT contract on Flow EVM',
+    icon: 'image',
+    files: [{
+      path: 'MyNFT.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract MyNFT {
+    string public name;
+    string public symbol;
+    uint256 private _tokenIdCounter;
+
+    mapping(uint256 => address) private _owners;
+    mapping(address => uint256) private _balances;
+    mapping(uint256 => address) private _tokenApprovals;
+    mapping(uint256 => string) private _tokenURIs;
+
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+
+    constructor(string memory _name, string memory _symbol) {
+        name = _name;
+        symbol = _symbol;
+    }
+
+    function mint(address to, string memory tokenURI) public returns (uint256) {
+        uint256 tokenId = _tokenIdCounter++;
+        _owners[tokenId] = to;
+        _balances[to] += 1;
+        _tokenURIs[tokenId] = tokenURI;
+        emit Transfer(address(0), to, tokenId);
+        return tokenId;
+    }
+
+    function ownerOf(uint256 tokenId) public view returns (address) {
+        address owner = _owners[tokenId];
+        require(owner != address(0), "Token does not exist");
+        return owner;
+    }
+
+    function balanceOf(address owner) public view returns (uint256) {
+        require(owner != address(0), "Zero address");
+        return _balances[owner];
+    }
+
+    function tokenURI(uint256 tokenId) public view returns (string memory) {
+        require(_owners[tokenId] != address(0), "Token does not exist");
+        return _tokenURIs[tokenId];
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) public {
+        require(_owners[tokenId] == from, "Not owner");
+        require(msg.sender == from || msg.sender == _tokenApprovals[tokenId], "Not authorized");
+        _owners[tokenId] = to;
+        _balances[from] -= 1;
+        _balances[to] += 1;
+        delete _tokenApprovals[tokenId];
+        emit Transfer(from, to, tokenId);
+    }
+
+    function approve(address to, uint256 tokenId) public {
+        require(msg.sender == _owners[tokenId], "Not owner");
+        _tokenApprovals[tokenId] = to;
+        emit Approval(msg.sender, to, tokenId);
+    }
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'MyNFT.sol',
+  },
+  {
+    label: 'Multi-Sig Wallet (Solidity)',
+    description: 'Simple multi-signature wallet',
+    icon: 'shield',
+    files: [{
+      path: 'MultiSigWallet.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract MultiSigWallet {
+    address[] public owners;
+    uint256 public required;
+    uint256 public transactionCount;
+
+    struct Transaction {
+        address to;
+        uint256 value;
+        bytes data;
+        bool executed;
+        uint256 confirmations;
+    }
+
+    mapping(uint256 => Transaction) public transactions;
+    mapping(uint256 => mapping(address => bool)) public isConfirmed;
+    mapping(address => bool) public isOwner;
+
+    event Submit(uint256 indexed txId, address indexed owner, address to, uint256 value);
+    event Confirm(uint256 indexed txId, address indexed owner);
+    event Execute(uint256 indexed txId);
+
+    modifier onlyOwner() {
+        require(isOwner[msg.sender], "Not owner");
+        _;
+    }
+
+    constructor(address[] memory _owners, uint256 _required) {
+        require(_owners.length > 0, "No owners");
+        require(_required > 0 && _required <= _owners.length, "Invalid required");
+        for (uint256 i = 0; i < _owners.length; i++) {
+            isOwner[_owners[i]] = true;
+        }
+        owners = _owners;
+        required = _required;
+    }
+
+    function submit(address _to, uint256 _value, bytes calldata _data) external onlyOwner returns (uint256) {
+        uint256 txId = transactionCount++;
+        transactions[txId] = Transaction(_to, _value, _data, false, 0);
+        emit Submit(txId, msg.sender, _to, _value);
+        return txId;
+    }
+
+    function confirm(uint256 _txId) external onlyOwner {
+        require(!isConfirmed[_txId][msg.sender], "Already confirmed");
+        isConfirmed[_txId][msg.sender] = true;
+        transactions[_txId].confirmations += 1;
+        emit Confirm(_txId, msg.sender);
+    }
+
+    function execute(uint256 _txId) external onlyOwner {
+        Transaction storage txn = transactions[_txId];
+        require(!txn.executed, "Already executed");
+        require(txn.confirmations >= required, "Not enough confirmations");
+        txn.executed = true;
+        (bool success, ) = txn.to.call{value: txn.value}(txn.data);
+        require(success, "Execution failed");
+        emit Execute(_txId);
+    }
+
+    receive() external payable {}
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'MultiSigWallet.sol',
+  },
+  {
+    label: 'Staking Vault (Solidity)',
+    description: 'Stake tokens and earn rewards',
+    icon: 'vault',
+    files: [{
+      path: 'StakingVault.sol',
+      content: `// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract StakingVault {
+    address public owner;
+    uint256 public rewardRate; // reward per second per token staked (scaled by 1e18)
+
+    struct StakeInfo {
+        uint256 amount;
+        uint256 rewardDebt;
+        uint256 lastStakedAt;
+    }
+
+    mapping(address => StakeInfo) public stakes;
+    uint256 public totalStaked;
+
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event RewardClaimed(address indexed user, uint256 reward);
+
+    constructor(uint256 _rewardRate) {
+        owner = msg.sender;
+        rewardRate = _rewardRate;
+    }
+
+    function stake() external payable {
+        require(msg.value > 0, "Cannot stake 0");
+        StakeInfo storage info = stakes[msg.sender];
+        if (info.amount > 0) {
+            uint256 pending = _pendingReward(msg.sender);
+            info.rewardDebt += pending;
+        }
+        info.amount += msg.value;
+        info.lastStakedAt = block.timestamp;
+        totalStaked += msg.value;
+        emit Staked(msg.sender, msg.value);
+    }
+
+    function withdraw(uint256 _amount) external {
+        StakeInfo storage info = stakes[msg.sender];
+        require(info.amount >= _amount, "Insufficient stake");
+        uint256 pending = _pendingReward(msg.sender);
+        info.rewardDebt += pending;
+        info.amount -= _amount;
+        info.lastStakedAt = block.timestamp;
+        totalStaked -= _amount;
+        payable(msg.sender).transfer(_amount);
+        emit Withdrawn(msg.sender, _amount);
+    }
+
+    function claimReward() external {
+        uint256 reward = _pendingReward(msg.sender) + stakes[msg.sender].rewardDebt;
+        require(reward > 0, "No reward");
+        stakes[msg.sender].rewardDebt = 0;
+        stakes[msg.sender].lastStakedAt = block.timestamp;
+        payable(msg.sender).transfer(reward);
+        emit RewardClaimed(msg.sender, reward);
+    }
+
+    function _pendingReward(address _user) internal view returns (uint256) {
+        StakeInfo storage info = stakes[_user];
+        if (info.amount == 0) return 0;
+        uint256 elapsed = block.timestamp - info.lastStakedAt;
+        return (info.amount * rewardRate * elapsed) / 1e18;
+    }
+
+    function pendingReward(address _user) external view returns (uint256) {
+        return _pendingReward(_user) + stakes[_user].rewardDebt;
+    }
+
+    receive() external payable {}
+}
+`,
+      language: 'sol',
+    }],
+    activeFile: 'StakingVault.sol',
+  },
 ];
 
 function defaultProject(): ProjectState {
@@ -577,6 +809,96 @@ export function saveProject(state: ProjectState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
   } catch { /* quota exceeded, ignore */ }
+}
+
+function stripReadOnlyFiles(state: ProjectState): ProjectState {
+  return {
+    ...state,
+    files: state.files.filter((f) => !f.readOnly),
+    folders: (state.folders || [])
+      .map((folder) => normalizeFolderPath(folder))
+      .filter((folder): folder is string => !!folder),
+  };
+}
+
+// ── Local project management (anonymous / offline) ──
+
+export interface LocalProjectMeta {
+  id: string;
+  name: string;
+  updatedAt: string;
+}
+
+const LOCAL_INDEX_KEY = 'runner:local-project-index';
+const LOCAL_PREFIX = 'runner:local:';
+const CLOUD_META_KEY = 'runner:cloudMeta';
+
+export function generateLocalId(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let id = '';
+  for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+  return id;
+}
+
+export function listLocalProjects(): LocalProjectMeta[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_INDEX_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveLocalIndex(list: LocalProjectMeta[]) {
+  try { localStorage.setItem(LOCAL_INDEX_KEY, JSON.stringify(list)); } catch {}
+}
+
+export function saveLocalProject(id: string, state: ProjectState, name: string) {
+  const toSave = stripReadOnlyFiles(state);
+  try { localStorage.setItem(LOCAL_PREFIX + id, JSON.stringify(toSave)); } catch {}
+  const list = listLocalProjects();
+  const idx = list.findIndex(p => p.id === id);
+  const meta: LocalProjectMeta = { id, name, updatedAt: new Date().toISOString() };
+  if (idx >= 0) list[idx] = meta; else list.unshift(meta);
+  saveLocalIndex(list);
+}
+
+export function loadLocalProject(id: string): ProjectState | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_PREFIX + id);
+    if (raw) return sanitizeProject(JSON.parse(raw));
+  } catch {}
+  return null;
+}
+
+export function deleteLocalProject(id: string) {
+  try { localStorage.removeItem(LOCAL_PREFIX + id); } catch {}
+  saveLocalIndex(listLocalProjects().filter(p => p.id !== id));
+}
+
+export function renameLocalProject(id: string, name: string) {
+  const list = listLocalProjects();
+  const idx = list.findIndex(p => p.id === id);
+  if (idx >= 0) {
+    list[idx] = { ...list[idx], name };
+    saveLocalIndex(list);
+  }
+}
+
+// ── Cloud meta persistence (survives page refresh) ──
+
+export function loadCloudMeta(): { id?: string; name: string; slug?: string; is_public?: boolean } | null {
+  try {
+    const raw = localStorage.getItem(CLOUD_META_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+export function saveCloudMeta(meta: { id?: string; name: string; slug?: string; is_public?: boolean }) {
+  try { localStorage.setItem(CLOUD_META_KEY, JSON.stringify(meta)); } catch {}
+}
+
+export function clearCloudMeta() {
+  try { localStorage.removeItem(CLOUD_META_KEY); } catch {}
 }
 
 export function getFileContent(state: ProjectState, path: string): string | undefined {

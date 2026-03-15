@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { TreeNode, ProjectState } from '../fs/fileSystem';
 import { buildTree, getUserFiles, getDependencyFiles } from '../fs/fileSystem';
+import SolidityIcon from './icons/SolidityIcon';
 
 function CadenceIcon({ className }: { className?: string }) {
   return (
@@ -277,7 +278,7 @@ function TreeItem({
       {node.name.endsWith('.cdc') ? (
         <CadenceIcon className="w-3.5 h-3.5 shrink-0" />
       ) : node.name.endsWith('.sol') ? (
-        <File className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+        <SolidityIcon className="w-3.5 h-3.5 shrink-0 text-purple-400" />
       ) : (
         <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
       )}

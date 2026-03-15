@@ -6,8 +6,9 @@ import {
   Bot, X, Send, Trash2, Loader2, Sparkles, Database, Copy, Check, Download,
   Search, ChevronRight, Code, Wrench, Zap, Scale, Brain, ChevronUp,
   Eye, EyeOff, Square, ReplaceAll, Coins, Image, SendHorizonal,
-  ShieldCheck, ShieldOff,
+  ShieldCheck, ShieldOff, Import,
 } from 'lucide-react';
+import SolidityIcon from './icons/SolidityIcon';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { AnimatedMarkdown } from '@outblock/flowtoken';
@@ -101,6 +102,7 @@ interface AIPanelProps {
     meta?: { assistantId?: string; streaming?: boolean },
   ) => void;
   onLoadTemplate: (template: Template) => void;
+  onImportFromAddress?: () => void;
   onCreateFile?: (path: string, content: string) => void;
   onDeleteFile?: (path: string) => void;
   onSetActiveFile?: (path: string) => void;
@@ -1533,6 +1535,7 @@ export default function AIPanel({
   onApplyCodeToFile,
   onAutoApplyEdits,
   onLoadTemplate,
+  onImportFromAddress,
   onCreateFile,
   onDeleteFile,
   onSetActiveFile,
@@ -2085,6 +2088,19 @@ export default function AIPanel({
               const solidityTemplates = allTemplates.filter(t => t.activeFile.endsWith('.sol'));
               return (
                 <div className="pt-2 border-t border-zinc-800 space-y-3">
+                  {/* Import from Address */}
+                  {onImportFromAddress && (
+                    <button
+                      onClick={onImportFromAddress}
+                      className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/50 hover:border-emerald-700/40 text-left transition-colors group"
+                    >
+                      <Import className="w-3.5 h-3.5 text-emerald-500/70 group-hover:text-emerald-400 shrink-0" />
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-zinc-300 group-hover:text-zinc-200 font-medium">Import from Address</span>
+                        <span className="text-[9px] text-zinc-600">Load contracts from a Cadence or EVM address</span>
+                      </div>
+                    </button>
+                  )}
                   <div>
                     <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Cadence</p>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -2102,13 +2118,16 @@ export default function AIPanel({
                     </div>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">Solidity <span className="text-orange-500/70">EVM</span></p>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">
+                      <SolidityIcon className="w-3 h-3 inline-block mr-1 text-purple-400" />
+                      Solidity <span className="text-purple-400/70">EVM</span>
+                    </p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {solidityTemplates.map((template) => (
                         <button
                           key={template.label}
                           onClick={() => onLoadTemplate(template)}
-                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-orange-700/30 hover:border-orange-600/50 text-left transition-colors"
+                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-purple-700/30 hover:border-purple-600/50 text-left transition-colors"
                           title={template.description}
                         >
                           <span className="text-[10px] text-zinc-300 font-medium leading-tight">{template.label}</span>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Plus, Globe, Trash2, Pencil, Download, Share2 } from 'lucide-react';
+import { ChevronDown, Plus, Globe, Trash2, Pencil, Download, Share2, Import } from 'lucide-react';
 import type { CloudProject } from '../auth/useProjects';
 
 interface ProjectSelectorProps {
@@ -7,9 +7,10 @@ interface ProjectSelectorProps {
   currentProject: { id?: string; name: string; slug?: string; is_public?: boolean } | null;
   onSelectProject: (slug: string) => void;
   onNewProject: () => void;
+  onImportFromAddress: () => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
-  onShare: () => void;
+  onShare?: () => void;
   saving: boolean;
   lastSaved: Date | null;
   onExport: () => void;
@@ -20,6 +21,7 @@ export default function ProjectSelector({
   currentProject,
   onSelectProject,
   onNewProject,
+  onImportFromAddress,
   onRename,
   onDelete,
   onShare,
@@ -92,13 +94,15 @@ export default function ProjectSelector({
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
-                  <button
-                    onClick={() => { onShare(); setOpen(false); }}
-                    className="text-zinc-500 hover:text-zinc-300 p-0.5"
-                    title="Share"
-                  >
-                    <Share2 className="w-3 h-3" />
-                  </button>
+                  {onShare && (
+                    <button
+                      onClick={() => { onShare(); setOpen(false); }}
+                      className="text-zinc-500 hover:text-zinc-300 p-0.5"
+                      title="Share"
+                    >
+                      <Share2 className="w-3 h-3" />
+                    </button>
+                  )}
                   <button
                     onClick={() => { onExport(); setOpen(false); }}
                     className="text-zinc-500 hover:text-zinc-300 p-0.5"
@@ -131,6 +135,13 @@ export default function ProjectSelector({
           >
             <Plus className="w-3 h-3" />
             New Project
+          </button>
+          <button
+            onClick={() => { onImportFromAddress(); setOpen(false); }}
+            className="flex items-center gap-1.5 w-full px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700/50 transition-colors"
+          >
+            <Import className="w-3 h-3" />
+            Import from Address
           </button>
 
           {projects.length > 0 && <div className="border-t border-zinc-700" />}

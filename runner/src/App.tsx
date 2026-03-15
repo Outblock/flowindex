@@ -40,10 +40,14 @@ import {
   openFile, closeFile, getFileContent, addDependencyFile, getUserFiles,
   renameFile, moveFile,
   TEMPLATES, DEFAULT_CODE, getTemplates, replaceContractAddresses,
-  type ProjectState, type Template,
+  generateLocalId, listLocalProjects, saveLocalProject, loadLocalProject,
+  deleteLocalProject, renameLocalProject, loadCloudMeta, saveCloudMeta, clearCloudMeta,
+  type ProjectState, type Template, type LocalProjectMeta,
 } from './fs/fileSystem';
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
 import ProjectSelector from './components/ProjectSelector';
+import SearchPanel from './components/SearchPanel';
+import ImportFromAddressDialog from './components/ImportFromAddressDialog';
 import ShareModal from './components/ShareModal';
 import { useGitHub } from './github/useGitHub';
 import GitHubConnect from './components/GitHubConnect';
@@ -52,7 +56,7 @@ import GitHubPanel from './components/GitHubPanel';
 import SettingsPanel from './components/SettingsPanel';
 import { githubApi } from './github/api';
 import { useDeployEvents } from './github/useDeployEvents';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, ChevronDown, Globe, Terminal } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, ChevronDown, Globe, Terminal, Import, Download, Plus, FilePlus } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 const AIPanel = lazy(() => import('./components/AIPanel'));
@@ -241,6 +245,12 @@ export default function App() {
         folders: [],
       };
     }
+    // Load from local project store if ?local=id
+    const localId = params.get('local');
+    if (localId) {
+      const local = loadLocalProject(localId);
+      if (local) return local;
+    }
     return loadProject();
   });
 
@@ -359,9 +369,11 @@ export default function App() {
   const [showKeyManager, setShowKeyManager] = useState(false);
   const [keyManagerInitialMode, setKeyManagerInitialMode] = useState<'create' | 'import' | undefined>();
   const [showNetworkMenu, setShowNetworkMenu] = useState(false);
+  const [showFileMenu, setShowFileMenu] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showPasskeyOnboarding, setShowPasskeyOnboarding] = useState(false);
   const networkMenuRef = useRef<HTMLDivElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     try {
       localStorage.setItem('runner:show-ai', String(showAI));
@@ -384,6 +396,17 @@ export default function App() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showNetworkMenu]);
+  // Close file menu on outside click
+  useEffect(() => {
+    if (!showFileMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) {
+        setShowFileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showFileMenu]);
 
   const [autoSign, setAutoSign] = useState(() => {
     try { return localStorage.getItem('runner-auto-sign') !== 'false'; } catch { return true; }
@@ -601,10 +624,39 @@ export default function App() {
 
   const [cloudMeta, setCloudMeta] = useState<{
     id?: string; name: string; slug?: string; is_public?: boolean;
-  }>({ name: 'Untitled' });
+  }>(() => {
+    const params = new URLSearchParams(window.location.search);
+    // Don't restore if URL has explicit params
+    if (params.get('project') || params.get('tx') || params.get('code') || params.get('local')) {
+      return { name: 'Untitled' };
+    }
+    // Restore from localStorage so refresh reconnects to the same project
+    const saved = loadCloudMeta();
+    if (saved?.slug) {
+      // Put slug back in URL so the existing ?project= load effect picks it up
+      const url = new URL(window.location.href);
+      url.searchParams.set('project', saved.slug);
+      window.history.replaceState({}, '', url.toString());
+    }
+    return saved || { name: 'Untitled' };
+  });
   const autoCreatingRef = useRef(false);
   const [viewingShared, setViewingShared] = useState<string | null>(null);
+
+  // Local project identity for anonymous users
+  const [localMeta, setLocalMeta] = useState<{ id: string; name: string } | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const localId = params.get('local');
+    if (localId) {
+      const projects = listLocalProjects();
+      const found = projects.find(p => p.id === localId);
+      return { id: localId, name: found?.name || 'Untitled' };
+    }
+    return null;
+  });
+  const [localProjects, setLocalProjects] = useState<LocalProjectMeta[]>(() => listLocalProjects());
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // GitHub integration state
   const [ghInstallationId, setGhInstallationId] = useState<number | undefined>(() => {
@@ -683,14 +735,48 @@ export default function App() {
     setSelectedSigner({ type: 'local', key: selectedSigner.key, account: newAccount });
   }, [accountsMap, selectedSigner]);
 
-  // Persist project to localStorage (debounced)
+  // Persist project to localStorage (debounced) + local project store for anonymous
   useEffect(() => {
     const timer = setTimeout(() => {
-      saveProject(project);
+      saveProject(project); // always save to runner:project as fallback
       localStorage.setItem('runner:network', network);
+      // Also save to local project store for anonymous users
+      if (!user && !viewingShared) {
+        if (localMeta) {
+          saveLocalProject(localMeta.id, project, localMeta.name);
+        } else {
+          const id = generateLocalId();
+          setLocalMeta({ id, name: 'Untitled' });
+          saveLocalProject(id, project, 'Untitled');
+        }
+        setLocalProjects(listLocalProjects());
+      }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [project, network]);
+  }, [project, network, user, localMeta, viewingShared]);
+
+  // Sync project identity to URL (so refresh reconnects to same project)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('tx') || url.searchParams.has('code')) return;
+    url.searchParams.delete('project');
+    url.searchParams.delete('local');
+    if (cloudMeta.slug) {
+      url.searchParams.set('project', cloudMeta.slug);
+    } else if (localMeta?.id) {
+      url.searchParams.set('local', localMeta.id);
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [cloudMeta.slug, localMeta?.id]);
+
+  // Persist cloudMeta to localStorage (so refresh without URL still works)
+  useEffect(() => {
+    if (cloudMeta.id) {
+      saveCloudMeta(cloudMeta);
+    } else {
+      clearCloudMeta();
+    }
+  }, [cloudMeta]);
 
   // Cloud auto-save (debounced 2s) — auto-creates if no cloud project yet
   const isTxMode = useMemo(() => !!new URLSearchParams(window.location.search).get('tx'), []);
@@ -1280,14 +1366,59 @@ export default function App() {
     setProject((prev) => openFile(prev, path));
   }, []);
 
-  const handleLoadTemplate = useCallback((template: Template) => {
-    setProject({
+  const handleLoadTemplate = useCallback(async (template: Template) => {
+    const templateState = {
       files: template.files,
       activeFile: template.activeFile,
       openFiles: [template.activeFile],
       folders: template.folders || [],
-    });
-  }, []);
+    };
+    setProject(templateState);
+    // Immediately create a named project to avoid duplicate "Untitled" entries
+    if (user) {
+      try {
+        autoCreatingRef.current = true;
+        const result = await cloudSave(templateState, { name: template.label, network });
+        setCloudMeta({ id: result.id, name: template.label, slug: result.slug });
+        await fetchProjects();
+      } catch { /* ignore */ } finally {
+        autoCreatingRef.current = false;
+      }
+    } else {
+      const id = generateLocalId();
+      setLocalMeta({ id, name: template.label });
+      saveLocalProject(id, templateState, template.label);
+      setLocalProjects(listLocalProjects());
+    }
+  }, [user, cloudSave, network, fetchProjects]);
+
+  const handleImportFromAddress = useCallback(async (
+    files: { path: string; content: string }[],
+    projectName: string,
+  ) => {
+    const importedState: ProjectState = {
+      files: files.map((f) => ({ path: f.path, content: f.content })),
+      activeFile: files[0]?.path || '',
+      openFiles: [files[0]?.path || ''],
+      folders: ['contracts'],
+    };
+    setProject(importedState);
+    if (user) {
+      try {
+        autoCreatingRef.current = true;
+        const result = await cloudSave(importedState, { name: projectName, network });
+        setCloudMeta({ id: result.id, name: projectName, slug: result.slug });
+        await fetchProjects();
+      } catch { /* ignore */ } finally {
+        autoCreatingRef.current = false;
+      }
+    } else {
+      const id = generateLocalId();
+      setLocalMeta({ id, name: projectName });
+      saveLocalProject(id, importedState, projectName);
+      setLocalProjects(listLocalProjects());
+    }
+  }, [user, cloudSave, network, fetchProjects]);
 
   const handleOpenFile = useCallback((path: string) => {
     setProject((prev) => openFile(prev, path));
@@ -1451,6 +1582,54 @@ export default function App() {
     a.click();
     URL.revokeObjectURL(url);
   }, [project, cloudMeta.name]);
+
+  const handleImportLocalFiles = useCallback((fileList: FileList) => {
+    const allowedExts = ['.cdc', '.sol', '.json', '.txt', '.toml', '.md', '.js', '.ts'];
+    const files = Array.from(fileList).filter((f) => {
+      // Skip hidden files/dirs and node_modules
+      const relPath = f.webkitRelativePath || f.name;
+      if (relPath.split('/').some((seg) => seg.startsWith('.') || seg === 'node_modules')) return false;
+      return allowedExts.some((ext) => f.name.endsWith(ext));
+    });
+    const readPromises = files.map((file) => {
+      // For folder imports, strip the top-level folder name from path
+      let path = file.webkitRelativePath || file.name;
+      if (path.includes('/')) {
+        // Remove top-level dir (e.g., "myproject/contracts/Foo.cdc" → "contracts/Foo.cdc")
+        path = path.split('/').slice(1).join('/');
+      }
+      return file.text().then((content) => ({ path, content }));
+    });
+    Promise.all(readPromises).then((imported) => {
+      if (imported.length === 0) return;
+      // Collect folder paths for the project state
+      const folderSet = new Set<string>();
+      for (const f of imported) {
+        const parts = f.path.split('/');
+        for (let i = 1; i < parts.length; i++) {
+          folderSet.add(parts.slice(0, i).join('/'));
+        }
+      }
+      setProject((prev) => {
+        let updated = prev;
+        for (const f of imported) {
+          const existing = updated.files.find((e) => e.path === f.path);
+          if (existing) {
+            updated = updateFileContent(updated, f.path, f.content);
+          } else {
+            updated = createFile(updated, f.path);
+            updated = updateFileContent(updated, f.path, f.content);
+          }
+        }
+        return {
+          ...updated,
+          activeFile: imported[0].path,
+          openFiles: [...new Set([...updated.openFiles, ...imported.map((f) => f.path)])],
+          folders: [...new Set([...updated.folders, ...folderSet])],
+        };
+      });
+    });
+  }, []);
 
   // Auto-open GitHub connect modal when returning from GitHub app install
   useEffect(() => {
@@ -1626,8 +1805,81 @@ export default function App() {
           )}
           <h1 className="text-sm font-semibold tracking-tight">{isMobile ? 'Runner' : 'Flow Runner'}</h1>
           <nav className="flex items-center gap-1 ml-3">
-            <span className="px-3 py-1 text-xs rounded-md bg-zinc-800 text-zinc-100">Editor</span>
-            <a href="/deploy" className="px-3 py-1 text-xs rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors">Deploy</a>
+            {/* File menu */}
+            <div ref={fileMenuRef} className="relative">
+              <button
+                onClick={() => setShowFileMenu(!showFileMenu)}
+                className={`px-3 py-1 text-xs rounded-md transition-colors ${
+                  showFileMenu ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                }`}
+              >
+                File
+              </button>
+              {showFileMenu && (
+                <div className="absolute left-0 top-full mt-1 w-52 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl z-50 py-1">
+                  <button
+                    onClick={() => {
+                      setShowFileMenu(false);
+                      const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
+                      const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+                      if (user) {
+                        cloudSave(defaultState, { name: 'Untitled', network }).then(async (result) => {
+                          setProject(defaultState);
+                          setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
+                          await fetchProjects();
+                        });
+                      } else {
+                        const id = generateLocalId();
+                        setProject(defaultState);
+                        setLocalMeta({ id, name: 'Untitled' });
+                        saveLocalProject(id, defaultState, 'Untitled');
+                        setLocalProjects(listLocalProjects());
+                      }
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-zinc-500" />
+                    New Project
+                  </button>
+                  <button
+                    onClick={() => { setShowFileMenu(false); document.getElementById('file-import-input')?.click(); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <FilePlus className="w-3.5 h-3.5 text-zinc-500" />
+                    Open File...
+                  </button>
+                  <button
+                    onClick={() => { setShowFileMenu(false); document.getElementById('folder-import-input')?.click(); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <FilePlus className="w-3.5 h-3.5 text-zinc-500" />
+                    Open Folder...
+                  </button>
+                  <button
+                    onClick={() => { setShowFileMenu(false); setShowImportDialog(true); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <Import className="w-3.5 h-3.5 text-zinc-500" />
+                    Import from Address
+                  </button>
+                  <div className="border-t border-zinc-700 my-1" />
+                  <button
+                    onClick={() => { setShowFileMenu(false); handleExportZip(); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5 text-zinc-500" />
+                    Export as ZIP
+                  </button>
+                  <button
+                    onClick={() => { setShowFileMenu(false); setShowShareModal(true); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-zinc-500" />
+                    Share
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* LSP status indicator */}
@@ -1819,7 +2071,10 @@ export default function App() {
           <>
             <ActivityBar
               activeTab={sidebarTab}
-              onTabChange={setSidebarTab}
+              onTabChange={(tab) => {
+                if (tab === 'deploy') { window.location.href = '/deploy'; return; }
+                setSidebarTab(tab);
+              }}
               hasGitHub={!!github.connection}
               gitChangesCount={gitChangedFiles.length}
             />
@@ -1827,13 +2082,19 @@ export default function App() {
               {/* Files tab */}
               {sidebarTab === 'files' && (
                 <>
-                  {user && (
-                    <div className="shrink-0 border-b border-zinc-700">
-                      <ProjectSelector
-                        projects={cloudProjects}
-                        currentProject={cloudMeta.id ? cloudMeta : null}
-                        onSelectProject={async (slug) => {
-                          const full = await getProject(slug);
+                  <div className="shrink-0 border-b border-zinc-700">
+                    <ProjectSelector
+                      projects={user ? cloudProjects : localProjects.map(p => ({
+                        id: p.id, name: p.name, slug: p.id, network,
+                        is_public: false, active_file: '', open_files: [], folders: [], updated_at: p.updatedAt,
+                      }))}
+                      currentProject={user
+                        ? (cloudMeta.id ? cloudMeta : null)
+                        : (localMeta ? { id: localMeta.id, name: localMeta.name, slug: localMeta.id } : null)
+                      }
+                      onSelectProject={async (slugOrId) => {
+                        if (user) {
+                          const full = await getProject(slugOrId);
                           if (!full) return;
                           const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
                           setProject({
@@ -1846,32 +2107,69 @@ export default function App() {
                             id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
                           });
                           setNetwork(full.network as FlowNetwork);
-                        }}
-                        onNewProject={async () => {
-                          const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
-                          const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+                        } else {
+                          const loaded = loadLocalProject(slugOrId);
+                          if (!loaded) return;
+                          const meta = localProjects.find(p => p.id === slugOrId);
+                          setProject(loaded);
+                          setLocalMeta({ id: slugOrId, name: meta?.name || 'Untitled' });
+                        }
+                      }}
+                      onNewProject={async () => {
+                        const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
+                        const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+                        if (user) {
                           const result = await cloudSave(defaultState, { name: 'Untitled', network });
                           setProject(defaultState);
                           setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
                           await fetchProjects();
-                        }}
-                        onRename={async (id, name) => {
+                        } else {
+                          const id = generateLocalId();
+                          setProject(defaultState);
+                          setLocalMeta({ id, name: 'Untitled' });
+                          saveLocalProject(id, defaultState, 'Untitled');
+                          setLocalProjects(listLocalProjects());
+                        }
+                      }}
+                      onImportFromAddress={() => setShowImportDialog(true)}
+                      onRename={async (id, name) => {
+                        if (user) {
                           setCloudMeta(prev => ({ ...prev, name }));
                           await cloudSave(project, { ...cloudMeta, id, name });
                           await fetchProjects();
-                        }}
-                        onShare={() => setShowShareModal(true)}
-                        onDelete={async (id) => {
+                        } else {
+                          renameLocalProject(id, name);
+                          setLocalMeta(prev => prev ? { ...prev, name } : null);
+                          setLocalProjects(listLocalProjects());
+                        }
+                      }}
+                      onShare={user ? () => setShowShareModal(true) : undefined}
+                      onDelete={async (id) => {
+                        if (user) {
                           await cloudDelete(id);
                           setCloudMeta({ name: 'Untitled' });
                           setProject(loadProject());
-                        }}
-                        saving={projectSaving}
-                        lastSaved={lastSaved}
-                        onExport={handleExportZip}
-                      />
-                    </div>
-                  )}
+                        } else {
+                          deleteLocalProject(id);
+                          setLocalProjects(listLocalProjects());
+                          const remaining = listLocalProjects();
+                          if (remaining.length > 0) {
+                            const next = loadLocalProject(remaining[0].id);
+                            if (next) {
+                              setProject(next);
+                              setLocalMeta({ id: remaining[0].id, name: remaining[0].name });
+                              return;
+                            }
+                          }
+                          setLocalMeta(null);
+                          setProject(loadProject());
+                        }
+                      }}
+                      saving={projectSaving}
+                      lastSaved={lastSaved}
+                      onExport={handleExportZip}
+                    />
+                  </div>
                   <div className="flex-1 overflow-y-auto">
                     <FileExplorer
                       project={project}
@@ -1908,6 +2206,45 @@ export default function App() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Search tab */}
+              {sidebarTab === 'search' && (
+                <SearchPanel
+                  files={project.files}
+                  onOpenFileAtLine={(path, line, column) => {
+                    setProject((prev) => openFile(prev, path));
+                    // Defer cursor jump until editor loads the file
+                    setTimeout(() => {
+                      editorRef.current?.setPosition({ lineNumber: line, column });
+                      editorRef.current?.revealPositionInCenter({ lineNumber: line, column });
+                      editorRef.current?.focus();
+                    }, 50);
+                  }}
+                  onReplaceInFile={(path, search, replace, line) => {
+                    setProject((prev) => {
+                      const file = prev.files.find((f) => f.path === path);
+                      if (!file) return prev;
+                      const lines = file.content.split('\n');
+                      if (line >= 1 && line <= lines.length) {
+                        lines[line - 1] = lines[line - 1].replace(search, replace);
+                      }
+                      return updateFileContent(prev, path, lines.join('\n'));
+                    });
+                  }}
+                  onReplaceAll={(search, replace) => {
+                    setProject((prev) => {
+                      let updated = prev;
+                      for (const file of prev.files) {
+                        if (file.readOnly) continue;
+                        if (file.content.includes(search)) {
+                          updated = updateFileContent(updated, file.path, file.content.replaceAll(search, replace));
+                        }
+                      }
+                      return updated;
+                    });
+                  }}
+                />
               )}
 
               {/* GitHub tab */}
@@ -2050,6 +2387,7 @@ export default function App() {
                     onApplyCodeToFile={handleApplyCodeToFile}
                     onAutoApplyEdits={handleAutoApplyEdits}
                     onLoadTemplate={handleLoadTemplate}
+                    onImportFromAddress={() => setShowImportDialog(true)}
                     onCreateFile={handleAICreateFile}
                     onDeleteFile={handleAIDeleteFile}
                     onSetActiveFile={handleAISetActiveFile}
@@ -2147,6 +2485,7 @@ export default function App() {
                 onApplyCodeToFile={(path, code) => { handleApplyCodeToFile(path, code); setShowMobileAI(false); }}
                 onAutoApplyEdits={handleAutoApplyEdits}
                 onLoadTemplate={(t) => { handleLoadTemplate(t); setShowMobileAI(false); }}
+                onImportFromAddress={() => { setShowImportDialog(true); setShowMobileAI(false); }}
                 onCreateFile={handleAICreateFile}
                 onDeleteFile={handleAIDeleteFile}
                 onSetActiveFile={handleAISetActiveFile}
@@ -2187,6 +2526,38 @@ export default function App() {
           onClose={() => setShowShareModal(false)}
         />
       )}
+
+      {/* Hidden file inputs for Open File / Open Folder */}
+      <input
+        id="file-import-input"
+        type="file"
+        multiple
+        accept=".cdc,.sol,.json,.txt"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) handleImportLocalFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        id="folder-import-input"
+        type="file"
+        // @ts-expect-error webkitdirectory is non-standard but widely supported
+        webkitdirectory=""
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) handleImportLocalFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+
+      {/* Import from Address Dialog */}
+      <ImportFromAddressDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        onImport={handleImportFromAddress}
+        network={network}
+      />
 
       {/* GitHub Connect Modal */}
       {showGitHubConnect && (
