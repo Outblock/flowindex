@@ -119,7 +119,12 @@ export function AddressLink({
                     className="text-[#5353D3] hover:text-[#4040B0] dark:text-[#7B7BE8] dark:hover:text-[#9B9BF0] transition-colors p-0.5 shrink-0 opacity-60 hover:opacity-100"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <BlockscoutIcon className="w-3 h-3" />
+                    <span className="inline-flex items-center gap-px">
+                        <BlockscoutIcon className="w-3 h-3" />
+                        <svg viewBox="0 0 8 8" fill="none" className="w-1.5 h-1.5 -mt-1.5 -ml-0.5">
+                            <path d="M1 7L7 1M7 1H2M7 1V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                    </span>
                 </a>
             )}
         </span>
