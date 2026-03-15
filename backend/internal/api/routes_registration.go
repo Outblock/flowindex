@@ -185,6 +185,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/evm/token", s.handleFlowListEVMTokens).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/token/{address}", s.handleFlowGetEVMToken).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/token", s.handleFlowGetEVMAddressTokens).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/evm/address/{address}/nft", s.handleFlowGetEVMAddressNFTs).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/transactions", s.handleFlowGetEVMAddressTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/internal-transactions", s.handleFlowGetEVMAddressInternalTxs).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/token-transfers", s.handleFlowGetEVMAddressTokenTransfers).Methods("GET", "OPTIONS")

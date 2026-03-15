@@ -54,6 +54,11 @@ func (s *Server) handleFlowGetEVMTransactionTokenTransfers(w http.ResponseWriter
 	s.proxyBlockscout(w, r, "/api/v2/transactions/0x"+hash+"/token-transfers")
 }
 
+func (s *Server) handleFlowGetEVMAddressNFTs(w http.ResponseWriter, r *http.Request) {
+	address := normalizeAddr(mux.Vars(r)["address"])
+	s.proxyBlockscout(w, r, "/api/v2/addresses/0x"+address+"/nft")
+}
+
 func (s *Server) handleFlowGetEVMAddress(w http.ResponseWriter, r *http.Request) {
 	addr := normalizeAddr(mux.Vars(r)["address"])
 

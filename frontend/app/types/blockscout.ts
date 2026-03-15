@@ -97,11 +97,24 @@ export interface BSToken {
   exchange_rate: string | null;
 }
 
+export interface BSNFTInstance {
+  id: number;
+  is_unique: boolean;
+  metadata: {
+    name?: string;
+    image?: string;
+    image_url?: string;
+    description?: string;
+    attributes?: Array<{ trait_type: string; value: string }>;
+    [key: string]: any;
+  } | null;
+}
+
 export interface BSTokenBalance {
   token: BSToken;
   token_id: string | null;
   value: string;
-  token_instance: any | null;
+  token_instance: BSNFTInstance | null;
 }
 
 export interface BSLog {
