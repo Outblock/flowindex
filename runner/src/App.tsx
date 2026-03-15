@@ -45,7 +45,7 @@ import {
   type ProjectState, type Template, type LocalProjectMeta,
 } from './fs/fileSystem';
 import { useProjects, type CloudProject, type CloudProjectFull } from './auth/useProjects';
-import ProjectSelector from './components/ProjectSelector';
+import ProjectManagerModal from './components/ProjectManagerModal';
 import SearchPanel from './components/SearchPanel';
 import ImportFromAddressDialog from './components/ImportFromAddressDialog';
 import ShareModal from './components/ShareModal';
@@ -56,7 +56,7 @@ import GitHubPanel from './components/GitHubPanel';
 import SettingsPanel from './components/SettingsPanel';
 import { githubApi } from './github/api';
 import { useDeployEvents } from './github/useDeployEvents';
-import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, ChevronDown, Globe, Terminal, Import, Download, Plus, FilePlus } from 'lucide-react';
+import { Play, Loader2, PanelLeftOpen, PanelLeftClose, Bot, ChevronLeft, Key as KeyIcon, LogIn, Share2, X, MessageSquare, ChevronDown, Globe, Terminal, Import, Download, Plus, FilePlus, FolderOpen } from 'lucide-react';
 import type { LspMode } from './editor/useLsp';
 
 const AIPanel = lazy(() => import('./components/AIPanel'));
@@ -657,6 +657,7 @@ export default function App() {
   const [localProjects, setLocalProjects] = useState<LocalProjectMeta[]>(() => listLocalProjects());
   const [showShareModal, setShowShareModal] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showProjectManager, setShowProjectManager] = useState(false);
 
   // GitHub integration state
   const [ghInstallationId, setGhInstallationId] = useState<number | undefined>(() => {
@@ -1842,6 +1843,14 @@ export default function App() {
                     New Project
                   </button>
                   <button
+                    onClick={() => { setShowFileMenu(false); setShowProjectManager(true); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-zinc-500" />
+                    Projects...
+                  </button>
+                  <div className="border-t border-zinc-700 my-1" />
+                  <button
                     onClick={() => { setShowFileMenu(false); document.getElementById('file-import-input')?.click(); }}
                     className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
                   >
@@ -2082,94 +2091,17 @@ export default function App() {
               {/* Files tab */}
               {sidebarTab === 'files' && (
                 <>
-                  <div className="shrink-0 border-b border-zinc-700">
-                    <ProjectSelector
-                      projects={user ? cloudProjects : localProjects.map(p => ({
-                        id: p.id, name: p.name, slug: p.id, network,
-                        is_public: false, active_file: '', open_files: [], folders: [], updated_at: p.updatedAt,
-                      }))}
-                      currentProject={user
-                        ? (cloudMeta.id ? cloudMeta : null)
-                        : (localMeta ? { id: localMeta.id, name: localMeta.name, slug: localMeta.id } : null)
-                      }
-                      onSelectProject={async (slugOrId) => {
-                        if (user) {
-                          const full = await getProject(slugOrId);
-                          if (!full) return;
-                          const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
-                          setProject({
-                            files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
-                            activeFile: full.active_file || files[0]?.path || 'main.cdc',
-                            openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
-                            folders: full.folders || [],
-                          });
-                          setCloudMeta({
-                            id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
-                          });
-                          setNetwork(full.network as FlowNetwork);
-                        } else {
-                          const loaded = loadLocalProject(slugOrId);
-                          if (!loaded) return;
-                          const meta = localProjects.find(p => p.id === slugOrId);
-                          setProject(loaded);
-                          setLocalMeta({ id: slugOrId, name: meta?.name || 'Untitled' });
-                        }
-                      }}
-                      onNewProject={async () => {
-                        const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
-                        const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
-                        if (user) {
-                          const result = await cloudSave(defaultState, { name: 'Untitled', network });
-                          setProject(defaultState);
-                          setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
-                          await fetchProjects();
-                        } else {
-                          const id = generateLocalId();
-                          setProject(defaultState);
-                          setLocalMeta({ id, name: 'Untitled' });
-                          saveLocalProject(id, defaultState, 'Untitled');
-                          setLocalProjects(listLocalProjects());
-                        }
-                      }}
-                      onImportFromAddress={() => setShowImportDialog(true)}
-                      onRename={async (id, name) => {
-                        if (user) {
-                          setCloudMeta(prev => ({ ...prev, name }));
-                          await cloudSave(project, { ...cloudMeta, id, name });
-                          await fetchProjects();
-                        } else {
-                          renameLocalProject(id, name);
-                          setLocalMeta(prev => prev ? { ...prev, name } : null);
-                          setLocalProjects(listLocalProjects());
-                        }
-                      }}
-                      onShare={user ? () => setShowShareModal(true) : undefined}
-                      onDelete={async (id) => {
-                        if (user) {
-                          await cloudDelete(id);
-                          setCloudMeta({ name: 'Untitled' });
-                          setProject(loadProject());
-                        } else {
-                          deleteLocalProject(id);
-                          setLocalProjects(listLocalProjects());
-                          const remaining = listLocalProjects();
-                          if (remaining.length > 0) {
-                            const next = loadLocalProject(remaining[0].id);
-                            if (next) {
-                              setProject(next);
-                              setLocalMeta({ id: remaining[0].id, name: remaining[0].name });
-                              return;
-                            }
-                          }
-                          setLocalMeta(null);
-                          setProject(loadProject());
-                        }
-                      }}
-                      saving={projectSaving}
-                      lastSaved={lastSaved}
-                      onExport={handleExportZip}
-                    />
-                  </div>
+                  <button
+                    onClick={() => setShowProjectManager(true)}
+                    className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors border-b border-zinc-700 shrink-0"
+                  >
+                    <FolderOpen className="w-3 h-3 text-zinc-500" />
+                    <span className="truncate flex-1 text-left font-medium">
+                      {user ? (cloudMeta.name || 'Untitled') : (localMeta?.name || 'Untitled')}
+                    </span>
+                    {projectSaving && <span className="text-[9px] text-amber-400">Saving...</span>}
+                    {!projectSaving && lastSaved && <span className="text-[9px] text-zinc-600">Saved</span>}
+                  </button>
                   <div className="flex-1 overflow-y-auto">
                     <FileExplorer
                       project={project}
@@ -2557,6 +2489,88 @@ export default function App() {
         onClose={() => setShowImportDialog(false)}
         onImport={handleImportFromAddress}
         network={network}
+      />
+
+      <ProjectManagerModal
+        open={showProjectManager}
+        onClose={() => setShowProjectManager(false)}
+        cloudProjects={cloudProjects}
+        localProjects={localProjects}
+        currentProjectId={user ? cloudMeta.id : localMeta?.id}
+        isLoggedIn={!!user}
+        currentNetwork={network}
+        onSelectProject={async (slugOrId, isLocal) => {
+          if (isLocal) {
+            const loaded = loadLocalProject(slugOrId);
+            if (!loaded) return;
+            const meta = localProjects.find(p => p.id === slugOrId);
+            setProject(loaded);
+            setLocalMeta({ id: slugOrId, name: meta?.name || 'Untitled' });
+          } else {
+            const full = await getProject(slugOrId);
+            if (!full) return;
+            const files = full.files.map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+            setProject({
+              files: files.length > 0 ? files : [{ path: 'main.cdc', content: '' }],
+              activeFile: full.active_file || files[0]?.path || 'main.cdc',
+              openFiles: full.open_files || [files[0]?.path || 'main.cdc'],
+              folders: full.folders || [],
+            });
+            setCloudMeta({
+              id: full.id, name: full.name, slug: full.slug, is_public: full.is_public,
+            });
+            setNetwork(full.network as FlowNetwork);
+          }
+        }}
+        onNewProject={async () => {
+          const defaultFiles = [{ path: 'main.cdc', content: DEFAULT_CODE }];
+          const defaultState = { files: defaultFiles, activeFile: 'main.cdc', openFiles: ['main.cdc'], folders: [] as string[] };
+          if (user) {
+            const result = await cloudSave(defaultState, { name: 'Untitled', network });
+            setProject(defaultState);
+            setCloudMeta({ id: result.id, name: 'Untitled', slug: result.slug });
+            await fetchProjects();
+          } else {
+            const id = generateLocalId();
+            setProject(defaultState);
+            setLocalMeta({ id, name: 'Untitled' });
+            saveLocalProject(id, defaultState, 'Untitled');
+            setLocalProjects(listLocalProjects());
+          }
+        }}
+        onRename={async (id, name, isLocal) => {
+          if (isLocal) {
+            renameLocalProject(id, name);
+            setLocalMeta(prev => prev?.id === id ? { ...prev, name } : prev);
+            setLocalProjects(listLocalProjects());
+          } else {
+            setCloudMeta(prev => ({ ...prev, name }));
+            await cloudSave(project, { ...cloudMeta, id, name });
+            await fetchProjects();
+          }
+        }}
+        onDelete={async (id, isLocal) => {
+          if (isLocal) {
+            deleteLocalProject(id);
+            setLocalProjects(listLocalProjects());
+            if (localMeta?.id === id) {
+              const remaining = listLocalProjects();
+              if (remaining.length > 0) {
+                const next = loadLocalProject(remaining[0].id);
+                if (next) { setProject(next); setLocalMeta({ id: remaining[0].id, name: remaining[0].name }); return; }
+              }
+              setLocalMeta(null);
+              setProject(loadProject());
+            }
+          } else {
+            await cloudDelete(id);
+            if (cloudMeta.id === id) {
+              setCloudMeta({ name: 'Untitled' });
+              setProject(loadProject());
+            }
+            await fetchProjects();
+          }
+        }}
       />
 
       {/* GitHub Connect Modal */}
