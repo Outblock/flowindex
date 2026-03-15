@@ -1,6 +1,6 @@
-import { Files, GitBranch, Settings } from 'lucide-react';
+import { Files, Search, GitBranch, Rocket, Settings } from 'lucide-react';
 
-export type SidebarTab = 'files' | 'github' | 'settings';
+export type SidebarTab = 'files' | 'search' | 'github' | 'deploy' | 'settings';
 
 interface ActivityBarProps {
   activeTab: SidebarTab;
@@ -11,7 +11,9 @@ interface ActivityBarProps {
 
 const tabs: { id: SidebarTab; icon: typeof Files; label: string }[] = [
   { id: 'files', icon: Files, label: 'Explorer' },
+  { id: 'search', icon: Search, label: 'Search' },
   { id: 'github', icon: GitBranch, label: 'Source Control' },
+  { id: 'deploy', icon: Rocket, label: 'Deploy' },
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
