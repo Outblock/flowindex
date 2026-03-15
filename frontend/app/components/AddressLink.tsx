@@ -1,5 +1,6 @@
 import Avatar from 'boring-avatars';
 import { Link } from '@tanstack/react-router';
+import { ExternalLink } from 'lucide-react';
 import { normalizeAddress, formatShort } from './account/accountUtils';
 
 /** Derive 5 colors from an address.
@@ -30,6 +31,7 @@ interface Props {
     className?: string;
     showAvatar?: boolean;
     showTag?: boolean;
+    showBlockscoutLink?: boolean;
     neutral?: boolean;
     onClick?: (e: React.MouseEvent) => void;
 }
@@ -63,35 +65,53 @@ export function AddressLink({
     className = '',
     showAvatar = true,
     showTag = true,
+    showBlockscoutLink,
     neutral = false,
     onClick,
 }: Props) {
     const normalized = normalizeAddress(address);
     const colors = colorsFromAddress(normalized);
     const addrType = addressType(normalized);
+    const isEVM = addrType === 'coa' || addrType === 'eoa';
+    // Show Blockscout link for EVM addresses by default, unless explicitly set
+    const showBsLink = showBlockscoutLink ?? isEVM;
     const colorCls = neutral
         ? 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
         : 'text-nothing-green-dark dark:text-nothing-green';
     return (
-        <Link
-            to={`/accounts/${normalized}` as any}
-            className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
-            onClick={onClick}
-        >
-            {showAvatar && (
-                <Avatar
-                    size={size}
-                    name={normalized}
-                    variant={avatarVariant(normalized)}
-                    colors={colors}
-                />
+        <span className="inline-flex items-center gap-0.5">
+            <Link
+                to={`/accounts/${normalized}` as any}
+                className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
+                onClick={onClick}
+            >
+                {showAvatar && (
+                    <Avatar
+                        size={size}
+                        name={normalized}
+                        variant={avatarVariant(normalized)}
+                        colors={colors}
+                    />
+                )}
+                {formatShort(address, prefixLen, suffixLen)}
+                {showTag && addrType !== 'flow' && (
+                    <span className={`text-[9px] font-bold uppercase px-1 py-px rounded-sm leading-none ${TAG_CLASSES[addrType]}`}>
+                        {addrType}
+                    </span>
+                )}
+            </Link>
+            {showBsLink && (
+                <a
+                    href={`https://evm.flowindex.io/address/${normalized}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open in Blockscout"
+                    className="text-zinc-400 hover:text-zinc-300 transition-colors p-0.5 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <ExternalLink className="w-3 h-3" />
+                </a>
             )}
-            {formatShort(address, prefixLen, suffixLen)}
-            {showTag && addrType !== 'flow' && (
-                <span className={`text-[9px] font-bold uppercase px-1 py-px rounded-sm leading-none ${TAG_CLASSES[addrType]}`}>
-                    {addrType}
-                </span>
-            )}
-        </Link>
+        </span>
     );
 }
