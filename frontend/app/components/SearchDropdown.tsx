@@ -72,8 +72,15 @@ function getFlatItems(state: SearchState): FlatItem[] {
       if (data.evm) items.push({ route: `/txs/${data.evm.hash}?view=evm`, label: 'EVM Transaction' });
     } else if (state.previewData && state.previewType === 'address') {
       const data = state.previewData as AddressPreviewResponse;
-      if (data.evm) items.push({ route: `/accounts/${data.evm.address}`, label: 'EVM Address' });
-      if (data.cadence) items.push({ route: `/accounts/${data.cadence.address}`, label: 'Flow Address' });
+      // Show the searched address type first
+      const searchedFlow = state.quickMatches[0]?.type === 'flow-account';
+      if (searchedFlow) {
+        if (data.cadence) items.push({ route: `/accounts/${data.cadence.address}`, label: 'Flow Address' });
+        if (data.evm) items.push({ route: `/accounts/${data.evm.address}`, label: 'EVM Address' });
+      } else {
+        if (data.evm) items.push({ route: `/accounts/${data.evm.address}`, label: 'EVM Address' });
+        if (data.cadence) items.push({ route: `/accounts/${data.cadence.address}`, label: 'Flow Address' });
+      }
     }
     // Fallback to quickMatches during loading
     if (items.length === 0) {
@@ -426,91 +433,105 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                   </div>
                 );
               }
-              return (
-                <>
-                  {data.evm && (() => {
-                    const idx = globalIdx++;
-                    return (
-                      <>
-                        <SectionLabel label="EVM Address" />
-                        <button
-                          type="button"
-                          data-index={idx}
-                          onClick={() => goTo(`/accounts/${data.evm!.address}`)}
-                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
-                            activeIndex === idx
-                              ? 'border-l-nothing-green bg-nothing-green/5'
-                              : 'border-l-transparent hover:bg-white/[0.02]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-zinc-200 truncate">
-                              <HighlightMatch text={data.evm.address} query={highlightQuery} />
-                            </span>
-                            <span className="text-xs text-zinc-400">
-                              {formatWei(data.evm.balance)} FLOW
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-500">
-                              {(data.evm.tx_count ?? 0).toLocaleString()} txns
-                            </span>
-                            {data.evm.is_contract && (
-                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-blue-500/10 text-blue-400">
-                                Contract
-                              </span>
-                            )}
-                            {data.evm.is_verified && (
-                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-nothing-green/10 text-nothing-green">
-                                Verified
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                      </>
-                    );
-                  })()}
 
-                  {data.cadence && (() => {
-                    const idx = globalIdx++;
-                    const sectionLabel = data.coa_link
-                      ? 'Linked Flow Address (COA)'
-                      : 'Flow Address';
-                    return (
-                      <>
-                        <SectionLabel label={sectionLabel} />
-                        <button
-                          type="button"
-                          data-index={idx}
-                          onClick={() => goTo(`/accounts/${data.cadence!.address}`)}
-                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
-                            activeIndex === idx
-                              ? 'border-l-nothing-green bg-nothing-green/5'
-                              : 'border-l-transparent hover:bg-white/[0.02]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-zinc-200">
-                              0x{data.cadence.address}
-                            </span>
-                            {data.coa_link && (
-                              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-violet-500/10 text-violet-400">
-                                COA
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-zinc-500">
-                              {data.cadence.contracts_count ?? 0} contract{(data.cadence.contracts_count ?? 0) !== 1 ? 's' : ''}
-                            </span>
-                            {data.cadence.has_keys && (
-                              <span className="text-xs text-zinc-500">Has keys</span>
-                            )}
-                          </div>
-                        </button>
-                      </>
-                    );
-                  })()}
+              const searchedFlow = state.quickMatches[0]?.type === 'flow-account';
+              const hasCOALink = !!data.coa_link;
+
+              // Render a Cadence address card
+              const renderCadence = (isPrimary: boolean) => {
+                if (!data.cadence) return null;
+                const idx = globalIdx++;
+                const cadenceAddr = data.cadence.address.startsWith('0x') ? data.cadence.address : `0x${data.cadence.address}`;
+                return (
+                  <>
+                    <SectionLabel label={isPrimary ? 'Flow Address' : hasCOALink ? 'Linked COA Owner' : 'Flow Address'} />
+                    <button
+                      type="button"
+                      data-index={idx}
+                      onClick={() => goTo(`/accounts/${cadenceAddr}`)}
+                      className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                        activeIndex === idx
+                          ? 'border-l-nothing-green bg-nothing-green/5'
+                          : 'border-l-transparent hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-zinc-200">
+                          <HighlightMatch text={cadenceAddr} query={highlightQuery} />
+                        </span>
+                        {hasCOALink && (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-violet-500/10 text-violet-400">
+                            COA
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        {(data.cadence.contracts_count ?? 0) > 0 && (
+                          <span>{data.cadence.contracts_count} contract{data.cadence.contracts_count !== 1 ? 's' : ''}</span>
+                        )}
+                        {data.cadence.has_keys && <span>Has keys</span>}
+                      </div>
+                    </button>
+                  </>
+                );
+              };
+
+              // Render an EVM address card
+              const renderEVM = (isPrimary: boolean) => {
+                if (!data.evm) return null;
+                const idx = globalIdx++;
+                return (
+                  <>
+                    <SectionLabel label={isPrimary ? 'EVM Address' : hasCOALink ? '↳ Linked EVM (COA)' : 'EVM Address'} />
+                    <button
+                      type="button"
+                      data-index={idx}
+                      onClick={() => goTo(`/accounts/${data.evm!.address}`)}
+                      className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                        !isPrimary && hasCOALink ? 'ml-3 ' : ''
+                      }${
+                        activeIndex === idx
+                          ? 'border-l-nothing-green bg-nothing-green/5'
+                          : 'border-l-transparent hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-zinc-200 truncate">
+                          <HighlightMatch text={data.evm.address} query={highlightQuery} />
+                        </span>
+                        <span className="text-xs text-zinc-400 shrink-0">
+                          {formatWei(data.evm.balance)} FLOW
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500">
+                          {(data.evm.tx_count ?? 0).toLocaleString()} txns
+                        </span>
+                        {data.evm.is_contract && (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-blue-500/10 text-blue-400">
+                            Contract
+                          </span>
+                        )}
+                        {data.evm.is_verified && (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-nothing-green/10 text-nothing-green">
+                            Verified
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </>
+                );
+              };
+
+              return searchedFlow ? (
+                <>
+                  {renderCadence(true)}
+                  {renderEVM(false)}
+                </>
+              ) : (
+                <>
+                  {renderEVM(true)}
+                  {renderCadence(false)}
                 </>
               );
             })()}
