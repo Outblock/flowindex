@@ -255,16 +255,8 @@ function AccountDetail() {
         return () => { cancelled = true; };
     }, [address, normalizedAddress, account?.address]);
 
-    // EVM address — render COA dual-view or plain EVM account page
+    // EVM address — always render EVMAccountPage (COA shows linked Flow address as a link)
     if (isEVM) {
-        if (isCOA && flowAddress) {
-            return (
-                <COAAccountPage
-                    evmAddress={evmAddress!}
-                    flowAddress={flowAddress}
-                />
-            );
-        }
         return (
             <EVMAccountPage
                 address={evmAddress!}
