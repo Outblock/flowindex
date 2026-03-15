@@ -45,7 +45,7 @@ export default function SolidityParamInput({ param, value, onChange, error }: So
             type="button"
             onClick={() => onChange(value === 'true' ? 'false' : 'true')}
             className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${
-              value === 'true' ? 'bg-orange-600' : 'bg-zinc-700'
+              value === 'true' ? 'bg-violet-600' : 'bg-zinc-700'
             }`}
           >
             <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
@@ -71,7 +71,7 @@ export default function SolidityParamInput({ param, value, onChange, error }: So
         className={`w-full px-2 py-1 text-xs font-mono rounded border bg-zinc-800 text-zinc-200 outline-none transition-colors
           ${error
             ? 'border-red-500 focus:border-red-400'
-            : 'border-zinc-700 focus:border-orange-500'
+            : 'border-zinc-700 focus:border-violet-500'
           }`}
       />
       {error && <div className="text-[10px] text-red-400">{error}</div>}

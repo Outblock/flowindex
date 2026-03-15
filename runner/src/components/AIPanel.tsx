@@ -2119,15 +2119,15 @@ export default function AIPanel({
                   </div>
                   <div>
                     <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-medium mb-2 px-1">
-                      <SolidityIcon className="w-3 h-3 inline-block mr-1 text-purple-400" />
-                      Solidity <span className="text-purple-400/70">EVM</span>
+                      <SolidityIcon className="w-3 h-3 inline-block mr-1 text-violet-400" />
+                      Solidity <span className="text-violet-400/70">EVM</span>
                     </p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {solidityTemplates.map((template) => (
                         <button
                           key={template.label}
                           onClick={() => onLoadTemplate(template)}
-                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-purple-700/30 hover:border-purple-600/50 text-left transition-colors"
+                          className="flex flex-col gap-0.5 px-2 py-1.5 rounded-md bg-zinc-800/40 hover:bg-zinc-800 border border-violet-700/30 hover:border-violet-600/50 text-left transition-colors"
                           title={template.description}
                         >
                           <span className="text-[10px] text-zinc-300 font-medium leading-tight">{template.label}</span>

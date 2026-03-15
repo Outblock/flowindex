@@ -229,7 +229,7 @@ export default function ImportFromAddressDialog({
                       {c.language === 'cadence' ? (
                         <CadenceIcon className="w-3.5 h-3.5 shrink-0" />
                       ) : (
-                        <SolidityIcon className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+                        <SolidityIcon className="w-3.5 h-3.5 shrink-0 text-violet-400" />
                       )}
                       <span className="text-xs text-zinc-200 font-medium">{c.name}</span>
                       <span className="text-[9px] text-zinc-600">

@@ -4,6 +4,7 @@ import { configureFcl } from './flow/fclConfig';
 
 const App = lazy(() => import('./App'));
 const DeployDashboard = lazy(() => import('./deploy/DeployDashboard'));
+const InteractPage = lazy(() => import('./interact/InteractPage'));
 
 function LoadingSpinner() {
   return (
@@ -26,6 +27,7 @@ export default function Router() {
         <Routes>
           <Route path="/editor" element={<App />} />
           <Route path="/deploy/*" element={<DeployDashboard />} />
+          <Route path="/interact" element={<InteractPage />} />
           <Route path="*" element={<Navigate to="/editor" replace />} />
         </Routes>
       </Suspense>

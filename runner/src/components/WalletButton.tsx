@@ -121,7 +121,7 @@ export default function WalletButton({
               onClick={() => { connectEvm({ connector: injected() }); setOpen(false); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
             >
-              <Globe className="w-3.5 h-3.5 text-orange-400" />
+              <Globe className="w-3.5 h-3.5 text-violet-400" />
               EVM Wallet
             </button>
           </div>
@@ -130,12 +130,12 @@ export default function WalletButton({
     );
   }
 
-  // Show EVM wallet with orange accent when connected and editing Solidity
+  // Show EVM wallet with violet accent when connected and editing Solidity
   if (showEvmWallet) {
     return (
       <button
         onClick={() => onViewAccount?.(displayAddress!)}
-        className="flex items-center gap-1.5 text-xs text-orange-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-2 py-1 transition-colors"
+        className="flex items-center gap-1.5 text-xs text-violet-400 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded px-2 py-1 transition-colors"
       >
         <Globe className="w-3.5 h-3.5" />
         <span className="font-mono">{truncated}</span>

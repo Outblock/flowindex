@@ -19,7 +19,7 @@ function formatResult(data: any): string {
   return String(data);
 }
 
-function ResultDisplay({ result }: { result: ContractCallResult }) {
+function ResultDisplay({ result, explorerBaseUrl }: { result: ContractCallResult; explorerBaseUrl?: string }) {
   const [copied, setCopied] = useState(false);
   const text = result.success ? formatResult(result.data) : result.error || 'Unknown error';
 
@@ -44,7 +44,19 @@ function ResultDisplay({ result }: { result: ContractCallResult }) {
       </div>
       {result.txHash && (
         <div className="mt-1 text-zinc-500">
-          tx: <span className="text-blue-400">{result.txHash}</span>
+          tx:{' '}
+          {explorerBaseUrl ? (
+            <a
+              href={`${explorerBaseUrl}/tx/${result.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline"
+            >
+              {result.txHash}
+            </a>
+          ) : (
+            <span className="text-blue-400">{result.txHash}</span>
+          )}
         </div>
       )}
       {result.gasUsed && (
@@ -71,6 +83,9 @@ function FunctionCard({
   const [result, setResult] = useState<ContractCallResult | null>(null);
   const [loading, setLoading] = useState(false);
   const { data: walletClient } = useWalletClient();
+  const explorerBaseUrl = contract.chainId === 545
+    ? 'https://evm-testnet.flowindex.io'
+    : 'https://evm.flowindex.io';
 
   const handleCall = useCallback(async () => {
     setLoading(true);
@@ -115,7 +130,7 @@ function FunctionCard({
           expanded ? <ChevronDown className="w-3 h-3 text-zinc-500" /> : <ChevronRight className="w-3 h-3 text-zinc-500" />
         ) : (
           isWrite
-            ? <Pencil className="w-3 h-3 text-orange-400" />
+            ? <Pencil className="w-3 h-3 text-violet-400" />
             : <BookOpen className="w-3 h-3 text-blue-400" />
         )}
         <span className="text-xs font-mono text-zinc-200">{fn.name}</span>
@@ -151,7 +166,7 @@ function FunctionCard({
                   value={ethValue}
                   onChange={(e) => setEthValue(e.target.value)}
                   placeholder="0"
-                  className="w-full px-2 py-1 text-xs font-mono rounded border border-zinc-700 bg-zinc-800 text-zinc-200 outline-none focus:border-orange-500"
+                  className="w-full px-2 py-1 text-xs font-mono rounded border border-zinc-700 bg-zinc-800 text-zinc-200 outline-none focus:border-violet-500"
                 />
               </div>
             )}
@@ -161,13 +176,13 @@ function FunctionCard({
             disabled={loading}
             className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
               isWrite
-                ? 'bg-orange-600 hover:bg-orange-500 text-white disabled:bg-orange-800'
+                ? 'bg-violet-600 hover:bg-violet-500 text-white disabled:bg-violet-800'
                 : 'bg-blue-600 hover:bg-blue-500 text-white disabled:bg-blue-800'
             }`}
           >
             {loading ? 'Calling...' : isWrite ? 'Write' : 'Read'}
           </button>
-          {result && <ResultDisplay result={result} />}
+          {result && <ResultDisplay result={result} explorerBaseUrl={explorerBaseUrl} />}
         </div>
       )}
 
@@ -186,7 +201,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-orange-400">{contract.name}</span>
+        <span className="text-xs font-semibold text-violet-400">{contract.name}</span>
         <span className="text-[10px] font-mono text-zinc-500 truncate">{contract.address}</span>
       </div>
 
@@ -205,7 +220,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
 
       {write.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-orange-400 font-semibold mb-1.5 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-wider text-violet-400 font-semibold mb-1.5 flex items-center gap-1">
             <Pencil className="w-3 h-3" /> Write ({write.length})
           </div>
           <div className="space-y-1">

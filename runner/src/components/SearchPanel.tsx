@@ -15,7 +15,7 @@ function CadenceIcon({ className }: { className?: string }) {
 
 function FileIcon({ name, className }: { name: string; className?: string }) {
   if (name.endsWith('.cdc')) return <CadenceIcon className={className} />;
-  if (name.endsWith('.sol')) return <SolidityIcon className={`${className} text-purple-400`} />;
+  if (name.endsWith('.sol')) return <SolidityIcon className={`${className} text-violet-400`} />;
   return <File className={`${className} text-zinc-500`} />;
 }
 

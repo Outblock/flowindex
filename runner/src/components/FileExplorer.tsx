@@ -278,7 +278,7 @@ function TreeItem({
       {node.name.endsWith('.cdc') ? (
         <CadenceIcon className="w-3.5 h-3.5 shrink-0" />
       ) : node.name.endsWith('.sol') ? (
-        <SolidityIcon className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+        <SolidityIcon className="w-3.5 h-3.5 shrink-0 text-violet-400" />
       ) : (
         <File className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
       )}

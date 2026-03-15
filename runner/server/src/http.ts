@@ -36,12 +36,15 @@ app.use('/github/webhook', webhookRouter);
 
 // Fetch verified Solidity contracts from Blockscout (proxy to avoid CORS)
 const BLOCKSCOUT_BASE = process.env.BLOCKSCOUT_URL || 'https://evm.flowscan.io';
+const BLOCKSCOUT_TESTNET_BASE = process.env.BLOCKSCOUT_TESTNET_URL || 'https://evm-testnet.flowscan.io';
 
 app.get('/api/evm-contracts/:address', async (req, res) => {
   const { address } = req.params;
+  const network = req.query.network === 'testnet' ? 'testnet' : 'mainnet';
+  const base = network === 'testnet' ? BLOCKSCOUT_TESTNET_BASE : BLOCKSCOUT_BASE;
+
   try {
-    // Check if address has a verified contract
-    const addrRes = await fetch(`${BLOCKSCOUT_BASE}/api/v2/addresses/${address}`);
+    const addrRes = await fetch(`${base}/api/v2/addresses/${address}`);
     if (!addrRes.ok) {
       res.json({ verified: false });
       return;
@@ -52,14 +55,14 @@ app.get('/api/evm-contracts/:address', async (req, res) => {
       return;
     }
 
-    // Fetch verified source code
-    const scRes = await fetch(`${BLOCKSCOUT_BASE}/api/v2/smart-contracts/${address}`);
+    const scRes = await fetch(`${base}/api/v2/smart-contracts/${address}`);
     if (!scRes.ok) {
       res.json({ verified: false });
       return;
     }
     const scData = await scRes.json() as {
       name?: string;
+      abi?: unknown[];
       source_code?: string;
       file_path?: string;
       additional_sources?: { file_path: string; source_code: string }[];
@@ -79,7 +82,12 @@ app.get('/api/evm-contracts/:address', async (req, res) => {
       }
     }
 
-    res.json({ verified: true, name: scData.name || 'Contract', files });
+    res.json({
+      verified: true,
+      name: scData.name || 'Contract',
+      abi: scData.abi || null,
+      files,
+    });
   } catch (e) {
     console.error('Blockscout proxy error:', e);
     res.status(500).json({ error: 'Failed to fetch from Blockscout' });

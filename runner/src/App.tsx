@@ -2005,7 +2005,7 @@ export default function App() {
               disabled={loading || activeFileEntry?.readOnly}
               className={`flex items-center gap-1.5 text-white text-xs font-medium px-3 py-1.5 rounded transition-colors ${
                 isSolidityFile
-                  ? 'bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:text-orange-400'
+                  ? 'bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 disabled:text-violet-400'
                   : 'bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 disabled:text-emerald-500'
               }`}
             >
@@ -2082,6 +2082,7 @@ export default function App() {
               activeTab={sidebarTab}
               onTabChange={(tab) => {
                 if (tab === 'deploy') { window.location.href = '/deploy'; return; }
+                if (tab === 'interact') { window.location.href = '/interact'; return; }
                 setSidebarTab(tab);
               }}
               hasGitHub={!!github.connection}
@@ -2364,7 +2365,7 @@ export default function App() {
           disabled={loading || activeFileEntry?.readOnly}
           className={`fixed bottom-5 right-5 z-40 flex items-center gap-2 text-white font-semibold pl-4 pr-5 py-3.5 rounded-full shadow-lg transition-colors ${
             isSolidityFile
-              ? 'bg-orange-600 hover:bg-orange-500 active:bg-orange-700 disabled:bg-orange-800 disabled:text-orange-400 shadow-orange-900/40'
+              ? 'bg-purple-600 hover:bg-purple-500 active:bg-violet-700 disabled:bg-purple-800 disabled:text-purple-400 shadow-violet-900/40'
               : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:bg-emerald-800 disabled:text-emerald-500 shadow-emerald-900/40'
           }`}
         >

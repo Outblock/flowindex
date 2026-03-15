@@ -18,7 +18,7 @@ export interface DeployedContract {
   address: `0x${string}`;
   name: string;
   abi: Abi;
-  deployTxHash: string;
+  deployTxHash?: string;
   chainId: number;
 }
 
