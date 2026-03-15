@@ -119,9 +119,9 @@ export function AddressLink({
                     className="text-zinc-400 hover:text-[#5353D3] dark:text-zinc-500 dark:hover:text-[#7B7BE8] transition-colors p-0.5 shrink-0"
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <span className="inline-flex items-center gap-px">
+                    <span className="inline-flex items-center gap-0.5">
                         <BlockscoutIcon className="w-3 h-3" />
-                        <svg viewBox="0 0 8 8" fill="none" className="w-1.5 h-1.5 -mt-1.5 -ml-0.5">
+                        <svg viewBox="0 0 8 8" fill="none" className="w-1.5 h-1.5">
                             <path d="M1 7L7 1M7 1H2M7 1V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                     </span>
