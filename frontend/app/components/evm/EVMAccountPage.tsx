@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Activity, ArrowRightLeft, Coins, Wallet, ExternalLink, FileCode2 } from 'lucide-react';
+import { ArrowLeft, Activity, ArrowRightLeft, Coins, Wallet, ExternalLink, FileCode2, ImageIcon } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { colorsFromAddress, avatarVariant } from '@/components/AddressLink';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
@@ -12,6 +12,8 @@ import { EVMTransactionList } from './EVMTransactionList';
 import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
 import { EVMTokenHoldings } from './EVMTokenHoldings';
+import { AccountTokensTab } from '@/components/account/AccountTokensTab';
+import { AccountNFTsTab } from '@/components/account/AccountNFTsTab';
 import type { BSAddress } from '@/types/blockscout';
 
 interface EVMAccountPageProps {
@@ -21,9 +23,9 @@ interface EVMAccountPageProps {
   initialTab?: string;
 }
 
-type EVMTab = 'transactions' | 'internal' | 'transfers' | 'holdings';
+type EVMTab = 'transactions' | 'internal' | 'transfers' | 'tokens' | 'nfts';
 
-const VALID_TABS: EVMTab[] = ['transactions', 'internal', 'transfers', 'holdings'];
+const VALID_TABS: EVMTab[] = ['transactions', 'internal', 'transfers', 'tokens', 'nfts'];
 
 export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMAccountPageProps) {
   const navigate = useNavigate();
@@ -63,7 +65,8 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
     { id: 'transactions', label: 'Transactions', icon: Activity },
     { id: 'internal', label: 'Internal Txs', icon: ArrowRightLeft },
     { id: 'transfers', label: 'Token Transfers', icon: Coins },
-    { id: 'holdings', label: 'Token Holdings', icon: Wallet },
+    { id: 'tokens', label: 'Tokens', icon: Wallet },
+    { id: 'nfts', label: 'NFTs', icon: ImageIcon },
   ];
 
   return (
@@ -235,7 +238,23 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
             {activeTab === 'transactions' && <EVMTransactionList address={address} />}
             {activeTab === 'internal' && <EVMInternalTxList address={address} />}
             {activeTab === 'transfers' && <EVMTokenTransfers address={address} />}
-            {activeTab === 'holdings' && <EVMTokenHoldings address={address} />}
+            {activeTab === 'tokens' && (
+              isCOA && flowAddress ? (
+                <AccountTokensTab address={flowAddress} coaAddress={address} subtab="evm" />
+              ) : (
+                <EVMTokenHoldings address={address} />
+              )
+            )}
+            {activeTab === 'nfts' && (
+              isCOA && flowAddress ? (
+                <AccountNFTsTab address={flowAddress} />
+              ) : (
+                <div className="text-center py-12 text-zinc-500">
+                  <p className="text-sm">NFT display for non-COA EVM addresses is not yet supported.</p>
+                  <p className="text-xs mt-2 text-zinc-400">NFTs on Flow EVM are indexed via the linked Cadence account.</p>
+                </div>
+              )
+            )}
           </div>
         </div>
       </div>
