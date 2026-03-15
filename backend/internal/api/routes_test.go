@@ -106,6 +106,7 @@ var specExcludedRoutes = map[string]bool{
 	"/flow/evm/address/{address}/internal-transactions":  true,
 	"/flow/evm/address/{address}/token-transfers":        true,
 	"/flow/evm/address/{address}":                        true,
+	"/flow/evm/address/{address}/nft":                    true,
 	"/flow/evm/search":                                   true,
 	"/flow/search/preview":                               true,
 }

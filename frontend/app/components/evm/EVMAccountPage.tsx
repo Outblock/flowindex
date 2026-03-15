@@ -13,7 +13,7 @@ import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
 import { EVMTokenHoldings } from './EVMTokenHoldings';
 import { AccountTokensTab } from '@/components/account/AccountTokensTab';
-import { AccountNFTsTab } from '@/components/account/AccountNFTsTab';
+import { EVMNFTsTab } from './EVMNFTsTab';
 import type { BSAddress } from '@/types/blockscout';
 
 interface EVMAccountPageProps {
@@ -245,16 +245,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
                 <EVMTokenHoldings address={address} />
               )
             )}
-            {activeTab === 'nfts' && (
-              isCOA && flowAddress ? (
-                <AccountNFTsTab address={flowAddress} />
-              ) : (
-                <div className="text-center py-12 text-zinc-500">
-                  <p className="text-sm">NFT display for non-COA EVM addresses is not yet supported.</p>
-                  <p className="text-xs mt-2 text-zinc-400">NFTs on Flow EVM are indexed via the linked Cadence account.</p>
-                </div>
-              )
-            )}
+            {activeTab === 'nfts' && <EVMNFTsTab address={address} />}
           </div>
         </div>
       </div>

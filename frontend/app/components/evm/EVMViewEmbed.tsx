@@ -8,7 +8,7 @@ import { EVMTransactionList } from './EVMTransactionList';
 import { EVMInternalTxList } from './EVMInternalTxList';
 import { EVMTokenTransfers } from './EVMTokenTransfers';
 import { AccountTokensTab } from '@/components/account/AccountTokensTab';
-import { AccountNFTsTab } from '@/components/account/AccountNFTsTab';
+import { EVMNFTsTab } from './EVMNFTsTab';
 import type { BSAddress } from '@/types/blockscout';
 
 type EVMSubTab = 'transactions' | 'internal' | 'transfers' | 'tokens' | 'nfts';
@@ -166,7 +166,7 @@ export function EVMViewEmbed({ evmAddress, flowAddress, viewSwitcher }: EVMViewE
                         <AccountTokensTab address={flowAddress} coaAddress={evmAddress} subtab={tokensSubTab} onSubTabChange={setTokensSubTab} />
                     )}
                     {activeTab === 'nfts' && (
-                        <AccountNFTsTab address={flowAddress} />
+                        <EVMNFTsTab address={evmAddress} />
                     )}
                 </div>
             </div>

@@ -63,6 +63,12 @@ export async function getEVMAddressTokenBalances(
   return Array.isArray(res) ? res : (res as BSPaginatedResponse<BSTokenBalance>).items ?? [];
 }
 
+export async function getEVMAddressNFTs(
+  address: string, pageParams?: BSPageParams, signal?: AbortSignal
+): Promise<BSPaginatedResponse<BSTokenBalance>> {
+  return evmFetch(`/address/${address}/nft`, pageParamsToRecord(pageParams), signal);
+}
+
 // --- Transaction endpoints ---
 
 export async function getEVMTransaction(hash: string, signal?: AbortSignal): Promise<BSTransaction> {
