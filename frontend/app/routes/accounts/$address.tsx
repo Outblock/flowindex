@@ -302,6 +302,36 @@ function AccountDetail() {
     const stakedValue = [...(onChainData?.staking?.nodeInfos || []), ...(onChainData?.staking?.delegatorInfos || [])]
         .reduce((sum, info) => sum + Number(info.tokensStaked || 0), 0);
 
+    // Cadence / EVM view switcher — only rendered for COA accounts
+    const viewSwitcher = onChainData?.coaAddress ? (
+        <div className="inline-flex items-center gap-1 mb-4">
+            <button
+                onClick={() => navigate({ search: { view: undefined } as any, replace: true })}
+                className={cn(
+                    "inline-flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors",
+                    searchView !== 'evm'
+                        ? "bg-nothing-green text-black shadow-sm"
+                        : "text-zinc-400 dark:text-zinc-500 hover:text-nothing-green-dark dark:hover:text-nothing-green border border-zinc-200 dark:border-zinc-700"
+                )}
+            >
+                <span className={cn("w-1.5 h-1.5 shrink-0", searchView !== 'evm' ? "bg-black/20" : "bg-nothing-green")} />
+                Cadence
+            </button>
+            <button
+                onClick={() => navigate({ search: { view: 'evm' } as any, replace: true })}
+                className={cn(
+                    "inline-flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest transition-colors",
+                    searchView === 'evm'
+                        ? "bg-violet-600 text-white dark:bg-violet-500 shadow-sm"
+                        : "text-zinc-400 dark:text-zinc-500 hover:text-violet-600 dark:hover:text-violet-400 border border-zinc-200 dark:border-zinc-700"
+                )}
+            >
+                <span className={cn("w-1.5 h-1.5 shrink-0", searchView === 'evm' ? "bg-white/30" : "bg-violet-500")} />
+                EVM
+            </button>
+        </div>
+    ) : null;
+
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono transition-colors duration-300 selection:bg-nothing-green selection:text-black">
             <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
@@ -475,34 +505,6 @@ function AccountDetail() {
                     </div>
                 )}
 
-                {/* Cadence / EVM View Switcher — only for COA accounts */}
-                {onChainData?.coaAddress && (
-                    <div className="inline-flex items-center border border-zinc-200 dark:border-zinc-700 overflow-hidden mb-6">
-                        <button
-                            onClick={() => navigate({ search: { view: undefined } as any, replace: true })}
-                            className={cn(
-                                "px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors",
-                                searchView !== 'evm'
-                                    ? "bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green"
-                                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                            )}
-                        >
-                            Cadence
-                        </button>
-                        <button
-                            onClick={() => navigate({ search: { view: 'evm' } as any, replace: true })}
-                            className={cn(
-                                "px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-colors",
-                                searchView === 'evm'
-                                    ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
-                                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                            )}
-                        >
-                            EVM
-                        </button>
-                    </div>
-                )}
-
                 {/* ── Cadence View ── */}
                 {searchView !== 'evm' && (
                     <>
@@ -573,6 +575,9 @@ function AccountDetail() {
                             </GlassCard>
                         </div>
 
+                        {/* VM View Switcher */}
+                        {viewSwitcher}
+
                         {/* Tabs & Content */}
                         <div className="space-y-6">
                             {/* Mobile Tab Selector */}
@@ -637,6 +642,7 @@ function AccountDetail() {
                     <EVMViewEmbed
                         evmAddress={onChainData.coaAddress.startsWith('0x') ? onChainData.coaAddress : `0x${onChainData.coaAddress}`}
                         flowAddress={normalizedAddress}
+                        viewSwitcher={viewSwitcher}
                     />
                 )}
             </div>

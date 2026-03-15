@@ -16,9 +16,10 @@ type EVMSubTab = 'transactions' | 'internal' | 'transfers' | 'tokens' | 'nfts';
 interface EVMViewEmbedProps {
     evmAddress: string;
     flowAddress: string;
+    viewSwitcher?: React.ReactNode;
 }
 
-export function EVMViewEmbed({ evmAddress, flowAddress }: EVMViewEmbedProps) {
+export function EVMViewEmbed({ evmAddress, flowAddress, viewSwitcher }: EVMViewEmbedProps) {
     const [addressInfo, setAddressInfo] = useState<BSAddress | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<EVMSubTab>('transactions');
@@ -113,6 +114,9 @@ export function EVMViewEmbed({ evmAddress, flowAddress }: EVMViewEmbedProps) {
                     </p>
                 </GlassCard>
             </div>
+
+            {/* VM View Switcher */}
+            {viewSwitcher}
 
             {/* Tabs & Content */}
             <div className="space-y-6">

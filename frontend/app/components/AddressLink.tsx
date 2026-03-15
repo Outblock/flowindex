@@ -89,7 +89,7 @@ export function AddressLink({
             ? 'text-[#5353D3] dark:text-[#7B7BE8]'
             : 'text-nothing-green-dark dark:text-nothing-green';
     return (
-        <span className="inline-flex items-center gap-0.5">
+        <span className="inline-flex items-center gap-0.5 group/addr">
             <Link
                 to={`/accounts/${normalized}` as any}
                 className={`inline-flex items-center gap-1 font-mono ${colorCls} hover:underline ${className}`}
@@ -116,7 +116,7 @@ export function AddressLink({
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Open in Blockscout"
-                    className="text-zinc-400 hover:text-[#5353D3] dark:text-zinc-500 dark:hover:text-[#7B7BE8] transition-colors p-0.5 shrink-0"
+                    className="text-zinc-400 hover:text-[#5353D3] dark:text-zinc-500 dark:hover:text-[#7B7BE8] transition-all p-0.5 shrink-0 opacity-0 group-hover/addr:opacity-100"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <span className="inline-flex items-center gap-0.5">
