@@ -1,4 +1,4 @@
-import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface.js';
+import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface';
 
 // ---------------------------------------------------------------------------
 // CloudSigner — delegates signing to FlowIndex custodial wallet API

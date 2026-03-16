@@ -5,7 +5,7 @@ import { sha3_256 } from '@noble/hashes/sha3.js';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { mnemonicToAccount } from 'viem/accounts';
-import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface.js';
+import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface';
 
 // ---------------------------------------------------------------------------
 // Hex helpers

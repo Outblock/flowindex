@@ -1,4 +1,4 @@
-import type { FlowSigner } from './interface.js';
+import type { FlowSigner } from './interface';
 
 export function createAuthzFromSigner(signer: FlowSigner) {
   return async (account: Record<string, unknown>) => {

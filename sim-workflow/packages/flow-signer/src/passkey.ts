@@ -1,4 +1,4 @@
-import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface.js';
+import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface';
 
 // ---------------------------------------------------------------------------
 // PasskeySigner — browser-based passkey approval flow (NOT headless)
