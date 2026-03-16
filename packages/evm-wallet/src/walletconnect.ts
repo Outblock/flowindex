@@ -38,6 +38,7 @@ export async function createWalletConnectManager(config: WalletConnectConfig) {
     },
   } = config
 
+  // @ts-expect-error — optional peer dependency, resolved at runtime
   const { Web3Wallet } = await import("@walletconnect/web3wallet")
   const { Core } = await import("@walletconnect/core")
 

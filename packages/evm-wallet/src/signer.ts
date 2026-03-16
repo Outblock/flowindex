@@ -82,7 +82,7 @@ export async function signUserOpWithPasskey(
   const assertion = (await navigator.credentials.get({
     publicKey: {
       challenge: challengeBytes,
-      allowCredentials: [{ id: base64urlToBytes(credentialId), type: "public-key" }],
+      allowCredentials: [{ id: base64urlToBytes(credentialId) as BufferSource, type: "public-key" as const }],
       userVerification: "preferred",
     },
   })) as PublicKeyCredential
