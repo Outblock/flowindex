@@ -1009,6 +1009,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Copy shared packages into Docker context
+        run: |
+          cp -r packages/flow-signer sim-workflow/packages/flow-signer
+          # Fix file: path for Docker context (../../packages/flow-signer instead of ../../../)
+          sed -i 's|"file:../../../packages/flow-signer"|"file:../../packages/flow-signer"|' sim-workflow/apps/sim/package.json
+
       - name: Build & push ${{ matrix.name }} image (cached)
         uses: docker/build-push-action@v7
         with:
