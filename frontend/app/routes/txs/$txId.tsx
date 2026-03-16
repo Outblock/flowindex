@@ -1453,9 +1453,9 @@ function TransactionDetail() {
                                 animateOn="view"
                                 sequential
                                 revealDirection="start"
-                                speed={60}
-                                maxIterations={30}
-                                characters="█▓▒░╳╱╲◆◇●○■□▪▫#@$%&*!?~^"
+                                speed={25}
+                                maxIterations={12}
+                                characters="0123456789abcdef"
                                 startEncrypted
                                 className="font-mono"
                             />
