@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { List, Calendar } from 'lucide-react';
 import { getEVMAddressTokenTransfers, getEVMTransactionTokenTransfers } from '@/api/evm';
 import { formatWei, weiToNumber } from '@/lib/evmUtils';
-import { TransferRow } from '@/components/TransferRow';
+import { TransferRow, TransferRowHeader } from '@/components/TransferRow';
 import { LoadMorePagination } from '@/components/LoadMorePagination';
 import type { BSTokenTransfer, BSPageParams } from '@/types/blockscout';
 
@@ -209,6 +209,8 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
                     Timeline
                 </button>
             </div>
+
+            <TransferRowHeader />
 
             {/* Timeline View */}
             {viewMode === 'timeline' && timeGroups && (

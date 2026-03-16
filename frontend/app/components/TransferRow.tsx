@@ -31,6 +31,18 @@ export interface TransferRowProps {
     usdValue?: number | null;
 }
 
+/** Column header row — render once above a list of TransferRows */
+export function TransferRowHeader() {
+    return (
+        <div className="grid grid-cols-[auto_1fr_minmax(120px,auto)_minmax(80px,auto)] sm:grid-cols-[auto_1fr_minmax(160px,auto)_minmax(100px,auto)] items-center gap-3 px-3 md:px-4 py-2 border-b border-zinc-200 dark:border-zinc-700/50 text-[10px] uppercase tracking-widest text-zinc-500 font-medium">
+            <div className="w-9" />
+            <div>Transfer</div>
+            <div className="text-center hidden sm:block">TX ID</div>
+            <div className="text-right">Time</div>
+        </div>
+    );
+}
+
 export function TransferRow({
     direction,
     amount,
@@ -58,8 +70,8 @@ export function TransferRow({
         : 'text-[#5353D3] dark:text-[#7B7BE8]';
 
     return (
-        <div className="flex items-center gap-3 p-3 md:p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-            {/* Token Icon — no colored bg, just the logo or a circle placeholder */}
+        <div className="grid grid-cols-[auto_1fr_minmax(120px,auto)_minmax(80px,auto)] sm:grid-cols-[auto_1fr_minmax(160px,auto)_minmax(100px,auto)] items-center gap-3 p-3 md:p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
+            {/* Token Icon */}
             <div className="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden">
                 {tokenIcon ? (
                     <img
@@ -80,7 +92,7 @@ export function TransferRow({
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
                 {/* Line 1: Direction + Amount + Token + USD */}
                 <div className="flex items-center gap-2 mb-0.5">
                     <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${dirColor}`}>
@@ -108,20 +120,22 @@ export function TransferRow({
                 </div>
             </div>
 
-            {/* TX Hash column */}
-            {txHash && (
-                <div className="flex-shrink-0 hidden sm:block">
+            {/* TX Hash — center column */}
+            <div className="hidden sm:flex justify-center">
+                {txHash ? (
                     <Link
                         to={`${txLinkPrefix}${txHash}` as any}
                         className={`text-xs ${txColor} hover:underline font-mono`}
                     >
                         {shortHash}
                     </Link>
-                </div>
-            )}
+                ) : (
+                    <span className="text-xs text-zinc-400">—</span>
+                )}
+            </div>
 
-            {/* Right: Time + Block */}
-            <div className="flex-shrink-0 text-right">
+            {/* Time + Block */}
+            <div className="text-right">
                 <p className="text-xs text-zinc-500" title={timestamp}>{timeStr}</p>
                 {blockNumber != null && (
                     <p className="text-[10px] text-zinc-400 mt-0.5">

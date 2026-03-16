@@ -3,7 +3,7 @@ import { List, Calendar } from 'lucide-react';
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { getFlowV1AccountByAddressFtTransfer } from '../../api/gen/find';
 import { normalizeAddress } from './accountUtils';
-import { TransferRow } from '../TransferRow';
+import { TransferRow, TransferRowHeader } from '../TransferRow';
 
 type ViewMode = 'pages' | 'timeline';
 
@@ -163,6 +163,8 @@ export function AccountFTTransfersTab({ address }: Props) {
             {!loading && transfers.length === 0 && (
                 <div className="text-center text-zinc-500 italic py-8">No FT transfers found</div>
             )}
+
+            {transfers.length > 0 && <TransferRowHeader />}
 
             {/* Timeline View */}
             {transfers.length > 0 && viewMode === 'timeline' && timeGroups && (
