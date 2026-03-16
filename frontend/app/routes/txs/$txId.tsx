@@ -557,7 +557,7 @@ export const Route = createFileRoute('/txs/$txId')({
         try {
             const forceEVM = (search as any)?.view === 'evm';
 
-            // If ?view=evm, skip Cadence lookup and go straight to EVM
+            // If ?view=evm, ONLY try Blockscout — never fall through to Cadence
             if (forceEVM && /^0x[0-9a-fA-F]{64}$/.test(params.txId)) {
                 try {
                     const evmTx = await getEVMTransaction(params.txId);
@@ -565,8 +565,9 @@ export const Route = createFileRoute('/txs/$txId')({
                         return { transaction: null, evmTransaction: evmTx as BSTransaction, isEVM: true, error: null as string | null };
                     }
                 } catch {
-                    // Fall through to normal flow
+                    // Blockscout failed
                 }
+                return { transaction: null, evmTransaction: null as BSTransaction | null, isEVM: false, error: 'EVM transaction not found in Blockscout' };
             }
 
             const baseUrl = await resolveApiBaseUrl();
