@@ -3,3 +3,4 @@ export { parsePublicKey, encodeOwnerBytes, buildOwners, getSmartWalletAddress, b
 export { derToRS, encodeWebAuthnSignature, signUserOpWithPasskey } from "./signer"
 export { createBundlerClient, type BundlerClient, type PackedUserOperation, type GasEstimate, type UserOpReceipt } from "./bundler-client"
 export { buildUserOperation, buildCallData, buildBatchCallData, packGasLimits, packGasFees, type CallParams } from "./user-op"
+export { createEvmWalletProvider, type EvmWalletProvider, type EvmWalletProviderConfig } from "./provider"
