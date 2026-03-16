@@ -119,6 +119,7 @@ const nextConfig: NextConfig = {
     '@t3-oss/env-core',
     '@sim/db',
     '@onflow/frw-cadence',
+    '@flowindex/flow-signer',
   ],
   async headers() {
     return [
