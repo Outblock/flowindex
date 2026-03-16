@@ -347,6 +347,27 @@ services:
     depends_on:
       - backend
 
+  alto-bundler:
+    image: ghcr.io/pimlicolabs/alto:latest
+    restart: unless-stopped
+    ports:
+      - "4337:4337"
+    environment:
+      - ALTO_RPC_URL=${ALTO_RPC_URL:-https://testnet.evm.nodes.onflow.org}
+      - ALTO_EXECUTOR_PRIVATE_KEYS=${ALTO_EXECUTOR_PRIVATE_KEY}
+      - ALTO_UTILITY_PRIVATE_KEY=${ALTO_UTILITY_PRIVATE_KEY}
+      - ALTO_ENTRYPOINTS=${ALTO_ENTRYPOINTS:-0x0000000071727De22E5E9d8BAf0edAc6f37da032}
+      - ALTO_SAFE_MODE=false
+      - ALTO_CHAIN_TYPE=default
+      - ALTO_DEPLOY_SIMULATIONS_CONTRACT=true
+      - ALTO_LOG_LEVEL=debug
+      - ALTO_PORT=4337
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4337/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
   supabase_db_data:
