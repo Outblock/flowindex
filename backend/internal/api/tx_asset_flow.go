@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"flowscan-clone/internal/models"
 	"flowscan-clone/internal/repository"
 )
 
@@ -19,6 +20,27 @@ const (
 )
 
 var bridgedTokenRegex = regexp.MustCompile(`evmvmbridgedtoken_([a-f0-9]{40})`)
+
+// Staking contract names — when these appear in transaction events,
+// FlowToken burns/mints should be classified as stake/unstake.
+var stakingContracts = map[string]bool{
+	"FlowIDTableStaking":  true,
+	"FlowStakingCollection": true,
+	"LockedTokens":        true,
+	"FlowEpoch":           true,
+	"FlowDKG":             true,
+	"FlowClusterQC":       true,
+}
+
+// HasStakingEvents checks if any event in the transaction belongs to a staking contract.
+func hasStakingEventsInTx(events []models.Event) bool {
+	for _, e := range events {
+		if stakingContracts[e.ContractName] {
+			return true
+		}
+	}
+	return false
+}
 
 type canonicalFTTransfer struct {
 	Token          string
@@ -220,7 +242,8 @@ func isDuplicateMint(transfer canonicalFTTransfer, all []canonicalFTTransfer) bo
 	return false
 }
 
-func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []repository.EVMTransactionRecord) []canonicalFTTransfer {
+func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []repository.EVMTransactionRecord, hasStaking ...bool) []canonicalFTTransfer {
+	isStakingTx := len(hasStaking) > 0 && hasStaking[0]
 	executions := parseEVMExecutions(evmExecs)
 	base := make([]canonicalFTTransfer, 0, len(rows))
 	for _, row := range rows {
@@ -236,11 +259,20 @@ func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []reposit
 			Amount:       row.Amount,
 			EventIndex:   row.EventIndex,
 		}
+		isFlowToken := transfer.ContractName == "FlowToken"
 		switch {
 		case transfer.FromAddress == "" && transfer.ToAddress != "":
-			transfer.TransferType = "mint"
+			if isStakingTx && isFlowToken {
+				transfer.TransferType = "unstake"
+			} else {
+				transfer.TransferType = "mint"
+			}
 		case transfer.FromAddress != "" && transfer.ToAddress == "":
-			transfer.TransferType = "burn"
+			if isStakingTx && isFlowToken {
+				transfer.TransferType = "stake"
+			} else {
+				transfer.TransferType = "burn"
+			}
 		default:
 			transfer.TransferType = "transfer"
 		}

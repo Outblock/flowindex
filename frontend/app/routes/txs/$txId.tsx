@@ -468,6 +468,12 @@ function NFTDetailRow({ nt, onClick, isAdmin }: { nt: any; onClick?: () => void;
                     {nt.transfer_type === 'burn' && (
                         <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Burn</span>
                     )}
+                    {nt.transfer_type === 'stake' && (
+                        <span className="text-[9px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Stake</span>
+                    )}
+                    {nt.transfer_type === 'unstake' && (
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Unstake</span>
+                    )}
                     {nt.nft_rarity && (
                         <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">{nt.nft_rarity}</span>
                     )}
@@ -2008,6 +2014,12 @@ function TransactionDetail() {
                                                                         {row.transferType === 'burn' && (
                                                                             <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Burn</span>
                                                                         )}
+                                                                        {row.transferType === 'stake' && (
+                                                                            <span className="text-[9px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Stake</span>
+                                                                        )}
+                                                                        {row.transferType === 'unstake' && (
+                                                                            <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Unstake</span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -2028,6 +2040,8 @@ function TransactionDetail() {
                                                                     <TxResolvedAddress address={row.to} book={addressBook} prefixLen={6} suffixLen={4} reserveLabelSpace size={16} className="w-full" />
                                                                 ) : row.transferType === 'burn' ? (
                                                                     <span className="text-zinc-400 dark:text-zinc-600 italic text-sm">Burn</span>
+                                                                ) : row.transferType === 'stake' ? (
+                                                                    <span className="text-blue-400 dark:text-blue-500 italic text-sm">Stake</span>
                                                                 ) : (
                                                                     <span />
                                                                 )}
@@ -2063,6 +2077,12 @@ function TransactionDetail() {
                                                                             {row.transferType === 'burn' && (
                                                                                 <span className="text-[9px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Burn</span>
                                                                             )}
+                                                                            {row.transferType === 'stake' && (
+                                                                                <span className="text-[9px] text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Stake</span>
+                                                                            )}
+                                                                            {row.transferType === 'unstake' && (
+                                                                                <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider font-medium">Unstake</span>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -2088,6 +2108,8 @@ function TransactionDetail() {
                                                                         <TxResolvedAddress address={row.to} book={addressBook} prefixLen={6} suffixLen={4} reserveLabelSpace size={16} />
                                                                     ) : row.transferType === 'burn' ? (
                                                                         <span className="text-zinc-400 dark:text-zinc-600 italic text-sm">Burn</span>
+                                                                    ) : row.transferType === 'stake' ? (
+                                                                        <span className="text-blue-400 dark:text-blue-500 italic text-sm">Stake</span>
                                                                     ) : (
                                                                         <span />
                                                                     )}

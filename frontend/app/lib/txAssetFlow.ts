@@ -17,7 +17,7 @@ type DetailTransfer = {
   token_logo?: string;
   token_name?: string;
   token_symbol?: string;
-  transfer_type?: 'transfer' | 'mint' | 'burn';
+  transfer_type?: 'transfer' | 'mint' | 'burn' | 'stake' | 'unstake';
   usd_value?: number;
   evm_to_address?: string;
   evm_from_address?: string;
@@ -43,7 +43,7 @@ export interface TxDetailDisplayTransferRow {
   logo?: string;
   symbol: string;
   to: string;
-  transferType?: 'transfer' | 'mint' | 'burn';
+  transferType?: 'transfer' | 'mint' | 'burn' | 'stake' | 'unstake';
   usdValue: number;
 }
 
@@ -371,7 +371,11 @@ function buildSummaryLineFromTransfers(transfers: DetailTransfer[]): string {
       ? 'Minted'
       : first.transfer_type === 'burn'
         ? 'Burned'
-        : 'Transferred';
+        : first.transfer_type === 'stake'
+          ? 'Staked'
+          : first.transfer_type === 'unstake'
+            ? 'Unstaked'
+            : 'Transferred';
     return `${verb} ${formatSummaryAmount(parseAmount(first.amount))} ${tokenSymbol(first)}`;
   }
 
