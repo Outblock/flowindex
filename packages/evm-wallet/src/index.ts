@@ -2,3 +2,4 @@ export { flowEvmMainnet, flowEvmTestnet, ENTRYPOINT_V07_ADDRESS, FACTORY_ADDRESS
 export { parsePublicKey, encodeOwnerBytes, buildOwners, getSmartWalletAddress, buildInitCode } from "./factory"
 export { derToRS, encodeWebAuthnSignature, signUserOpWithPasskey } from "./signer"
 export { createBundlerClient, type BundlerClient, type PackedUserOperation, type GasEstimate, type UserOpReceipt } from "./bundler-client"
+export { buildUserOperation, buildCallData, buildBatchCallData, packGasLimits, packGasFees, type CallParams } from "./user-op"
