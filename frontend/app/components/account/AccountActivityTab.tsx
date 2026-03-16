@@ -11,6 +11,7 @@ import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, L
 import { normalizeAddress, formatShort } from './accountUtils';
 import { EVENT_LABELS, EVENT_COLORS } from './AccountStakingTab';
 import { AddressLink } from '../AddressLink';
+import { TransferRow } from '../TransferRow';
 import { formatRelativeTime } from '../../lib/time';
 import {
     ActivityRow,
@@ -573,49 +574,23 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         const dir = tx.direction || (tx.from_address?.toLowerCase().includes(addr.replace('0x', '')) ? 'withdraw' : 'deposit');
         const isOut = dir === 'withdraw' || dir === 'out';
         const tokenSymbol = tx.token?.symbol || tx.token?.name || formatTokenName(tx.token?.token || '');
-        const tokenLogo = tx.token?.logo;
-        const hasLogo = !!extractLogoUrl(tokenLogo);
         const sender = tx.sender || tx.from_address;
         const receiver = tx.receiver || tx.to_address;
-        const timeStr = tx.timestamp ? formatRelativeTime(tx.timestamp, Date.now()) : '';
         return (
-            <div key={i} className="flex items-center gap-3 p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center overflow-hidden">
-                    {hasLogo ? (
-                        <TokenIcon logo={tokenLogo} symbol={tokenSymbol} size={28} />
-                    ) : (
-                        <ArrowRightLeft className="h-3.5 w-3.5 text-emerald-500" />
-                    )}
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isOut ? 'text-red-500' : 'text-emerald-500'}`}>
-                            {isOut ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />}
-                            {isOut ? 'Sent' : 'Received'}
-                        </span>
-                        <span className="font-mono text-xs font-medium text-zinc-900 dark:text-zinc-100">
-                            {tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
-                        </span>
-                        <span className="text-xs text-zinc-500 font-medium">{tokenSymbol}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        {sender && <span className="inline-flex items-center gap-1">From <AddressLink address={sender} size={12} neutral /></span>}
-                        {sender && receiver && <span className="text-zinc-300 dark:text-zinc-600">&rarr;</span>}
-                        {receiver && <span className="inline-flex items-center gap-1">To <AddressLink address={receiver} size={12} neutral /></span>}
-                        {tx.transaction_hash && (
-                            <>
-                                <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">|</span>
-                                <span className="text-zinc-400">tx:</span>
-                                <Link to={`/txs/${tx.transaction_hash}` as any} className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono">{formatShort(tx.transaction_hash, 8, 6)}</Link>
-                            </>
-                        )}
-                    </div>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                    <div className="text-[10px] text-zinc-400">{timeStr}</div>
-                    {tx.block_height && <div className="text-[10px] text-zinc-400 font-mono">#{tx.block_height}</div>}
-                </div>
-            </div>
+            <TransferRow
+                key={i}
+                direction={isOut ? 'out' : 'in'}
+                amount={tx.amount != null ? Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '\u2014'}
+                tokenSymbol={tokenSymbol}
+                tokenIcon={tx.token?.logo || null}
+                counterpartyAddress={isOut ? (receiver || '') : (sender || '')}
+                counterpartyRole={isOut ? 'to' : 'from'}
+                txHash={tx.transaction_hash || ''}
+                timestamp={tx.timestamp || ''}
+                blockNumber={tx.block_height}
+                txLinkPrefix="/transactions/"
+                usdValue={tx.usd_value ?? null}
+            />
         );
     };
 

@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { AddressLink } from '@/components/AddressLink';
+import { UsdValue } from '@/components/UsdValue';
 import { formatRelativeTime } from '@/lib/time';
 
 export interface TransferRowProps {
@@ -26,6 +27,8 @@ export interface TransferRowProps {
     blockNumber?: number;
     /** Link prefix for tx (default: /txs/) */
     txLinkPrefix?: string;
+    /** Optional USD value */
+    usdValue?: number | null;
 }
 
 export function TransferRow({
@@ -40,6 +43,7 @@ export function TransferRow({
     timestamp,
     blockNumber,
     txLinkPrefix = '/txs/',
+    usdValue,
 }: TransferRowProps) {
     const isOut = direction === 'out';
     const dirColor = isOut ? 'text-red-500' : 'text-emerald-500';
@@ -80,6 +84,9 @@ export function TransferRow({
                         {amount}
                     </span>
                     <span className="text-xs font-medium text-zinc-500">{tokenSymbol}</span>
+                    {usdValue != null && usdValue > 0 && (
+                        <UsdValue value={usdValue} className="text-[10px]" />
+                    )}
                     {typeBadge && (
                         <span className="text-[9px] px-1 py-px bg-zinc-100 dark:bg-zinc-800 text-zinc-500 uppercase font-medium">
                             {typeBadge}
