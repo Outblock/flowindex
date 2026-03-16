@@ -1238,6 +1238,10 @@ jobs:
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
               -e COPILOT_API_KEY="${COPILOT_API_KEY:-}" \
               -e CRON_SECRET="${CRON_SECRET}" \
+              -e GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-}" \
+              -e GCS_PROJECT_ID="${GCS_PROJECT_ID:-}" \
+              -e GCS_KEY_PREFIX="${GCS_KEY_PREFIX:-}" \
+              -e GCS_CREDENTIALS_JSON="${GCS_CREDENTIALS_JSON:-}" \
               -e PORT=3200 \
               "$SIM_STUDIO_IMAGE"
 

@@ -174,6 +174,7 @@ export const env = createEnv({
     GCS_PROJECT_ID:                        z.string().optional(),                  // GCP project ID
     GCS_BUCKET_NAME:                       z.string().optional(),                  // GCS bucket for general file storage
     GCS_CREDENTIALS_JSON:                  z.string().optional(),                  // GCS service account JSON (optional if using ADC)
+    GCS_KEY_PREFIX:                        z.string().optional(),                  // Prefix for all GCS keys (e.g. "sim/" to namespace within shared bucket)
     GCS_KB_BUCKET_NAME:                    z.string().optional(),                  // GCS bucket for knowledge base files
     GCS_EXECUTION_FILES_BUCKET_NAME:       z.string().optional(),                  // GCS bucket for workflow execution files
     GCS_CHAT_BUCKET_NAME:                  z.string().optional(),                  // GCS bucket for chat logos

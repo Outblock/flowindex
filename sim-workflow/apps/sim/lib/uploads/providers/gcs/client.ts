@@ -11,6 +11,17 @@ import { sanitizeFileName } from '@/executor/constants'
 
 let _gcsClient: Storage | null = null
 
+/**
+ * Key prefix for namespacing within a shared bucket (e.g. "sim/").
+ * Set via GCS_KEY_PREFIX env var.
+ */
+const KEY_PREFIX = env.GCS_KEY_PREFIX || ''
+
+function prefixKey(key: string): string {
+  if (!KEY_PREFIX) return key
+  return `${KEY_PREFIX}${key}`
+}
+
 export function getGcsClient(): Storage {
   if (_gcsClient) return _gcsClient
 
@@ -46,10 +57,11 @@ export async function uploadToGcs(
 
   const safeFileName = sanitizeFileName(fileName)
   const uniqueKey = skipTimestampPrefix ? fileName : `${Date.now()}-${safeFileName}`
+  const gcsKey = prefixKey(uniqueKey)
 
   const storage = getGcsClient()
   const bucket = storage.bucket(config.bucket)
-  const blob = bucket.file(uniqueKey)
+  const blob = bucket.file(gcsKey)
 
   const gcsMetadata: Record<string, string> = {
     originalName: sanitizeFilenameForMetadata(fileName),
@@ -79,7 +91,7 @@ export async function uploadToGcs(
 export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<string> {
   const storage = getGcsClient()
   const bucket = storage.bucket(GCS_CONFIG.bucket)
-  const blob = bucket.file(key)
+  const blob = bucket.file(prefixKey(key))
 
   const [url] = await blob.getSignedUrl({
     action: 'read',
@@ -96,7 +108,7 @@ export async function getPresignedUrlWithConfig(
 ): Promise<string> {
   const storage = getGcsClient()
   const bucket = storage.bucket(customConfig.bucket)
-  const blob = bucket.file(key)
+  const blob = bucket.file(prefixKey(key))
 
   const [url] = await blob.getSignedUrl({
     action: 'read',
@@ -113,7 +125,7 @@ export async function downloadFromGcs(key: string, customConfig?: GcsConfig): Pr
 
   const storage = getGcsClient()
   const bucket = storage.bucket(config.bucket)
-  const blob = bucket.file(key)
+  const blob = bucket.file(prefixKey(key))
 
   const [contents] = await blob.download()
   return Buffer.from(contents)
@@ -126,7 +138,7 @@ export async function deleteFromGcs(key: string, customConfig?: GcsConfig): Prom
 
   const storage = getGcsClient()
   const bucket = storage.bucket(config.bucket)
-  const blob = bucket.file(key)
+  const blob = bucket.file(prefixKey(key))
 
   await blob.delete()
 }
