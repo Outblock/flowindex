@@ -684,10 +684,11 @@ function TokenBubble({ logo, symbol, size = 32 }: { logo?: string; symbol?: stri
     );
 }
 
-function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, addressBook }: {
+function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, addressBook, transferType }: {
     from?: string; to?: string; amount?: string | number; symbol?: string; logo?: string; badge?: React.ReactNode;
     usdPrice?: number;
     addressBook: TxAddressBook;
+    transferType?: string;
 }) {
     const formattedAmount = amount != null ? Number(amount).toLocaleString(undefined, { maximumFractionDigits: 8 }) : '—';
     return (
@@ -697,7 +698,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, addressBook 
                 {from ? (
                     <TxResolvedAddress address={from} book={addressBook} prefixLen={8} suffixLen={4} reserveLabelSpace size={14} />
                 ) : (
-                    <span className="text-[11px] text-zinc-400 italic">Mint</span>
+                    <span className="text-[11px] text-zinc-400 italic">{transferType === 'unstake' ? 'Unstake' : transferType === 'mint' ? 'Mint' : ''}</span>
                 )}
             </div>
             {/* ARROW + TOKEN */}
@@ -717,7 +718,7 @@ function FlowRow({ from, to, amount, symbol, logo, badge, usdPrice, addressBook 
                 {to ? (
                     <TxResolvedAddress address={to} book={addressBook} prefixLen={8} suffixLen={4} reserveLabelSpace size={14} />
                 ) : (
-                    <span className="text-[11px] text-zinc-400 italic">Burn</span>
+                    <span className="text-[11px] text-zinc-400 italic">{transferType === 'stake' ? 'Stake' : transferType === 'burn' ? 'Burn' : ''}</span>
                 )}
             </div>
         </div>
@@ -848,6 +849,7 @@ function TransactionSummaryCard({ transaction, assetView, addressBook, formatAdd
                             usdPrice={row.amount > 0 ? row.usdValue / row.amount : 0}
                             addressBook={addressBook}
                             badge={renderTransferRowBadge(row)}
+                            transferType={row.transferType}
                         />
                     ))}
                     {assetView.transferListRows.length > 10 && (
@@ -1455,7 +1457,7 @@ function TransactionDetail() {
                                 revealDirection="start"
                                 speed={25}
                                 maxIterations={12}
-                                characters="0123456789abcdef"
+                                characters="█▓▒░╳╱╲◆◇●○■□▪▫#@$%&*!?~^"
                                 startEncrypted
                                 className="font-mono"
                             />
