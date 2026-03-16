@@ -32,10 +32,17 @@ var stakingContracts = map[string]bool{
 	"FlowClusterQC":       true,
 }
 
-// HasStakingEvents checks if any event in the transaction belongs to a staking contract.
+// hasStakingEventsInTx checks if any event in the transaction belongs to a staking contract.
+// Event.Type format: "A.<address>.<ContractName>.<EventName>" — extract the 3rd segment.
 func hasStakingEventsInTx(events []models.Event) bool {
 	for _, e := range events {
-		if stakingContracts[e.ContractName] {
+		// Check ContractName field first (may be populated in some code paths)
+		if e.ContractName != "" && stakingContracts[e.ContractName] {
+			return true
+		}
+		// Fallback: parse contract name from the fully-qualified event type
+		parts := strings.Split(e.Type, ".")
+		if len(parts) >= 3 && stakingContracts[parts[2]] {
 			return true
 		}
 	}
