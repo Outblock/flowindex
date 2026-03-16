@@ -21,7 +21,8 @@ export type OAuthProvider = 'github' | 'google';
 
 export interface PasskeyAccount {
   credentialId: string;
-  flowAddress: string;
+  flowAddress?: string;
+  evmAddress?: string;
   flowAddressTestnet?: string;
   publicKeySec1Hex: string;
   authenticatorName?: string;

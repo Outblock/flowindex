@@ -167,6 +167,8 @@ services:
       SUPABASE_URL: http://supabase-gateway:8000
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_KEY}
+      EVM_WALLET_FACTORY_ADDRESS: ${EVM_WALLET_FACTORY_ADDRESS:-}
+      EVM_RPC_URL: ${EVM_RPC_URL:-https://mainnet.evm.nodes.onflow.org}
       DENO_NO_UPDATE_CHECK: "1"
     volumes:
       - ./supabase/functions/passkey-auth/index.ts:/app/index.ts:ro

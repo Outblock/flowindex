@@ -647,6 +647,40 @@ serve(async (req: Request) => {
         break;
       }
 
+      case '/wallet/save-evm-address': {
+        const user = await getAuthenticatedUser();
+        if (!user) { result = error('UNAUTHORIZED', 'Authentication required'); break; }
+
+        const { credentialId: evmCredId, evmAddress } = data as { credentialId: string; evmAddress: string };
+        if (!evmCredId || !evmAddress) {
+          result = error('INVALID_INPUT', 'Missing credentialId or evmAddress');
+          break;
+        }
+
+        // Verify credential belongs to user
+        const { data: cred, error: credErr } = await supabaseAdmin
+          .from('passkey_credentials')
+          .select('public_key_sec1_hex')
+          .eq('id', evmCredId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (credErr || !cred) { result = error('NOT_FOUND', 'Credential not found'); break; }
+
+        console.log(`[passkey-auth] Saving EVM address: ${evmAddress} for credential: ${evmCredId}`);
+
+        const normalizedAddress = evmAddress.toLowerCase();
+        const { error: updateErr } = await supabaseAdmin
+          .from('passkey_credentials')
+          .update({ evm_address: normalizedAddress })
+          .eq('id', evmCredId)
+          .eq('user_id', user.id);
+
+        if (updateErr) { result = error('INTERNAL', 'Failed to save EVM address'); break; }
+        result = success({ evmAddress: normalizedAddress });
+        break;
+      }
+
       case '/wallet/provision': {
         const authHeader = req.headers.get('Authorization');
         const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -771,9 +805,9 @@ serve(async (req: Request) => {
         }
 
         const { data: credentials } = await supabaseAdmin.from('passkey_credentials')
-          .select('id, public_key_sec1_hex, flow_address, authenticator_name, created_at')
+          .select('id, public_key_sec1_hex, flow_address, evm_address, authenticator_name, created_at')
           .eq('user_id', user.id)
-          .not('flow_address', 'is', null)
+          .or('flow_address.not.is.null,evm_address.not.is.null')
           .order('created_at', { ascending: false });
 
         result = success({
@@ -781,6 +815,7 @@ serve(async (req: Request) => {
             credentialId: c.id,
             publicKeySec1Hex: c.public_key_sec1_hex,
             flowAddress: c.flow_address,
+            evmAddress: c.evm_address,
             authenticatorName: c.authenticator_name,
             createdAt: c.created_at,
           })) || []
