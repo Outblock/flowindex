@@ -145,7 +145,7 @@ describe('parseTokenEvents', () => {
     expect(ft.transfer_type).toBe('transfer');
   });
 
-  it('should classify deposit-only as mint', () => {
+  it('should classify deposit-only WITHOUT TokensMinted as transfer (conservative)', () => {
     const events: RawEvent[] = [
       makeFTEvent(
         'A.82ed1b9cba5bb1b3.JOSHIN.TokensDeposited',
@@ -161,13 +161,31 @@ describe('parseTokenEvents', () => {
     const result = parseTokenEvents(events);
     expect(result.transfers).toHaveLength(1);
     const ft = result.transfers[0];
-    expect(ft.transfer_type).toBe('mint');
+    expect(ft.transfer_type).toBe('transfer');
     expect(ft.from_address).toBe('');
     expect(ft.to_address).toBe(ADDR_RECEIVER);
-    expect(ft.amount).toBe('100.00000000');
   });
 
-  it('should classify withdrawal-only as burn', () => {
+  it('should classify deposit-only WITH TokensMinted as mint', () => {
+    const events: RawEvent[] = [
+      makeFTEvent('A.82ed1b9cba5bb1b3.JOSHIN.TokensMinted', [cdcUFix64('amount', '100.00000000')], 0),
+      makeFTEvent(
+        'A.82ed1b9cba5bb1b3.JOSHIN.TokensDeposited',
+        [
+          cdcUFix64('amount', '100.00000000'),
+          cdcOptionalAddr('to', ADDR_RECEIVER),
+          cdcUInt64('depositedUUID', '200'),
+        ],
+        1,
+      ),
+    ];
+
+    const result = parseTokenEvents(events);
+    expect(result.transfers).toHaveLength(1);
+    expect(result.transfers[0].transfer_type).toBe('mint');
+  });
+
+  it('should classify withdrawal-only WITHOUT TokensBurned as transfer (conservative)', () => {
     const events: RawEvent[] = [
       makeFTEvent(
         'A.82ed1b9cba5bb1b3.JOSHIN.TokensWithdrawn',
@@ -183,10 +201,28 @@ describe('parseTokenEvents', () => {
     const result = parseTokenEvents(events);
     expect(result.transfers).toHaveLength(1);
     const ft = result.transfers[0];
-    expect(ft.transfer_type).toBe('burn');
+    expect(ft.transfer_type).toBe('transfer');
     expect(ft.from_address).toBe(ADDR_SENDER);
     expect(ft.to_address).toBe('');
-    expect(ft.amount).toBe('25.00000000');
+  });
+
+  it('should classify withdrawal-only WITH TokensBurned as burn', () => {
+    const events: RawEvent[] = [
+      makeFTEvent(
+        'A.82ed1b9cba5bb1b3.JOSHIN.TokensWithdrawn',
+        [
+          cdcUFix64('amount', '25.00000000'),
+          cdcOptionalAddr('from', ADDR_SENDER),
+          cdcUInt64('withdrawnUUID', '300'),
+        ],
+        0,
+      ),
+      makeFTEvent('A.82ed1b9cba5bb1b3.JOSHIN.TokensBurned', [cdcUFix64('amount', '25.00000000')], 1),
+    ];
+
+    const result = parseTokenEvents(events);
+    expect(result.transfers).toHaveLength(1);
+    expect(result.transfers[0].transfer_type).toBe('burn');
   });
 
   it('should parse NFT transfer (Withdrawn + Deposited pair)', () => {
@@ -224,15 +260,13 @@ describe('parseTokenEvents', () => {
     expect(nft.token_id).toBe('12345');
   });
 
-  it('should NOT classify unpaired FlowToken as mint/burn in staking context', () => {
+  it('should classify unpaired FlowToken deposit in staking context as unstake', () => {
     const events: RawEvent[] = [
-      // Staking event that sets context
       makeFTEvent(
         'A.8624b52f9ddcd04a.FlowIDTableStaking.DelegatorRewardsPaid',
         [cdcUFix64('amount', '5.00000000')],
         0,
       ),
-      // Unpaired FlowToken deposit (normally would be 'mint')
       makeFTEvent(
         'A.1654653399040a61.FlowToken.TokensDeposited',
         [
@@ -247,9 +281,32 @@ describe('parseTokenEvents', () => {
     const result = parseTokenEvents(events);
     expect(result.transfers).toHaveLength(1);
     const ft = result.transfers[0];
-    // In staking context, unpaired FlowToken should be 'transfer' not 'mint'
-    expect(ft.transfer_type).toBe('transfer');
+    expect(ft.transfer_type).toBe('unstake');
     expect(ft.to_address).toBe(ADDR_STAKER);
+  });
+
+  it('should classify unpaired FlowToken withdrawal in staking context as stake', () => {
+    const events: RawEvent[] = [
+      makeFTEvent(
+        'A.8624b52f9ddcd04a.FlowIDTableStaking.DelegatorTokensCommitted',
+        [cdcUFix64('amount', '16989.00000000')],
+        0,
+      ),
+      makeFTEvent(
+        'A.1654653399040a61.FlowToken.TokensWithdrawn',
+        [
+          cdcUFix64('amount', '16989.00000000'),
+          cdcOptionalAddr('from', ADDR_STAKER),
+          cdcUInt64('withdrawnUUID', '888'),
+        ],
+        1,
+      ),
+    ];
+
+    const result = parseTokenEvents(events);
+    expect(result.transfers).toHaveLength(1);
+    expect(result.transfers[0].transfer_type).toBe('stake');
+    expect(result.transfers[0].from_address).toBe(ADDR_STAKER);
   });
 
   it('should filter out transfers to/from fee vault address', () => {

@@ -7,7 +7,7 @@ export interface RawEvent {
   block_height?: number;
 }
 
-export type TransferType = 'transfer' | 'mint' | 'burn';
+export type TransferType = 'transfer' | 'mint' | 'burn' | 'stake' | 'unstake';
 
 export interface FTTransfer {
   token: string;

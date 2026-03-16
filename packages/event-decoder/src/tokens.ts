@@ -49,11 +49,9 @@ export function classifyTokenEvent(eventType: string): { isToken: boolean; isNFT
   if (eventType.endsWith('.Deposited') || eventType.endsWith('.Withdrawn')) {
     return { isToken: true, isNFT: false };
   }
-  // Mint/Burn events (skip FlowToken system-level mints/burns)
-  if ((eventType.includes('.TokensMinted') || eventType.includes('.TokensBurned')) &&
-    !eventType.includes('FlowToken.')) {
-    return { isToken: true, isNFT: false };
-  }
+  // TokensMinted/TokensBurned are evidence events only — used for context flags
+  // but don't produce transfer legs (they lack proper from/to fields).
+  // Skip them as token events.
   return { isToken: false, isNFT: false };
 }
 
@@ -318,8 +316,26 @@ export function parseTokenEvents(events: RawEvent[]): {
   // Lightweight EVM execution info for cross-VM enrichment
   const evmExecs: EVMFromTo[] = [];
 
-  // Staking context detection
+  // Context flags — scan all events once for evidence-based classification
   let hasStakingEvents = false;
+  let hasFeesDeducted = false;
+  let hasLostFound = false;
+  let hasBurnEvent = false;   // explicit TokensBurned / TokensBurnt
+  let hasMintEvent = false;   // explicit TokensMinted
+
+  // Pre-scan for context flags before processing legs
+  for (const event of events) {
+    const et = event.type || '';
+    const cn = parseContractName(et);
+    const en = et.split('.').pop() || '';
+    if (STAKING_CONTRACTS.has(cn) || et.includes('LiquidStaking') || et.includes('stFlowToken')) {
+      hasStakingEvents = true;
+    }
+    if (cn === 'LostAndFound') hasLostFound = true;
+    if (cn === 'FlowFees' && en === 'FeesDeducted') hasFeesDeducted = true;
+    if (en === 'TokensBurned' || en === 'TokensBurnt') hasBurnEvent = true;
+    if (en === 'TokensMinted') hasMintEvent = true;
+  }
 
   for (const event of events) {
     const eventType = event.type || '';
@@ -378,17 +394,6 @@ export function parseTokenEvents(events: RawEvent[]): {
       } catch { /* skip */ }
     }
 
-    // Detect staking/system events
-    if (!hasStakingEvents && (
-      eventType.includes('FlowIDTableStaking.') ||
-      eventType.includes('FlowStakingCollection.') ||
-      eventType.includes('LockedTokens.') ||
-      eventType.includes('FlowEpoch.') ||
-      eventType.includes('LiquidStaking') ||
-      eventType.includes('stFlowToken')
-    )) {
-      hasStakingEvents = true;
-    }
   }
 
   // Enrich mint/burn legs with addresses from wrapper events
@@ -434,21 +439,70 @@ export function parseTokenEvents(events: RawEvent[]): {
   // Build transfers from paired legs
   const allTransfers = buildTokenTransfers(legs);
 
-  // Split into FT and NFT, filter fee vault transfers
+  // Evidence-based classification
+  function classifyTransferType(t: RawTransfer): TransferType {
+    const isFlowToken = t.token.includes('FlowToken');
+    const hasFrom = !!t.fromAddress;
+    const hasTo = !!t.toAddress;
+
+    if (hasFrom && hasTo) return 'transfer';
+
+    // Unpaired withdraw (from only, no to)
+    if (hasFrom && !hasTo) {
+      if (hasStakingEvents && isFlowToken) return 'stake';
+      if (hasBurnEvent) return 'burn';
+      // Small FlowToken in fee tx → likely fee noise, still classify as transfer
+      return 'transfer';
+    }
+
+    // Unpaired deposit (to only, no from)
+    if (!hasFrom && hasTo) {
+      if (hasStakingEvents && isFlowToken) return 'unstake';
+      if (hasMintEvent) return 'mint';
+      return 'transfer';
+    }
+
+    return 'transfer';
+  }
+
+  // Duplicate leg filtering — remove unpaired legs that have a matching paired transfer
+  function isDuplicateUnpaired(t: RawTransfer): boolean {
+    if (t.fromAddress && t.toAddress) return false; // already paired
+    if (t.isNFT) return false;
+    return allTransfers.some(candidate => {
+      if (candidate === t || candidate.eventIndex === t.eventIndex) return false;
+      if (candidate.token !== t.token) return false;
+      if (candidate.amount !== t.amount) return false;
+      // Unpaired withdraw: duplicate if there's a paired transfer from the same address
+      if (t.fromAddress && !t.toAddress) {
+        return candidate.fromAddress === t.fromAddress && !!candidate.toAddress;
+      }
+      // Unpaired deposit: duplicate if there's a paired transfer to the same address
+      if (!t.fromAddress && t.toAddress) {
+        return candidate.toAddress === t.toAddress && !!candidate.fromAddress;
+      }
+      return false;
+    });
+  }
+
+  // Split into FT and NFT, filter fee vault transfers + duplicates
   const ftTransfers: FTTransfer[] = [];
   const nftTransfers: NFTTransfer[] = [];
 
   for (const t of allTransfers) {
     const fromNorm = normalizeFlowAddress(t.fromAddress);
     const toNorm = normalizeFlowAddress(t.toAddress);
+    // Filter fee vault transfers
     if (fromNorm === FEE_VAULT_ADDRESS || toNorm === FEE_VAULT_ADDRESS) continue;
+    // Filter small FlowToken noise in fee transactions
+    if (hasFeesDeducted && t.token.includes('FlowToken') && !t.fromAddress !== !t.toAddress) {
+      const amount = parseFloat(t.amount) || 0;
+      if (amount > 0 && amount < 0.01) continue;
+    }
+    // Filter duplicate unpaired legs
+    if (isDuplicateUnpaired(t)) continue;
 
-    // Unpaired FlowToken legs in staking txs are staking operations, not mints/burns
-    const isFlowToken = t.token.includes('FlowToken');
-    const transferType: TransferType =
-      (!t.fromAddress && !(isFlowToken && hasStakingEvents)) ? 'mint' :
-      (!t.toAddress && !(isFlowToken && hasStakingEvents)) ? 'burn' :
-      'transfer';
+    const transferType = classifyTransferType(t);
 
     if (t.isNFT) {
       nftTransfers.push({
