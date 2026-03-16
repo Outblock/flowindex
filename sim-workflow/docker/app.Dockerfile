@@ -18,13 +18,13 @@ FROM base AS deps
 WORKDIR /app
 
 COPY package.json bun.lock turbo.json ./
-RUN mkdir -p apps packages/db packages/testing packages/logger packages/tsconfig packages/flow-signer
+RUN mkdir -p apps packages/db packages/testing packages/logger packages/tsconfig
 COPY apps/sim/package.json ./apps/sim/package.json
 COPY packages/db/package.json ./packages/db/package.json
 COPY packages/testing/package.json ./packages/testing/package.json
 COPY packages/logger/package.json ./packages/logger/package.json
 COPY packages/tsconfig/package.json ./packages/tsconfig/package.json
-COPY packages/flow-signer/package.json ./packages/flow-signer/package.json
+COPY packages/flow-signer ./packages/flow-signer
 
 # Install turbo globally, then dependencies, then rebuild isolated-vm for Node.js
 # Use --linker=hoisted for flat node_modules layout (required for Docker multi-stage builds)
