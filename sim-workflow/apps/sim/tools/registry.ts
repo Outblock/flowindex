@@ -1485,6 +1485,7 @@ import {
   onepasswordResolveSecretTool,
   onepasswordUpdateItemTool,
 } from '@/tools/onepassword'
+import { geminiImageTool } from '@/tools/gemini'
 import { openAIEmbeddingsTool, openAIImageTool } from '@/tools/openai'
 import {
   outlookCopyTool,
@@ -3725,6 +3726,7 @@ export const tools: Record<string, ToolConfig> = {
   datadog_create_downtime: datadogCreateDowntimeTool,
   datadog_list_downtimes: datadogListDowntimesTool,
   datadog_cancel_downtime: datadogCancelDowntimeTool,
+  gemini_image: geminiImageTool,
   openai_image: openAIImageTool,
   microsoft_teams_read_chat: microsoftTeamsReadChatTool,
   microsoft_teams_write_chat: microsoftTeamsWriteChatTool,
