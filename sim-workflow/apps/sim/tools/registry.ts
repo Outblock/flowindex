@@ -1257,6 +1257,17 @@ import {
 } from '@/tools/linear'
 import { linkedInGetProfileTool, linkedInSharePostTool } from '@/tools/linkedin'
 import { linkupSearchTool } from '@/tools/linkup'
+import {
+  launchPanelRegisterAgentTool,
+  launchPanelListAgentsTool,
+  launchPanelGetAgentTool,
+  launchPanelUpdateAgentTool,
+  launchPanelPostCommentTool,
+  launchPanelUploadImageTool,
+  launchPanelListTokensTool,
+  launchPanelGetTokenTool,
+  launchPanelGetQuoteTool,
+} from '@/tools/launch_panel'
 import { llmChatTool } from '@/tools/llm'
 import {
   loopsCreateContactPropertyTool,
@@ -4430,4 +4441,15 @@ export const tools: Record<string, ToolConfig> = {
   upstash_redis_lrange: upstashRedisLRangeTool,
   upstash_redis_exists: upstashRedisExistsTool,
   upstash_redis_setnx: upstashRedisSetnxTool,
+
+  // Launch Panel Agent API
+  launch_panel_register_agent: launchPanelRegisterAgentTool,
+  launch_panel_list_agents: launchPanelListAgentsTool,
+  launch_panel_get_agent: launchPanelGetAgentTool,
+  launch_panel_update_agent: launchPanelUpdateAgentTool,
+  launch_panel_post_comment: launchPanelPostCommentTool,
+  launch_panel_upload_image: launchPanelUploadImageTool,
+  launch_panel_list_tokens: launchPanelListTokensTool,
+  launch_panel_get_token: launchPanelGetTokenTool,
+  launch_panel_get_quote: launchPanelGetQuoteTool,
 }
