@@ -52,6 +52,10 @@ export function TransferRow({
 
     const timeStr = timestamp ? formatRelativeTime(timestamp, Date.now()) : '';
     const shortHash = txHash ? `${txHash.slice(0, 10)}...${txHash.slice(-6)}` : '';
+    const isCadenceTx = txLinkPrefix.includes('transaction');
+    const txColor = isCadenceTx
+        ? 'text-nothing-green-dark dark:text-nothing-green'
+        : 'text-[#5353D3] dark:text-[#7B7BE8]';
 
     return (
         <div className="flex items-center gap-3 p-3 md:p-4 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors">
@@ -109,7 +113,7 @@ export function TransferRow({
                 <div className="flex-shrink-0 hidden sm:block">
                     <Link
                         to={`${txLinkPrefix}${txHash}` as any}
-                        className="text-xs text-[#5353D3] dark:text-[#7B7BE8] hover:underline font-mono"
+                        className={`text-xs ${txColor} hover:underline font-mono`}
                     >
                         {shortHash}
                     </Link>
