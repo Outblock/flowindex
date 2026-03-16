@@ -272,9 +272,17 @@ const TYPE_FILTERS = [
   { label: 'Staking', value: 'staking' },
 ];
 
+const MIN_USD_PRESETS = [
+  { label: '1K+', value: 1_000 },
+  { label: '10K+', value: 10_000 },
+  { label: '100K+', value: 100_000 },
+  { label: '1M+', value: 1_000_000 },
+];
+
 export function BigTransfersFull() {
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
   const [typeFilter, setTypeFilter] = useState('');
+  const [minUsd, setMinUsd] = useState(10_000);
 
   // Pages mode state
   const [transfers, setTransfers] = useState<BigTransfer[] | null>(null);
@@ -297,7 +305,7 @@ export function BigTransfersFull() {
     setTimelineOffset(0);
     setTimelineHasMore(true);
     timelineInitRef.current = false;
-  }, [typeFilter]);
+  }, [typeFilter, minUsd]);
 
   // Pages mode fetch
   useEffect(() => {
@@ -307,8 +315,9 @@ export function BigTransfersFull() {
       limit: pageSize + 1,
       offset: page * pageSize,
       type: typeFilter || undefined,
+      minUsd,
     }).then(setTransfers).catch(() => setTransfers([]));
-  }, [typeFilter, page, viewMode]);
+  }, [typeFilter, page, viewMode, minUsd]);
 
   // Timeline initial load
   useEffect(() => {
@@ -320,6 +329,7 @@ export function BigTransfersFull() {
       limit: timelineBatchSize + 1,
       offset: 0,
       type: typeFilter || undefined,
+      minUsd,
     }).then(data => {
       const items = data ?? [];
       const hasMore = items.length > timelineBatchSize;
@@ -330,7 +340,7 @@ export function BigTransfersFull() {
       setTimelineTxs([]);
       setTimelineHasMore(false);
     }).finally(() => setTimelineLoading(false));
-  }, [viewMode, typeFilter]);
+  }, [viewMode, typeFilter, minUsd]);
 
   // Timeline infinite scroll
   const loadMoreTimeline = useCallback(() => {
@@ -340,6 +350,7 @@ export function BigTransfersFull() {
       limit: timelineBatchSize + 1,
       offset: timelineOffset,
       type: typeFilter || undefined,
+      minUsd,
     }).then(data => {
       const items = data ?? [];
       const hasMore = items.length > timelineBatchSize;
@@ -348,7 +359,7 @@ export function BigTransfersFull() {
       setTimelineHasMore(hasMore);
     }).catch(() => setTimelineHasMore(false))
       .finally(() => setTimelineLoading(false));
-  }, [timelineLoading, timelineHasMore, timelineOffset, typeFilter]);
+  }, [timelineLoading, timelineHasMore, timelineOffset, typeFilter, minUsd]);
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -386,22 +397,41 @@ export function BigTransfersFull() {
 
   return (
     <div className="space-y-4">
-      {/* Type filters + view mode toggle */}
+      {/* Type filters + min amount + view mode toggle */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
-          {TYPE_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => handleFilterChange(f.value)}
-              className={`px-3 py-1 text-xs font-mono uppercase tracking-wider border transition-colors ${
-                typeFilter === f.value
-                  ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white'
-                  : 'bg-transparent text-zinc-600 dark:text-gray-400 border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            {TYPE_FILTERS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => handleFilterChange(f.value)}
+                className={`px-3 py-1 text-xs font-mono uppercase tracking-wider border transition-colors ${
+                  typeFilter === f.value
+                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white'
+                    : 'bg-transparent text-zinc-600 dark:text-gray-400 border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 dark:text-gray-500">Min</span>
+            {MIN_USD_PRESETS.map(p => (
+              <button
+                key={p.value}
+                onClick={() => { setMinUsd(p.value); setPage(0); }}
+                className={`px-2 py-0.5 text-[10px] font-mono border transition-colors ${
+                  minUsd === p.value
+                    ? 'bg-nothing-green-dark dark:bg-nothing-green text-white dark:text-black border-nothing-green-dark dark:border-nothing-green'
+                    : 'bg-transparent text-zinc-500 dark:text-gray-400 border-zinc-200 dark:border-white/10 hover:border-zinc-400 dark:hover:border-white/30'
+                }`}
+              >
+                ${p.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-0.5 border border-zinc-200 dark:border-white/10 rounded-sm overflow-hidden">
