@@ -10,5 +10,5 @@ CREATE TABLE "flowindex_api_key" (
 );
 --> statement-breakpoint
 ALTER TABLE "workflow" ADD COLUMN "metadata" json DEFAULT '{}';--> statement-breakpoint
-ALTER TABLE "flowindex_api_key" ADD CONSTRAINT "flowindex_api_key_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "flowindex_api_key" ADD CONSTRAINT "flowindex_api_key_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "flowindex_api_key_user_idx" ON "flowindex_api_key" USING btree ("user_id");

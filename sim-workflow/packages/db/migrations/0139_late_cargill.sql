@@ -45,7 +45,7 @@ CREATE TABLE "a2a_task" (
 --> statement-breakpoint
 ALTER TABLE "a2a_agent" ADD CONSTRAINT "a2a_agent_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspace"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "a2a_agent" ADD CONSTRAINT "a2a_agent_workflow_id_workflow_id_fk" FOREIGN KEY ("workflow_id") REFERENCES "public"."workflow"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "a2a_agent" ADD CONSTRAINT "a2a_agent_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "a2a_agent" ADD CONSTRAINT "a2a_agent_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "a2a_push_notification_config" ADD CONSTRAINT "a2a_push_notification_config_task_id_a2a_task_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."a2a_task"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "a2a_task" ADD CONSTRAINT "a2a_task_agent_id_a2a_agent_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."a2a_agent"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "a2a_agent_workspace_id_idx" ON "a2a_agent" USING btree ("workspace_id");--> statement-breakpoint

@@ -13,4 +13,4 @@ CREATE TABLE "user_stats" (
 --> statement-breakpoint
 ALTER TABLE "workflow" ADD COLUMN "run_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "workflow" ADD COLUMN "last_run_at" timestamp;--> statement-breakpoint
-ALTER TABLE "user_stats" ADD CONSTRAINT "user_stats_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "user_stats" ADD CONSTRAINT "user_stats_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;

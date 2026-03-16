@@ -29,7 +29,7 @@ ALTER TABLE "templates" ADD COLUMN "status" "template_status" DEFAULT 'pending' 
 ALTER TABLE "templates" ADD COLUMN "tags" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
 ALTER TABLE "templates" ADD COLUMN "required_credentials" jsonb DEFAULT '[]' NOT NULL;--> statement-breakpoint
 ALTER TABLE "user" ADD COLUMN "is_super_user" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "template_creators" ADD CONSTRAINT "template_creators_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "template_creators" ADD CONSTRAINT "template_creators_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "template_creators_reference_idx" ON "template_creators" USING btree ("reference_type","reference_id");--> statement-breakpoint
 CREATE INDEX "template_creators_reference_id_idx" ON "template_creators" USING btree ("reference_id");--> statement-breakpoint
 CREATE INDEX "template_creators_created_by_idx" ON "template_creators" USING btree ("created_by");--> statement-breakpoint

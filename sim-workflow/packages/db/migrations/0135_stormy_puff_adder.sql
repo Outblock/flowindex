@@ -38,13 +38,13 @@ CREATE TABLE "credential_set_member" (
 --> statement-breakpoint
 ALTER TABLE "webhook" ADD COLUMN "credential_set_id" text;--> statement-breakpoint
 ALTER TABLE "credential_set" ADD CONSTRAINT "credential_set_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential_set" ADD CONSTRAINT "credential_set_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credential_set" ADD CONSTRAINT "credential_set_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credential_set_invitation" ADD CONSTRAINT "credential_set_invitation_credential_set_id_credential_set_id_fk" FOREIGN KEY ("credential_set_id") REFERENCES "public"."credential_set"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential_set_invitation" ADD CONSTRAINT "credential_set_invitation_invited_by_user_id_fk" FOREIGN KEY ("invited_by") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential_set_invitation" ADD CONSTRAINT "credential_set_invitation_accepted_by_user_id_user_id_fk" FOREIGN KEY ("accepted_by_user_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credential_set_invitation" ADD CONSTRAINT "credential_set_invitation_invited_by_user_id_fk" FOREIGN KEY ("invited_by") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credential_set_invitation" ADD CONSTRAINT "credential_set_invitation_accepted_by_user_id_user_id_fk" FOREIGN KEY ("accepted_by_user_id") REFERENCES "user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credential_set_member" ADD CONSTRAINT "credential_set_member_credential_set_id_credential_set_id_fk" FOREIGN KEY ("credential_set_id") REFERENCES "public"."credential_set"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential_set_member" ADD CONSTRAINT "credential_set_member_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "credential_set_member" ADD CONSTRAINT "credential_set_member_invited_by_user_id_fk" FOREIGN KEY ("invited_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credential_set_member" ADD CONSTRAINT "credential_set_member_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "credential_set_member" ADD CONSTRAINT "credential_set_member_invited_by_user_id_fk" FOREIGN KEY ("invited_by") REFERENCES "user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "credential_set_organization_id_idx" ON "credential_set" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "credential_set_created_by_idx" ON "credential_set" USING btree ("created_by");--> statement-breakpoint
 CREATE UNIQUE INDEX "credential_set_org_name_unique" ON "credential_set" USING btree ("organization_id","name");--> statement-breakpoint

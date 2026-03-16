@@ -23,6 +23,6 @@ CREATE TABLE "mcp_servers" (
 );
 --> statement-breakpoint
 ALTER TABLE "mcp_servers" ADD CONSTRAINT "mcp_servers_workspace_id_workspace_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspace"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "mcp_servers" ADD CONSTRAINT "mcp_servers_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mcp_servers" ADD CONSTRAINT "mcp_servers_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "mcp_servers_workspace_enabled_idx" ON "mcp_servers" USING btree ("workspace_id","enabled");--> statement-breakpoint
 CREATE INDEX "mcp_servers_workspace_deleted_idx" ON "mcp_servers" USING btree ("workspace_id","deleted_at");
