@@ -19,6 +19,8 @@ import type {
   TxPreviewResponse,
   AddressPreviewResponse,
 } from '@/types/blockscout';
+import Avatar from 'boring-avatars';
+import { colorsFromAddress, avatarVariant } from '@/components/AddressLink';
 import { formatWei, truncateHash } from '@/lib/evmUtils';
 import { formatRelativeTime } from '@/lib/time';
 
@@ -456,6 +458,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                       }`}
                     >
                       <div className="flex items-center gap-2">
+                        <Avatar size={20} name={cadenceAddr} variant={avatarVariant(cadenceAddr)} colors={colorsFromAddress(cadenceAddr)} />
                         <span className="font-mono text-xs text-zinc-200">
                           <HighlightMatch text={cadenceAddr} query={highlightQuery} />
                         </span>
@@ -496,6 +499,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                       }`}
                     >
                       <div className="flex items-center gap-2">
+                        <Avatar size={20} name={data.evm!.address} variant={avatarVariant(data.evm!.address)} colors={colorsFromAddress(data.evm!.address)} />
                         <span className="font-mono text-xs text-zinc-200 truncate">
                           <HighlightMatch text={data.evm.address} query={highlightQuery} />
                         </span>
