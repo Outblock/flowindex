@@ -14,6 +14,20 @@ export function formatWei(wei: string | null | undefined, decimals = 18, precisi
   }
 }
 
+/** Convert wei string to numeric value */
+export function weiToNumber(wei: string | null | undefined, decimals = 18): number {
+  if (!wei || wei === '0') return 0;
+  try {
+    const num = BigInt(wei);
+    const divisor = BigInt(10 ** decimals);
+    const whole = Number(num / divisor);
+    const remainder = Number(num % divisor) / (10 ** decimals);
+    return whole + remainder;
+  } catch {
+    return parseFloat(wei) || 0;
+  }
+}
+
 /** Format gas number with commas */
 export function formatGas(gas: string | number | null | undefined): string {
   if (!gas) return '0';

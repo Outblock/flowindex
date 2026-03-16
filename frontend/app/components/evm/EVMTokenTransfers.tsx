@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { List, Calendar } from 'lucide-react';
 import { getEVMAddressTokenTransfers, getEVMTransactionTokenTransfers } from '@/api/evm';
-import { formatWei } from '@/lib/evmUtils';
+import { formatWei, weiToNumber } from '@/lib/evmUtils';
 import { TransferRow } from '@/components/TransferRow';
 import { LoadMorePagination } from '@/components/LoadMorePagination';
 import type { BSTokenTransfer, BSPageParams } from '@/types/blockscout';
@@ -29,6 +29,9 @@ function getTimeSection(timestamp: string, now: Date): string {
 function normalizeTransfer(transfer: BSTokenTransfer, viewedAddress?: string) {
     const decimals = transfer.token.decimals ? parseInt(transfer.token.decimals, 10) : 18;
     const amount = transfer.total?.value ? formatWei(transfer.total.value, decimals) : '0';
+    const numericAmount = transfer.total?.value ? weiToNumber(transfer.total.value, decimals) : 0;
+    const exchangeRate = transfer.token.exchange_rate ? parseFloat(transfer.token.exchange_rate) : 0;
+    const usdValue = numericAmount > 0 && exchangeRate > 0 ? numericAmount * exchangeRate : null;
     const txHash = transfer.tx_hash || transfer.transaction_hash || '';
     const fromAddr = transfer.from?.hash?.toLowerCase() || '';
     const toAddr = transfer.to?.hash?.toLowerCase() || '';
@@ -65,6 +68,7 @@ function normalizeTransfer(transfer: BSTokenTransfer, viewedAddress?: string) {
         txHash,
         timestamp: transfer.timestamp,
         blockNumber: transfer.block_number,
+        usdValue,
     };
 }
 
