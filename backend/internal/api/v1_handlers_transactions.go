@@ -326,7 +326,8 @@ func (s *Server) enrichTransactionOutput(r *http.Request, out map[string]interfa
 	// Enrich: FT transfers with token metadata
 	ftTransfers, _ := s.repo.GetFTTransfersByTransactionID(r.Context(), tx.ID)
 	txEvents, _ := s.repo.GetEventsByTransactionID(r.Context(), tx.ID)
-	canonicalFTTransfers := canonicalizeFTTransfers(ftTransfers, evmExecs, hasStakingEventsInTx(txEvents))
+	evtCtx := buildTxEventContext(txEvents)
+	canonicalFTTransfers := canonicalizeFTTransfers(ftTransfers, evmExecs, evtCtx)
 	ftMeta := map[string]repository.TokenMetadataInfo{}
 	if len(canonicalFTTransfers) > 0 {
 		tokenIDSet := make(map[string]bool)

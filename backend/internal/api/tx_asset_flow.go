@@ -24,29 +24,70 @@ var bridgedTokenRegex = regexp.MustCompile(`evmvmbridgedtoken_([a-f0-9]{40})`)
 // Staking contract names — when these appear in transaction events,
 // FlowToken burns/mints should be classified as stake/unstake.
 var stakingContracts = map[string]bool{
-	"FlowIDTableStaking":  true,
+	"FlowIDTableStaking":    true,
 	"FlowStakingCollection": true,
-	"LockedTokens":        true,
-	"FlowEpoch":           true,
-	"FlowDKG":             true,
-	"FlowClusterQC":       true,
+	"LockedTokens":          true,
+	"FlowEpoch":             true,
+	"FlowDKG":               true,
+	"FlowClusterQC":         true,
 }
 
-// hasStakingEventsInTx checks if any event in the transaction belongs to a staking contract.
-// Event.Type format: "A.<address>.<ContractName>.<EventName>" — extract the 3rd segment.
-func hasStakingEventsInTx(events []models.Event) bool {
+// txEventContext holds pre-computed flags about what events exist in a transaction.
+// Used by canonicalizeFTTransfers to make better transfer_type decisions.
+type txEventContext struct {
+	HasStaking     bool
+	HasLostFound   bool
+	HasFees        bool // FlowFees.FeesDeducted present
+	HasBurnEvent   bool // explicit TokensBurned / Burner.TokensBurnt
+	HasMintEvent   bool // explicit TokensMinted
+}
+
+// eventContractName extracts the contract name (3rd segment) from a fully-qualified
+// event type like "A.<address>.<ContractName>.<EventName>".
+func eventContractName(eventType string) string {
+	parts := strings.Split(eventType, ".")
+	if len(parts) >= 3 {
+		return parts[2]
+	}
+	return ""
+}
+
+func eventName(eventType string) string {
+	parts := strings.Split(eventType, ".")
+	if len(parts) >= 4 {
+		return parts[3]
+	}
+	return ""
+}
+
+// buildTxEventContext scans events once and sets all context flags.
+func buildTxEventContext(events []models.Event) txEventContext {
+	var ctx txEventContext
 	for _, e := range events {
-		// Check ContractName field first (may be populated in some code paths)
-		if e.ContractName != "" && stakingContracts[e.ContractName] {
-			return true
+		cn := e.ContractName
+		if cn == "" {
+			cn = eventContractName(e.Type)
 		}
-		// Fallback: parse contract name from the fully-qualified event type
-		parts := strings.Split(e.Type, ".")
-		if len(parts) >= 3 && stakingContracts[parts[2]] {
-			return true
+		en := eventName(e.Type)
+
+		if stakingContracts[cn] {
+			ctx.HasStaking = true
+		}
+		if cn == "LostAndFound" {
+			ctx.HasLostFound = true
+		}
+		if cn == "FlowFees" && en == "FeesDeducted" {
+			ctx.HasFees = true
+		}
+		// Explicit burn/mint events (Cadence 1.0 Burner or legacy)
+		if en == "TokensBurned" || en == "TokensBurnt" {
+			ctx.HasBurnEvent = true
+		}
+		if en == "TokensMinted" {
+			ctx.HasMintEvent = true
 		}
 	}
-	return false
+	return ctx
 }
 
 type canonicalFTTransfer struct {
@@ -220,7 +261,8 @@ func sameTokenAmount(a, b canonicalFTTransfer) bool {
 }
 
 func isDuplicateBurn(transfer canonicalFTTransfer, all []canonicalFTTransfer) bool {
-	if transfer.TransferType != "burn" || transfer.FromAddress == "" || transfer.ToAddress != "" {
+	// Catch unpaired withdrawals (burn, stake, or reclassified transfer with no ToAddress)
+	if transfer.FromAddress == "" || transfer.ToAddress != "" {
 		return false
 	}
 	for _, candidate := range all {
@@ -235,7 +277,8 @@ func isDuplicateBurn(transfer canonicalFTTransfer, all []canonicalFTTransfer) bo
 }
 
 func isDuplicateMint(transfer canonicalFTTransfer, all []canonicalFTTransfer) bool {
-	if transfer.TransferType != "mint" || transfer.FromAddress != "" || transfer.ToAddress == "" {
+	// Catch unpaired deposits (mint, unstake, or reclassified transfer with no FromAddress)
+	if transfer.FromAddress != "" || transfer.ToAddress == "" {
 		return false
 	}
 	for _, candidate := range all {
@@ -249,8 +292,11 @@ func isDuplicateMint(transfer canonicalFTTransfer, all []canonicalFTTransfer) bo
 	return false
 }
 
-func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []repository.EVMTransactionRecord, hasStaking ...bool) []canonicalFTTransfer {
-	isStakingTx := len(hasStaking) > 0 && hasStaking[0]
+func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []repository.EVMTransactionRecord, evtCtx ...txEventContext) []canonicalFTTransfer {
+	var ctx txEventContext
+	if len(evtCtx) > 0 {
+		ctx = evtCtx[0]
+	}
 	executions := parseEVMExecutions(evmExecs)
 	base := make([]canonicalFTTransfer, 0, len(rows))
 	for _, row := range rows {
@@ -269,16 +315,27 @@ func canonicalizeFTTransfers(rows []repository.FTTransferRow, evmExecs []reposit
 		isFlowToken := transfer.ContractName == "FlowToken"
 		switch {
 		case transfer.FromAddress == "" && transfer.ToAddress != "":
-			if isStakingTx && isFlowToken {
+			// Deposit without paired withdraw
+			if ctx.HasStaking && isFlowToken {
 				transfer.TransferType = "unstake"
-			} else {
+			} else if ctx.HasMintEvent {
 				transfer.TransferType = "mint"
+			} else {
+				// Conservative: no explicit mint evidence → just "transfer"
+				transfer.TransferType = "transfer"
 			}
 		case transfer.FromAddress != "" && transfer.ToAddress == "":
-			if isStakingTx && isFlowToken {
+			// Withdraw without paired deposit
+			if ctx.HasStaking && isFlowToken {
 				transfer.TransferType = "stake"
-			} else {
+			} else if ctx.HasBurnEvent {
 				transfer.TransferType = "burn"
+			} else if ctx.HasFees && isFlowToken && parseAmountFloat(transfer.Amount) < 0.01 {
+				// Small FlowToken withdraw in a fee tx → likely fee-related, skip noise
+				continue
+			} else {
+				// Conservative: no explicit burn evidence → just "transfer"
+				transfer.TransferType = "transfer"
 			}
 		default:
 			transfer.TransferType = "transfer"
