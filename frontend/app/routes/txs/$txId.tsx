@@ -1088,14 +1088,13 @@ function TransactionDetail() {
             });
         }
 
-        // For ft_transfers: prefer API enrichment (has usd_value + canonicalization), fall back to derived, then SSR.
-        // Merge transfer_type + evm_to/from_address from derived enrichments into API data.
+        // For ft_transfers: use API data as base (has usd_value, token metadata),
+        // but event-decoder's transfer_type ALWAYS wins (more accurate, evidence-based).
         const derivedFt = enrichments?.ft_transfers;
         let ftTransfers = apiEnrichment?.ft_transfers?.length > 0
             ? apiEnrichment.ft_transfers
             : ((derivedFt && derivedFt.length > 0) ? derivedFt : transaction?.ft_transfers);
         if (ftTransfers && enrichments?.ft_transfers && enrichments.ft_transfers.length > 0 && ftTransfers !== enrichments.ft_transfers) {
-            // API data lacks transfer_type and evm addresses — merge from derived enrichments
             const derivedByKey = new Map<string, any>();
             for (const ft of enrichments!.ft_transfers) {
                 derivedByKey.set(`${ft.token}:${ft.event_index}`, ft);
@@ -1105,10 +1104,10 @@ function TransactionDetail() {
                 if (!derived) return ft;
                 return {
                     ...ft,
-                    transfer_type: ft.transfer_type || derived.transfer_type,
-                    evm_to_address: ft.evm_to_address || derived.evm_to_address,
-                    evm_from_address: ft.evm_from_address || derived.evm_from_address,
-                    // Fill in to/from from derived when API has empty addresses (e.g. bridge burns resolved by EVM call data)
+                    // Event-decoder transfer_type is source of truth (evidence-based)
+                    transfer_type: derived.transfer_type || ft.transfer_type,
+                    evm_to_address: derived.evm_to_address || ft.evm_to_address,
+                    evm_from_address: derived.evm_from_address || ft.evm_from_address,
                     to_address: ft.to_address || derived.to_address,
                     from_address: ft.from_address || derived.from_address,
                 };
