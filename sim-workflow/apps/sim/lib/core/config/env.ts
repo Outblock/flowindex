@@ -170,6 +170,17 @@ export const env = createEnv({
     AZURE_STORAGE_PROFILE_PICTURES_CONTAINER_NAME: z.string().optional(),          // Azure container for profile pictures
     AZURE_STORAGE_OG_IMAGES_CONTAINER_NAME: z.string().optional(),                 // Azure container for OpenGraph images
 
+    // Cloud Storage - Google Cloud Storage
+    GCS_PROJECT_ID:                        z.string().optional(),                  // GCP project ID
+    GCS_BUCKET_NAME:                       z.string().optional(),                  // GCS bucket for general file storage
+    GCS_CREDENTIALS_JSON:                  z.string().optional(),                  // GCS service account JSON (optional if using ADC)
+    GCS_KB_BUCKET_NAME:                    z.string().optional(),                  // GCS bucket for knowledge base files
+    GCS_EXECUTION_FILES_BUCKET_NAME:       z.string().optional(),                  // GCS bucket for workflow execution files
+    GCS_CHAT_BUCKET_NAME:                  z.string().optional(),                  // GCS bucket for chat logos
+    GCS_COPILOT_BUCKET_NAME:              z.string().optional(),                  // GCS bucket for copilot files
+    GCS_PROFILE_PICTURES_BUCKET_NAME:      z.string().optional(),                  // GCS bucket for profile pictures
+    GCS_OG_IMAGES_BUCKET_NAME:             z.string().optional(),                  // GCS bucket for OpenGraph images
+
     // Data Retention
     FREE_PLAN_LOG_RETENTION_DAYS:          z.string().optional(),                  // Log retention days for free plan users
 

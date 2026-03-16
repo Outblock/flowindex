@@ -3,7 +3,12 @@ import { mkdir } from 'fs/promises'
 import path, { join } from 'path'
 import { createLogger } from '@sim/logger'
 import { env } from '@/lib/core/config/env'
-import { getStorageProvider, USE_BLOB_STORAGE, USE_S3_STORAGE } from '@/lib/uploads/config'
+import {
+  getStorageProvider,
+  USE_BLOB_STORAGE,
+  USE_GCS_STORAGE,
+  USE_S3_STORAGE,
+} from '@/lib/uploads/config'
 
 const logger = createLogger('UploadsSetup')
 
@@ -21,6 +26,11 @@ export async function ensureUploadsDirectory() {
 
   if (USE_BLOB_STORAGE) {
     logger.info('Using Azure Blob storage, skipping local uploads directory creation')
+    return true
+  }
+
+  if (USE_GCS_STORAGE) {
+    logger.info('Using GCS storage, skipping local uploads directory creation')
     return true
   }
 
@@ -78,6 +88,18 @@ if (typeof process !== 'undefined') {
       logger.warn('Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for S3 storage')
     } else {
       logger.info('AWS S3 credentials found in environment variables')
+    }
+  } else if (USE_GCS_STORAGE) {
+    // Verify GCS credentials
+    if (!env.GCS_BUCKET_NAME) {
+      logger.warn('GCS storage is enabled but GCS_BUCKET_NAME is not set')
+    } else {
+      logger.info(`GCS bucket: ${env.GCS_BUCKET_NAME}`)
+      if (env.GCS_CREDENTIALS_JSON) {
+        logger.info('Using GCS service account credentials from GCS_CREDENTIALS_JSON')
+      } else {
+        logger.info('Using GCS Application Default Credentials (ADC)')
+      }
     }
   } else {
     // Local storage mode

@@ -1,6 +1,12 @@
 import { createLogger } from '@sim/logger'
-import { getStorageConfig, USE_BLOB_STORAGE, USE_S3_STORAGE } from '@/lib/uploads/config'
+import {
+  getStorageConfig,
+  USE_BLOB_STORAGE,
+  USE_GCS_STORAGE,
+  USE_S3_STORAGE,
+} from '@/lib/uploads/config'
 import type { BlobConfig } from '@/lib/uploads/providers/blob/types'
+import type { GcsConfig } from '@/lib/uploads/providers/gcs/types'
 import type { S3Config } from '@/lib/uploads/providers/s3/types'
 import type {
   DeleteFileOptions,
@@ -55,6 +61,20 @@ function createS3Config(config: StorageConfig): S3Config {
   return {
     bucket: config.bucket,
     region: config.region,
+  }
+}
+
+/**
+ * Create a GCS config from StorageConfig
+ * @throws Error if required properties are missing
+ */
+function createGcsConfig(config: StorageConfig): GcsConfig {
+  if (!config.bucket) {
+    throw new Error('GCS configuration missing required property: bucket')
+  }
+
+  return {
+    bucket: config.bucket,
   }
 }
 
@@ -145,6 +165,32 @@ export async function uploadFile(options: UploadFileOptions): Promise<FileInfo> 
     return uploadResult
   }
 
+  if (USE_GCS_STORAGE) {
+    const { uploadToGcs } = await import('@/lib/uploads/providers/gcs/client')
+    const uploadResult = await uploadToGcs(
+      file,
+      keyToUse,
+      contentType,
+      createGcsConfig(config),
+      file.length,
+      preserveKey,
+      metadata
+    )
+
+    if (metadata) {
+      await insertFileMetadataHelper(
+        uploadResult.key,
+        metadata,
+        context,
+        fileName,
+        contentType,
+        file.length
+      )
+    }
+
+    return uploadResult
+  }
+
   const { writeFile, mkdir } = await import('fs/promises')
   const { join, dirname } = await import('path')
   const { UPLOAD_DIR_SERVER } = await import('./setup.server')
@@ -195,6 +241,11 @@ export async function downloadFile(options: DownloadFileOptions): Promise<Buffer
       const { downloadFromS3 } = await import('@/lib/uploads/providers/s3/client')
       return downloadFromS3(key, createS3Config(config))
     }
+
+    if (USE_GCS_STORAGE) {
+      const { downloadFromGcs } = await import('@/lib/uploads/providers/gcs/client')
+      return downloadFromGcs(key, createGcsConfig(config))
+    }
   }
 
   const { readFile } = await import('fs/promises')
@@ -224,6 +275,11 @@ export async function deleteFile(options: DeleteFileOptions): Promise<void> {
     if (USE_S3_STORAGE) {
       const { deleteFromS3 } = await import('@/lib/uploads/providers/s3/client')
       return deleteFromS3(key, createS3Config(config))
+    }
+
+    if (USE_GCS_STORAGE) {
+      const { deleteFromGcs } = await import('@/lib/uploads/providers/gcs/client')
+      return deleteFromGcs(key, createGcsConfig(config))
     }
   }
 
@@ -281,6 +337,10 @@ export async function generatePresignedUploadUrl(
 
   if (USE_BLOB_STORAGE) {
     return generateBlobPresignedUrl(key, contentType, allMetadata, config, expirationSeconds)
+  }
+
+  if (USE_GCS_STORAGE) {
+    return generateGcsPresignedUrl(key, contentType, config, expirationSeconds)
   }
 
   throw new Error('Cloud storage not configured. Cannot generate presigned URL for local storage.')
@@ -395,6 +455,41 @@ async function generateBlobPresignedUrl(
 }
 
 /**
+ * Generate presigned URL for GCS
+ */
+async function generateGcsPresignedUrl(
+  key: string,
+  contentType: string,
+  config: { bucket?: string },
+  expirationSeconds: number
+): Promise<PresignedUrlResponse> {
+  const { getGcsClient } = await import('@/lib/uploads/providers/gcs/client')
+
+  if (!config.bucket) {
+    throw new Error('GCS configuration missing bucket')
+  }
+
+  const storage = getGcsClient()
+  const bucket = storage.bucket(config.bucket)
+  const blob = bucket.file(key)
+
+  const [url] = await blob.getSignedUrl({
+    action: 'write',
+    expires: Date.now() + expirationSeconds * 1000,
+    contentType,
+    version: 'v4',
+  })
+
+  return {
+    url,
+    key,
+    uploadHeaders: {
+      'Content-Type': contentType,
+    },
+  }
+}
+
+/**
  * Generate multiple presigned URLs at once (batch operation)
  */
 export async function generateBatchPresignedUploadUrls(
@@ -444,6 +539,11 @@ export async function generatePresignedDownloadUrl(
     return getPresignedUrlWithConfig(key, createBlobConfig(config), expirationSeconds)
   }
 
+  if (USE_GCS_STORAGE) {
+    const { getPresignedUrlWithConfig } = await import('@/lib/uploads/providers/gcs/client')
+    return getPresignedUrlWithConfig(key, createGcsConfig(config), expirationSeconds)
+  }
+
   const { getBaseUrl } = await import('@/lib/core/utils/urls')
   const baseUrl = getBaseUrl()
   return `${baseUrl}/api/files/serve/${encodeURIComponent(key)}`
@@ -453,7 +553,7 @@ export async function generatePresignedDownloadUrl(
  * Check if cloud storage is available
  */
 export function hasCloudStorage(): boolean {
-  return USE_BLOB_STORAGE || USE_S3_STORAGE
+  return USE_BLOB_STORAGE || USE_S3_STORAGE || USE_GCS_STORAGE
 }
 
 /**
