@@ -628,13 +628,23 @@ interface SolConnectionState {
   notificationHandler: (method: string, params: any) => void;
 }
 
-const solWss = new WebSocketServer({ port: SOL_LSP_PORT, path: '/lsp-sol' });
+let solWss: WebSocketServer | null = null;
+try {
+  solWss = new WebSocketServer({ port: SOL_LSP_PORT, path: '/lsp-sol' });
 
-solWss.on('listening', () => {
-  console.log(`[Sol LSP Server] WebSocket listening on :${SOL_LSP_PORT}/lsp-sol`);
-});
+  solWss.on('listening', () => {
+    console.log(`[Sol LSP Server] WebSocket listening on :${SOL_LSP_PORT}/lsp-sol`);
+  });
 
-solWss.on('connection', (socket: WebSocket) => {
+  solWss.on('error', (err: any) => {
+    console.error(`[Sol LSP Server] Failed to start: ${err.message}`);
+    solWss = null;
+  });
+} catch (err: any) {
+  console.error(`[Sol LSP Server] Failed to create: ${err.message}`);
+}
+
+solWss?.on('connection', (socket: WebSocket) => {
   console.log('[Sol LSP Server] Client connected');
   let state: SolConnectionState | null = null;
 
@@ -750,6 +760,6 @@ process.on('SIGTERM', async () => {
   }
   httpServer.close();
   wss.close();
-  solWss.close();
+  solWss?.close();
   process.exit(0);
 });
