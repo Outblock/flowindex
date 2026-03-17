@@ -7,6 +7,7 @@ import CadenceDiffEditor from './editor/CadenceDiffEditor';
 import { useLsp } from './editor/useLsp';
 import { useSolidityLsp } from './editor/useSolidityLsp';
 import { compileSolidity, compileSolidityMultiFile, deploySolidity, detectPragmaVersion } from './flow/evmExecute';
+import { useSolImports } from './flow/useSolImports';
 import type { DeployedContract } from './flow/evmContract';
 import { useAccount, useWalletClient, useSwitchChain } from 'wagmi';
 import { flowEvmMainnet, flowEvmTestnet } from './flow/evmChains';
@@ -889,6 +890,17 @@ export default function App() {
     isReady: solLspReady,
   } = useSolidityLsp(monacoInstance, project, hasSolFiles);
 
+  // Solidity npm import resolver — pre-fetches dependencies while editing
+  const solSources = useMemo(() => {
+    if (!hasSolFiles) return {};
+    const s: Record<string, string> = {};
+    for (const f of project.files) {
+      if (f.path.endsWith('.sol')) s[f.path] = f.content;
+    }
+    return s;
+  }, [hasSolFiles, project.files]);
+  const { loading: solImportsLoading, resolved: solResolvedDeps } = useSolImports(solSources, hasSolFiles);
+
   // File language detection
   const isSolidityFile = project.activeFile.endsWith('.sol');
   const activeFileLanguage = isSolidityFile ? 'sol' as const : 'cadence' as const;
@@ -1059,14 +1071,17 @@ export default function App() {
       // Auto-detect solc version from pragma (for display only; bundled compiler handles 0.8.x)
       const pragmaVersion = detectPragmaVersion(activeCode);
 
-      // Collect all .sol files for multi-file compilation
-      const solFiles = project.files.filter(f => f.path.endsWith('.sol'));
+      // Collect all .sol files + pre-resolved npm deps for compilation
+      const allSolSources: Record<string, string> = {};
+      for (const f of project.files) {
+        if (f.path.endsWith('.sol')) allSolSources[f.path] = f.content;
+      }
+      // Merge pre-fetched npm dependencies (won't re-download in worker)
+      for (const [path, content] of Object.entries(solResolvedDeps)) {
+        if (!allSolSources[path]) allSolSources[path] = content;
+      }
       let compilation;
-      if (solFiles.length > 1) {
-        const allSolSources: Record<string, string> = {};
-        for (const f of solFiles) {
-          allSolSources[f.path] = f.content;
-        }
+      if (Object.keys(allSolSources).length > 1) {
         compilation = await compileSolidityMultiFile(project.activeFile, allSolSources);
       } else {
         compilation = await compileSolidity(activeCode, project.activeFile);
@@ -1151,7 +1166,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain, selectedSigner, getPrivateKey]);
+  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain, selectedSigner, getPrivateKey, solResolvedDeps]);
 
   const handleRun = useCallback(async () => {
     if (loading) return;
@@ -2282,7 +2297,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            {loadingDeps && (
+            {(loadingDeps || solImportsLoading) && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 shrink-0">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span className="text-[11px] font-medium">Resolving imports...</span>
