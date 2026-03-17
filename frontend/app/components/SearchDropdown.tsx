@@ -55,10 +55,11 @@ interface FlatItem {
 }
 
 function evmItemRoute(item: BSSearchItem): string {
-  if (item.type === 'address' || item.type === 'contract') return `/accounts/${item.address}`;
-  if (item.type === 'transaction') return `/txs/${item.address}`;
-  if (item.type === 'token') return `/accounts/${item.address}`;
-  return `/accounts/${item.address}`;
+  const addr = item.address || item.address_hash;
+  if (item.type === 'address' || item.type === 'contract') return `/accounts/${addr}`;
+  if (item.type === 'transaction') return `/txs/${addr}`;
+  if (item.type === 'token') return `/accounts/${addr}`;
+  return `/accounts/${addr}`;
 }
 
 function getFlatItems(state: SearchState): FlatItem[] {
@@ -267,7 +268,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
     let globalIdx = 0;
 
     return (
-      <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-sm border border-white/10 bg-zinc-900 shadow-2xl">
+      <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-sm border border-white/10 bg-zinc-900 shadow-2xl">
         {/* Quick-match mode */}
         {state.mode === 'quick-match' && (
           <>

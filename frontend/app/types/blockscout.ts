@@ -142,6 +142,7 @@ export interface BSSearchItem {
   type: string;
   name: string | null;
   address: string | null;
+  address_hash?: string | null;
   url: string;
   symbol: string | null;
   token_type: string | null;
