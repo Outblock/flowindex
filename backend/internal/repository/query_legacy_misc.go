@@ -351,14 +351,18 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.accounts a
 			JOIN raw.blocks b ON b.height = a.first_seen_height
-			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+			WHERE a.first_seen_height >= (SELECT lo FROM bounds)
+			  AND a.first_seen_height < (SELECT hi FROM bounds)
+			  AND DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		coa_new AS (
 			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.coa_accounts c
 			JOIN raw.blocks b ON b.height = c.block_height
-			WHERE DATE(b.timestamp) IN (SELECT d FROM affected_dates)
+			WHERE c.block_height >= (SELECT lo FROM bounds)
+			  AND c.block_height < (SELECT hi FROM bounds)
+			  AND DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		),
 		evm_active AS (
@@ -412,7 +416,9 @@ func (r *Repository) RefreshAnalyticsDailyMetricsRange(ctx context.Context, from
 			SELECT DATE(b.timestamp) AS d, COUNT(*)::bigint AS cnt
 			FROM app.contract_versions cv
 			JOIN raw.blocks b ON b.height = cv.block_height
-			WHERE cv.version > 1
+			WHERE cv.block_height >= (SELECT lo FROM bounds)
+			  AND cv.block_height < (SELECT hi FROM bounds)
+			  AND cv.version > 1
 			  AND DATE(b.timestamp) IN (SELECT d FROM affected_dates)
 			GROUP BY 1
 		)
