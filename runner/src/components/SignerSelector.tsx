@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
-import { Wallet, ChevronDown, LogOut, Key, Zap, Droplets, Terminal, Shield } from 'lucide-react';
+import { Wallet, ChevronDown, LogOut, Key, Zap, Droplets, Terminal, Shield, Globe } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { FlowNetwork } from '../flow/networks';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import { useEvmAddress } from '../auth/useEvmAddress';
+import { useCoaAddress } from '../flow/useCoaAddress';
 
 export type SignerOption =
   | { type: 'none' }
   | { type: 'fcl' }
   | { type: 'local'; key: LocalKey; account: KeyAccount }
+  | { type: 'eoa'; key: LocalKey; evmAddress: string }
   | { type: 'passkey'; credentialId: string; flowAddress: string; publicKeySec1Hex: string };
 
 interface SignerSelectorProps {
@@ -40,6 +43,11 @@ function colorsFromAddress(addr: string): string[] {
   return [c1, c2, c3, c4, c5];
 }
 
+function truncateAddress(addr: string) {
+  if (addr.length <= 10) return addr;
+  return addr.slice(0, 6) + '...' + addr.slice(-4);
+}
+
 /** Fetch FLOW balance for an address. */
 function useFlowBalance(address: string | null) {
   const [balance, setBalance] = useState<string | null>(null);
@@ -59,11 +67,58 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
+/** Single local key entry in the dropdown — shows Flow address + COA + EOA */
+function LocalKeyEntry({
+  entry,
+  isSelected,
+  onSelect,
+}: {
+  entry: { key: LocalKey; account: KeyAccount };
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const colors = colorsFromAddress(entry.account.flowAddress);
+  const coaAddress = useCoaAddress(entry.account.flowAddress);
+  const eoaAddress = useEvmAddress(entry.key);
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-700 transition-colors ${
+        isSelected ? 'text-emerald-400' : 'text-zinc-300'
+      }`}
+    >
+      <Avatar size={16} name={`0x${entry.account.flowAddress}`} variant="beam" colors={colors} />
+      <div className="flex flex-col min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <span className="truncate">{entry.key.label || 'Wallet'}</span>
+          <span className="text-zinc-500 ml-auto flex-shrink-0">
+            {truncateAddress(entry.account.flowAddress)}
+          </span>
+        </div>
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          {coaAddress && (
+            <span className="text-[10px] text-blue-400/70 font-mono">
+              COA {truncateAddress(coaAddress)}
+            </span>
+          )}
+          {eoaAddress && (
+            <span className="text-[10px] text-violet-400/70 font-mono">
+              EOA {truncateAddress(eoaAddress)}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export default function SignerSelector({ selected, onSelect, localKeys, accountsMap, passkeyAccounts = [], onViewAccount, onOpenKeyManager, onOpenConnectModal, autoSign, onToggleAutoSign, simulateBeforeSend, onToggleSimulate, network }: SignerSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const selectedAddress = selected.type === 'local' ? selected.account.flowAddress
+    : selected.type === 'eoa' ? selected.evmAddress
     : selected.type === 'passkey' ? selected.flowAddress
     : null;
   const balance = useFlowBalance(selectedAddress);
@@ -75,11 +130,6 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  function truncateAddress(addr: string) {
-    if (addr.length <= 10) return addr;
-    return addr.slice(0, 6) + '...' + addr.slice(-4);
-  }
 
   // Build flat list of local key+account entries
   const localEntries: { key: LocalKey; account: KeyAccount }[] = [];
@@ -107,6 +157,8 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
       onOpenConnectModal();
     } else if (selected.type === 'local' && onViewAccount) {
       onViewAccount(selected.account.flowAddress);
+    } else if (selected.type === 'eoa') {
+      setOpen(!open);
     } else if (selected.type === 'passkey' && onViewAccount) {
       onViewAccount(selected.flowAddress);
     } else {
@@ -132,6 +184,15 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
           ) : (
             <span className="text-xs text-zinc-500">...</span>
           )}
+        </>
+      );
+    }
+    if (selected.type === 'eoa') {
+      const truncAddr = truncateAddress(selected.evmAddress);
+      return (
+        <>
+          <Globe className="w-3 h-3 text-violet-400" />
+          <span className="text-xs text-violet-400 font-mono">{truncAddr}</span>
         </>
       );
     }
@@ -190,29 +251,19 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
               <div className="px-3 py-1 text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-700">
                 Local Wallet
               </div>
-              {localEntries.map((entry) => {
-                const isSelected =
-                  selected.type === 'local' &&
-                  selected.key.id === entry.key.id &&
-                  selected.account.flowAddress === entry.account.flowAddress &&
-                  selected.account.keyIndex === entry.account.keyIndex;
-                const colors = colorsFromAddress(entry.account.flowAddress);
-                return (
-                  <button
-                    key={`${entry.key.id}-${entry.account.flowAddress}-${entry.account.keyIndex}`}
-                    onClick={() => { onSelect({ type: 'local', key: entry.key, account: entry.account }); setOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-zinc-700 transition-colors ${
-                      isSelected ? 'text-emerald-400' : 'text-zinc-300'
-                    }`}
-                  >
-                    <Avatar size={16} name={`0x${entry.account.flowAddress}`} variant="beam" colors={colors} />
-                    <span className="truncate">{entry.key.label || 'Key'}</span>
-                    <span className="text-zinc-500 ml-auto flex-shrink-0">
-                      {truncateAddress(entry.account.flowAddress)}
-                    </span>
-                  </button>
-                );
-              })}
+              {localEntries.map((entry) => (
+                <LocalKeyEntry
+                  key={`${entry.key.id}-${entry.account.flowAddress}-${entry.account.keyIndex}`}
+                  entry={entry}
+                  isSelected={
+                    selected.type === 'local' &&
+                    selected.key.id === entry.key.id &&
+                    selected.account.flowAddress === entry.account.flowAddress &&
+                    selected.account.keyIndex === entry.account.keyIndex
+                  }
+                  onSelect={() => { onSelect({ type: 'local', key: entry.key, account: entry.account }); setOpen(false); }}
+                />
+              ))}
             </>
           )}
 
@@ -276,7 +327,7 @@ export default function SignerSelector({ selected, onSelect, localKeys, accounts
                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-400 hover:bg-zinc-700 transition-colors"
               >
                 <Key className="w-3.5 h-3.5" />
-                Manage Keys
+                Manage Wallets
               </button>
             </>
           )}

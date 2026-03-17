@@ -465,6 +465,12 @@ export default function App() {
         }));
       } else if (signer.type === 'fcl') {
         localStorage.setItem('flow-selected-signer', JSON.stringify({ type: 'fcl' }));
+      } else if (signer.type === 'eoa') {
+        localStorage.setItem('flow-selected-signer', JSON.stringify({
+          type: 'eoa',
+          keyId: signer.key.id,
+          evmAddress: signer.evmAddress,
+        }));
       } else if (signer.type === 'passkey') {
         localStorage.setItem('flow-selected-signer', JSON.stringify({
           type: 'passkey',
@@ -557,26 +563,38 @@ export default function App() {
   useEffect(() => {
     if (hasRestoredSigner.current) return;
 
-    // Check if we expect local keys to load (saved signer is local type)
+    // Check if we expect local keys to load (saved signer is local/eoa type)
     // If so, wait until localKeys are populated
     try {
       const saved = localStorage.getItem('flow-selected-signer');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.type === 'local' && localKeys.length === 0) return; // keys not loaded yet
+        if ((parsed.type === 'local' || parsed.type === 'eoa') && localKeys.length === 0) return;
       }
     } catch {}
 
-    // If keys exist but no accounts discovered yet, wait
-    const hasLocalAccounts = localKeys.some(k => (accountsMap[k.id] || []).length > 0);
-    if (localKeys.length > 0 && !hasLocalAccounts) return;
+    // If keys exist but no accounts discovered yet, wait (skip for eoa — doesn't need chain accounts)
+    try {
+      const saved = localStorage.getItem('flow-selected-signer');
+      const parsedType = saved ? JSON.parse(saved).type : null;
+      if (parsedType !== 'eoa') {
+        const hasLocalAccounts = localKeys.some(k => (accountsMap[k.id] || []).length > 0);
+        if (localKeys.length > 0 && !hasLocalAccounts) return;
+      }
+    } catch {}
 
     hasRestoredSigner.current = true;
     const saved = localStorage.getItem('flow-selected-signer');
     try {
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.type === 'local') {
+        if (parsed.type === 'eoa') {
+          const key = localKeys.find(k => k.id === parsed.keyId);
+          if (key && key.evmAddress) {
+            setSelectedSigner({ type: 'eoa', key, evmAddress: key.evmAddress });
+            return;
+          }
+        } else if (parsed.type === 'local') {
           const key = localKeys.find(k => k.id === parsed.keyId);
           const accounts = key ? (accountsMap[key.id] || []) : [];
           const account = accounts.find(a => a.flowAddress === parsed.address && a.keyIndex === parsed.keyIndex);
@@ -601,10 +619,18 @@ export default function App() {
     // Auto-select first local account only if no prior preference was saved
     // (i.e. first-time user). If saved was explicitly cleared (disconnect), stay as 'none'.
     if (!saved) {
+      // Try auto-selecting first local Cadence account
       for (const key of localKeys) {
         const accounts = accountsMap[key.id];
         if (accounts && accounts.length > 0) {
           setSelectedSigner({ type: 'local', key, account: accounts[0] });
+          return;
+        }
+      }
+      // Fallback: auto-select first EOA if no Cadence accounts
+      for (const key of localKeys) {
+        if (key.evmAddress) {
+          setSelectedSigner({ type: 'eoa', key, evmAddress: key.evmAddress });
           return;
         }
       }
@@ -2225,7 +2251,7 @@ export default function App() {
         {/* Editor + Results (center) */}
         <div ref={editorContainerRef} className="flex flex-col flex-1 min-w-0 min-h-0">
           {/* Editor area */}
-          <div className="flex flex-col min-h-0" style={{ height: hasBottomPanel ? `${vertSplit.fraction * 100}%` : '100%' }}>
+          <div className={`flex flex-col min-h-0 ${hasBottomPanel ? '' : 'flex-1'}`} style={hasBottomPanel ? { height: `${vertSplit.fraction * 100}%` } : undefined}>
             <TabBar
               project={project}
               onSelectFile={handleSelectTab}
@@ -2248,7 +2274,7 @@ export default function App() {
                 <span className="text-[11px] font-medium">Resolving imports...</span>
               </div>
             )}
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               {activePendingDiff ? (
                 <CadenceDiffEditor
                   key={`diff-${project.activeFile}`}
@@ -2610,8 +2636,13 @@ export default function App() {
                 onCreateAccount={createAccount}
                 onRevealSecret={revealSecret}
                 onViewAccount={handleViewAccount}
-                selectedAccount={selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex } : null}
+                selectedAccount={
+                  selectedSigner.type === 'local' ? { keyId: selectedSigner.key.id, address: selectedSigner.account.flowAddress, keyIndex: selectedSigner.account.keyIndex }
+                  : selectedSigner.type === 'eoa' ? { keyId: selectedSigner.key.id, address: selectedSigner.evmAddress, keyIndex: -1 }
+                  : null
+                }
                 onSelectAccount={(key, account) => { persistSigner({ type: 'local', key, account }); setShowKeyManager(false); }}
+                onSelectEoa={(key) => { persistSigner({ type: 'eoa', key, evmAddress: key.evmAddress! }); setShowKeyManager(false); }}
                 initialMode={keyManagerInitialMode}
               />
             </Suspense>

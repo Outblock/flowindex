@@ -4,6 +4,9 @@
 
 body { margin: 0; font-family: 'GeistMono', 'SF Mono', monospace; }
 
+/* RainbowKitProvider injects a wrapper div that doesn't stretch to fill the viewport */
+#root > [data-rk] { height: 100%; }
+
 /* ── Execution error decorations in Monaco editor ── */
 .execution-error-line {
   background: rgba(239, 68, 68, 0.15) !important;

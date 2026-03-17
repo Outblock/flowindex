@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import { useEvmAddress } from '../auth/useEvmAddress';
 import type { RevealedSecret } from '../auth/useLocalKeys';
 import type { FlowNetwork } from '../flow/networks';
+import { useCoaAddress } from '../flow/useCoaAddress';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
 function colorsFromAddress(addr: string): string[] {
@@ -85,6 +87,7 @@ interface KeyManagerProps {
   onViewAccount?: (address: string) => void;
   selectedAccount?: { keyId: string; address: string; keyIndex: number } | null;
   onSelectAccount?: (key: LocalKey, account: KeyAccount) => void;
+  onSelectEoa?: (key: LocalKey) => void;
   initialMode?: 'create' | 'import';
 }
 
@@ -188,6 +191,7 @@ export default function KeyManager({
   onViewAccount,
   selectedAccount,
   onSelectAccount,
+  onSelectEoa,
   initialMode,
 }: KeyManagerProps) {
   const [tab, setTab] = useState<'accounts' | 'keys'>(initialMode ? 'keys' : 'accounts');
@@ -270,13 +274,16 @@ export default function KeyManager({
     ]);
   };
 
-  // Build flat account list for Accounts tab
+  // Build flat account list for Accounts tab (Cadence accounts from chain)
   const allAccounts: { key: LocalKey; account: KeyAccount }[] = [];
   for (const key of localKeys) {
     for (const acc of accountsMap[key.id] || []) {
       allAccounts.push({ key, account: acc });
     }
   }
+  // Keys with EOA addresses
+  const keysWithEoa = localKeys.filter((k) => !!k.evmAddress);
+  const hasAnyAccount = allAccounts.length > 0 || keysWithEoa.length > 0;
 
   return (
     <div className="flex flex-col h-full bg-zinc-900 border-l border-zinc-700">
@@ -301,7 +308,7 @@ export default function KeyManager({
               : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >
-          Accounts ({allAccounts.length})
+          Accounts ({allAccounts.length + keysWithEoa.length})
         </button>
         <button
           onClick={() => setTab('keys')}
@@ -327,7 +334,7 @@ export default function KeyManager({
         {/* ── Accounts Tab ── */}
         {tab === 'accounts' && (
           <div className="space-y-1.5">
-            {allAccounts.length === 0 ? (
+            {!hasAnyAccount ? (
               <div className="text-center py-8 space-y-2">
                 <p className="text-zinc-500 text-xs">No accounts yet.</p>
                 <button onClick={() => setTab('keys')} className={btnSecondary}>
@@ -336,54 +343,32 @@ export default function KeyManager({
                 </button>
               </div>
             ) : (
-              allAccounts.map(({ key, account }) => {
-                const isSelected =
-                  selectedAccount?.keyId === key.id &&
-                  selectedAccount?.address === account.flowAddress &&
-                  selectedAccount?.keyIndex === account.keyIndex;
-                return (
-                  <div
+              <>
+                {/* EOA accounts (always available from key) */}
+                {keysWithEoa.map((lk) => (
+                  <EoaAccountCard
+                    key={`eoa-${lk.id}`}
+                    localKey={lk}
+                    isSelected={selectedAccount?.keyId === lk.id && selectedAccount?.address === lk.evmAddress}
+                    onSelect={() => onSelectEoa?.(lk)}
+                  />
+                ))}
+                {/* Cadence accounts (discovered on-chain) */}
+                {allAccounts.map(({ key, account }) => (
+                  <AccountCard
                     key={`${key.id}-${account.flowAddress}-${account.keyIndex}`}
-                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-500/10 border border-emerald-500/30'
-                        : 'bg-zinc-800 border border-zinc-700 hover:border-zinc-600'
-                    }`}
-                    onClick={() => onSelectAccount?.(key, account)}
-                  >
-                    <Avatar
-                      size={28}
-                      name={account.flowAddress}
-                      variant="beam"
-                      colors={colorsFromAddress(account.flowAddress)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-xs font-mono ${isSelected ? 'text-emerald-300' : 'text-zinc-200'}`}>
-                          0x{account.flowAddress}
-                        </span>
-                        <CopyButton text={`0x${account.flowAddress}`} />
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-zinc-500">{key.label}</span>
-                        <span className="text-[10px] text-zinc-600">key #{account.keyIndex}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isSelected && (
-                        <span className="text-[10px] text-emerald-400 font-medium">Active</span>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onViewAccount?.(account.flowAddress); }}
-                        className="text-zinc-600 hover:text-zinc-300 p-1 transition-colors"
-                        title="View account details"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
+                    localKey={key}
+                    account={account}
+                    isSelected={
+                      selectedAccount?.keyId === key.id &&
+                      selectedAccount?.address === account.flowAddress &&
+                      selectedAccount?.keyIndex === account.keyIndex
+                    }
+                    onSelect={() => onSelectAccount?.(key, account)}
+                    onViewAccount={() => onViewAccount?.(account.flowAddress)}
+                  />
+                ))}
+              </>
             )}
           </div>
         )}
@@ -488,11 +473,11 @@ export default function KeyManager({
             {/* Local keys list */}
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-zinc-300">
-                Stored Keys ({localKeys.length})
+                Stored Wallets ({localKeys.length})
               </h3>
               {localKeys.length === 0 ? (
                 <p className="text-zinc-500 text-xs text-center py-6">
-                  No local keys yet. Create or import one above.
+                  No local wallets yet. Create or import one above.
                 </p>
               ) : (
                 localKeys.map((key) => (
@@ -1070,6 +1055,181 @@ function ImportKeystoreForm({
 }
 
 // ---------------------------------------------------------------------------
+// EOA Account Card (Accounts tab) — always available from key
+// ---------------------------------------------------------------------------
+
+function EoaAccountCard({ localKey, isSelected, onSelect }: { localKey: LocalKey; isSelected?: boolean; onSelect?: () => void }) {
+  const evmAddr = localKey.evmAddress!;
+
+  return (
+    <div
+      className={`rounded-lg px-3 py-2.5 transition-colors cursor-pointer ${
+        isSelected
+          ? 'bg-violet-500/10 border border-violet-500/30'
+          : 'bg-zinc-800 border border-zinc-700 hover:border-zinc-600'
+      }`}
+      onClick={onSelect}
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="w-7 h-7 rounded-full bg-violet-500/15 flex items-center justify-center shrink-0">
+          <span className="text-[10px] font-bold text-violet-400">EVM</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs font-mono ${isSelected ? 'text-violet-300' : 'text-zinc-200'}`}>{evmAddr}</span>
+            <CopyButton text={evmAddr} />
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] text-zinc-500">{localKey.label}</span>
+            <span className="text-[10px] text-violet-400/60">EOA</span>
+          </div>
+        </div>
+        {isSelected && (
+          <span className="text-[10px] text-violet-400 font-medium shrink-0">Active</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account Card (Accounts tab) — shows Cadence + COA + EOA
+// ---------------------------------------------------------------------------
+
+function AccountCard({
+  localKey,
+  account,
+  isSelected,
+  onSelect,
+  onViewAccount,
+}: {
+  localKey: LocalKey;
+  account: KeyAccount;
+  isSelected: boolean;
+  onSelect: () => void;
+  onViewAccount: () => void;
+}) {
+  const coaAddress = useCoaAddress(account.flowAddress);
+  const eoaAddress = useEvmAddress(localKey);
+
+  return (
+    <div
+      className={`rounded-lg px-3 py-2.5 transition-colors cursor-pointer ${
+        isSelected
+          ? 'bg-emerald-500/10 border border-emerald-500/30'
+          : 'bg-zinc-800 border border-zinc-700 hover:border-zinc-600'
+      }`}
+      onClick={onSelect}
+    >
+      <div className="flex items-center gap-2.5">
+        <Avatar
+          size={28}
+          name={account.flowAddress}
+          variant="beam"
+          colors={colorsFromAddress(account.flowAddress)}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs font-mono ${isSelected ? 'text-emerald-300' : 'text-zinc-200'}`}>
+              0x{account.flowAddress}
+            </span>
+            <CopyButton text={`0x${account.flowAddress}`} />
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-[10px] text-zinc-500">{localKey.label}</span>
+            <span className="text-[10px] text-zinc-600">key #{account.keyIndex}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {isSelected && (
+            <span className="text-[10px] text-emerald-400 font-medium">Active</span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onViewAccount(); }}
+            className="text-zinc-600 hover:text-zinc-300 p-1 transition-colors"
+            title="View account details"
+          >
+            <ExternalLink className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+      {/* COA + EOA addresses */}
+      <div className="mt-1.5 ml-[38px] space-y-0.5">
+        {coaAddress && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-blue-400 w-7 shrink-0">COA</span>
+            <span className="text-[10px] text-blue-300/70 font-mono">{coaAddress}</span>
+            <CopyButton text={coaAddress} />
+          </div>
+        )}
+        {eoaAddress && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-violet-400 w-7 shrink-0">EOA</span>
+            <span className="text-[10px] text-violet-300/70 font-mono">{eoaAddress}</span>
+            <CopyButton text={eoaAddress} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account entry inside LocalKeyCard — shows Cadence address + COA + EOA
+// ---------------------------------------------------------------------------
+
+function LocalKeyAccountEntry({
+  localKey,
+  account,
+  onViewAccount,
+}: {
+  localKey: LocalKey;
+  account: KeyAccount;
+  onViewAccount: () => void;
+}) {
+  const coaAddress = useCoaAddress(account.flowAddress);
+  const eoaAddress = useEvmAddress(localKey);
+
+  return (
+    <div
+      onClick={onViewAccount}
+      className="w-full bg-zinc-900 rounded px-2 py-1.5 hover:bg-zinc-700/50 transition-colors group text-left cursor-pointer"
+    >
+      <div className="flex items-center gap-2">
+        <Avatar size={18} name={account.flowAddress} variant="beam" colors={colorsFromAddress(account.flowAddress)} />
+        <div className="flex flex-col min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-emerald-400 shrink-0">Cadence</span>
+            <span className="text-[11px] text-zinc-200 font-mono">0x{account.flowAddress}</span>
+            <CopyButton text={`0x${account.flowAddress}`} />
+          </div>
+          <span className="text-[9px] text-zinc-500">
+            #{account.keyIndex} · {account.sigAlgo === 'ECDSA_secp256k1' ? 'secp256k1' : 'P256'} · {account.hashAlgo}
+          </span>
+        </div>
+        <ExternalLink className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+      </div>
+      <div className="mt-1 ml-[26px] space-y-0.5">
+        {coaAddress && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-blue-400 w-8 shrink-0">COA</span>
+            <span className="text-[10px] text-blue-300/70 font-mono truncate">{coaAddress}</span>
+            <CopyButton text={coaAddress} />
+          </div>
+        )}
+        {eoaAddress && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-violet-400 w-8 shrink-0">EOA</span>
+            <span className="text-[10px] text-violet-300/70 font-mono truncate">{eoaAddress}</span>
+            <CopyButton text={eoaAddress} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Local Key Card
 // ---------------------------------------------------------------------------
 
@@ -1223,6 +1383,13 @@ function LocalKeyCard({
           <span className="text-[10px] text-zinc-400 font-mono">{truncateKey(localKey.publicKeySecp256k1)}</span>
           <CopyButton text={localKey.publicKeySecp256k1} />
         </div>
+        {localKey.evmAddress && (
+          <div className="flex items-center gap-1 mt-0.5 ml-5">
+            <span className="text-[10px] text-violet-400">EOA:</span>
+            <span className="text-[10px] text-violet-300 font-mono">{localKey.evmAddress}</span>
+            <CopyButton text={localKey.evmAddress} />
+          </div>
+        )}
         <div className="flex items-center gap-2 mt-0.5 ml-5">
           <span className="text-[10px] text-zinc-500">{formatDate(localKey.createdAt)}</span>
           {localKey.hasPassword && (
@@ -1232,24 +1399,16 @@ function LocalKeyCard({
           )}
         </div>
 
-        {/* Accounts shown right under header with avatars */}
+        {/* Accounts shown right under header with avatars + COA/EOA */}
         {accounts.length > 0 && (
           <div className="mt-2 ml-5 space-y-1">
             {accounts.map((acc, i) => (
-              <button
+              <LocalKeyAccountEntry
                 key={`${acc.flowAddress}-${acc.keyIndex}-${i}`}
-                onClick={() => onViewAccount?.(acc.flowAddress)}
-                className="w-full flex items-center gap-2 bg-zinc-900 rounded px-2 py-1.5 hover:bg-zinc-700/50 transition-colors group text-left"
-              >
-                <Avatar size={18} name={acc.flowAddress} variant="beam" colors={colorsFromAddress(acc.flowAddress)} />
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[11px] text-zinc-200 font-mono">{acc.flowAddress}</span>
-                  <span className="text-[9px] text-zinc-500">
-                    #{acc.keyIndex} · {acc.sigAlgo === 'ECDSA_secp256k1' ? 'secp256k1' : 'P256'} · {acc.hashAlgo}
-                  </span>
-                </div>
-                <ExternalLink className="w-3 h-3 text-zinc-600 group-hover:text-zinc-400 ml-auto shrink-0" />
-              </button>
+                localKey={localKey}
+                account={acc}
+                onViewAccount={() => onViewAccount?.(acc.flowAddress)}
+              />
             ))}
           </div>
         )}

@@ -116,7 +116,7 @@ export default function SettingsPanel({ lspMode, onLspModeChange, activeMode, on
             }`}
           >
             <KeyIcon className="w-3.5 h-3.5" />
-            Manage Keys
+            Manage Wallets
           </button>
         </div>
       </div>

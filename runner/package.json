@@ -23,6 +23,7 @@
     "@outblock/cadence-language-server": "2.1.2",
     "@outblock/flowtoken": "workspace:*",
     "@outblock/wallet-core-lite": "^0.1.0",
+    "@rainbow-me/rainbowkit": "^2.2.10",
     "@supabase/supabase-js": "^2.98.0",
     "@tanstack/react-query": "^5.90.21",
     "ai": "^6.0.101",

@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Wallet, Key, Zap, Droplets, X, ExternalLink, Plus, Download, Loader2, Check, Settings2 } from 'lucide-react';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import Avatar from 'boring-avatars';
 import { fcl } from '../flow/fclConfig';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import { useEvmAddress } from '../auth/useEvmAddress';
 import type { SignerOption } from './SignerSelector';
 import type { FlowNetwork } from '../flow/networks';
+import { useCoaAddress } from '../flow/useCoaAddress';
 
 interface ConnectModalProps {
   open: boolean;
@@ -29,6 +32,11 @@ interface ConnectModalProps {
 /** Flow logo image */
 function FlowLogo({ size = 20 }: { size?: number }) {
   return <img src="/flow-logo.png" alt="Flow" width={size} height={size} className="rounded-full" />;
+}
+
+/** ETH logo image */
+function EthLogo({ size = 20, className }: { size?: number; className?: string }) {
+  return <img src="/eth.svg" alt="ETH" width={size} height={size} className={className} />;
 }
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
@@ -66,7 +74,74 @@ function useFlowBalance(address: string | null) {
   return balance;
 }
 
-type HoveredEntry = { key: LocalKey; account: KeyAccount } | 'local-wallet' | 'fcl' | null;
+/** Right-panel detail for a hovered local key account — shows Cadence + COA + EOA */
+function LocalAccountDetail({
+  entry,
+  balance,
+  onConnect,
+}: {
+  entry: { key: LocalKey; account: KeyAccount };
+  balance: string | null;
+  onConnect: () => void;
+}) {
+  const coaAddress = useCoaAddress(entry.account.flowAddress);
+  const eoaAddress = useEvmAddress(entry.key);
+
+  return (
+    <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
+      <Avatar
+        size={64}
+        name={`0x${entry.account.flowAddress}`}
+        variant="beam"
+        colors={colorsFromAddress(entry.account.flowAddress)}
+      />
+      <div className="text-center">
+        <div className="text-sm font-medium text-zinc-200">
+          {entry.key.label || 'Local Wallet'}
+        </div>
+      </div>
+      {/* Address list: Cadence + COA + EOA */}
+      <div className="w-full max-w-[280px] space-y-1.5 bg-zinc-800/50 rounded-lg px-3 py-2">
+        <a href={`https://flowindex.io/account/0x${entry.account.flowAddress}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group">
+          <span className="text-[10px] text-emerald-400 w-12 shrink-0">Cadence</span>
+          <span className="text-[11px] text-zinc-300 group-hover:text-emerald-300 font-mono truncate transition-colors">0x{entry.account.flowAddress}</span>
+          <ExternalLink className="w-2.5 h-2.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+        </a>
+        {coaAddress && (
+          <a href={`https://flowindex.io/account/${coaAddress}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group">
+            <span className="text-[10px] text-blue-400 w-12 shrink-0">COA</span>
+            <span className="text-[11px] text-blue-300/70 group-hover:text-blue-300 font-mono truncate transition-colors">{coaAddress}</span>
+            <ExternalLink className="w-2.5 h-2.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+          </a>
+        )}
+        {eoaAddress && (
+          <a href={`https://flowindex.io/account/${eoaAddress}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group">
+            <span className="text-[10px] text-violet-400 w-12 shrink-0">EOA</span>
+            <span className="text-[11px] text-violet-300/70 group-hover:text-violet-300 font-mono truncate transition-colors">{eoaAddress}</span>
+            <ExternalLink className="w-2.5 h-2.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+          </a>
+        )}
+      </div>
+      {balance !== null ? (
+        <div className="flex items-center gap-2 bg-zinc-800/80 px-3 py-1.5 rounded-full">
+          <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 bg-zinc-800/80 px-3 py-1.5 rounded-full">
+          <span className="text-xs text-zinc-500">Loading balance...</span>
+        </div>
+      )}
+      <button
+        onClick={onConnect}
+        className="mt-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+      >
+        Connect
+      </button>
+    </div>
+  );
+}
+
+type HoveredEntry = { key: LocalKey; account: KeyAccount } | { key: LocalKey; eoa: true } | 'local-wallet' | 'fcl' | 'evm' | null;
 
 type CreateStep =
   | { status: 'generating-key' }
@@ -85,20 +160,26 @@ export default function ConnectModal({
   const [hovered, setHovered] = useState<HoveredEntry>(null);
   const [createStep, setCreateStep] = useState<CreateStep | null>(null);
   const createAbortRef = useRef(false);
+  const { openConnectModal: openRainbowKit } = useConnectModal();
 
   // Build flat list of local key+account entries
   const localEntries: { key: LocalKey; account: KeyAccount }[] = [];
+  const eoaOnlyKeys: LocalKey[] = [];
   for (const key of localKeys) {
     const accounts = accountsMap[key.id] || [];
-    for (const account of accounts) {
-      localEntries.push({ key, account });
+    if (accounts.length > 0) {
+      for (const account of accounts) {
+        localEntries.push({ key, account });
+      }
+    } else if (key.evmAddress) {
+      eoaOnlyKeys.push(key);
     }
   }
 
-  const hasLocalKeys = localEntries.length > 0;
+  const hasLocalKeys = localEntries.length > 0 || eoaOnlyKeys.length > 0;
 
-  // Get address for balance lookup
-  const hoveredAddress = hovered && hovered !== 'fcl' && hovered !== 'local-wallet'
+  // Get address for balance lookup (only for Cadence account entries)
+  const hoveredAddress = hovered && typeof hovered === 'object' && 'account' in hovered
     ? hovered.account.flowAddress : null;
   const balance = useFlowBalance(hoveredAddress);
 
@@ -326,32 +407,80 @@ export default function ConnectModal({
               Local Wallet
             </div>
             {hasLocalKeys ? (
-              // Show existing local key accounts
-              localEntries.map((entry) => {
-                const colors = colorsFromAddress(entry.account.flowAddress);
-                const isHovered = hovered && hovered !== 'fcl' && hovered !== 'local-wallet' &&
-                  hovered.key.id === entry.key.id &&
-                  hovered.account.flowAddress === entry.account.flowAddress &&
-                  hovered.account.keyIndex === entry.account.keyIndex;
-                return (
-                  <button
-                    key={`${entry.key.id}-${entry.account.flowAddress}-${entry.account.keyIndex}`}
-                    onClick={() => handleSelect({ type: 'local', key: entry.key, account: entry.account })}
-                    onMouseEnter={() => setHovered(entry)}
-                    className={`w-full flex items-center gap-2 px-2 py-2 text-xs rounded-lg transition-colors ${
-                      isHovered ? 'bg-zinc-700/80 text-emerald-400' : 'text-zinc-300 hover:bg-zinc-800'
+              <>
+                {/* Cadence account entries */}
+                {localEntries.map((entry) => {
+                  const colors = colorsFromAddress(entry.account.flowAddress);
+                  const isHovered = hovered && typeof hovered === 'object' && 'account' in hovered &&
+                    hovered.key.id === entry.key.id &&
+                    hovered.account.flowAddress === entry.account.flowAddress &&
+                    hovered.account.keyIndex === entry.account.keyIndex;
+                  return (
+                    <button
+                      key={`${entry.key.id}-${entry.account.flowAddress}-${entry.account.keyIndex}`}
+                      onClick={() => handleSelect({ type: 'local', key: entry.key, account: entry.account })}
+                      onMouseEnter={() => setHovered(entry)}
+                      className={`w-full flex items-center gap-2 px-2 py-2 text-xs rounded-lg transition-colors ${
+                        isHovered ? 'bg-zinc-700/80 text-emerald-400' : 'text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Avatar size={20} name={`0x${entry.account.flowAddress}`} variant="beam" colors={colors} />
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="truncate text-xs">{entry.key.label || 'Key'}</span>
+                        <span className="text-[10px] text-zinc-500 truncate">
+                          {truncateAddress(entry.account.flowAddress)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+                {/* EOA-only keys (no Cadence accounts) */}
+                {eoaOnlyKeys.map((key) => {
+                  const colors = colorsFromAddress(key.evmAddress!);
+                  const isHovered = hovered && typeof hovered === 'object' && 'eoa' in hovered &&
+                    hovered.key.id === key.id;
+                  return (
+                    <button
+                      key={`eoa-${key.id}`}
+                      onClick={() => handleSelect({ type: 'eoa', key, evmAddress: key.evmAddress! })}
+                      onMouseEnter={() => setHovered({ key, eoa: true })}
+                      className={`w-full flex items-center gap-2 px-2 py-2 text-xs rounded-lg transition-colors ${
+                        isHovered ? 'bg-zinc-700/80 text-violet-400' : 'text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Avatar size={20} name={key.evmAddress!} variant="beam" colors={colors} />
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="truncate text-xs">{key.label || 'Key'}</span>
+                        <span className="text-[10px] text-zinc-500 truncate">
+                          {truncateAddress(key.evmAddress!)}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-violet-400/60 ml-auto shrink-0">EOA</span>
+                    </button>
+                  );
+                })}
+                {/* Auto Sign toggle — only for local keys */}
+                <button
+                  onClick={() => onToggleAutoSign(!autoSign)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 mt-1 text-xs text-zinc-400 hover:bg-zinc-800 rounded-lg transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Zap className={`w-3.5 h-3.5 ${autoSign ? 'text-amber-400' : ''}`} />
+                    <span>Auto Sign</span>
+                  </div>
+                  <div
+                    className={`relative w-7 h-4 rounded-full transition-colors ${
+                      autoSign ? 'bg-amber-500' : 'bg-zinc-600'
                     }`}
                   >
-                    <Avatar size={20} name={`0x${entry.account.flowAddress}`} variant="beam" colors={colors} />
-                    <div className="flex flex-col items-start min-w-0">
-                      <span className="truncate text-xs">{entry.key.label || 'Key'}</span>
-                      <span className="text-[10px] text-zinc-500 truncate">
-                        {truncateAddress(entry.account.flowAddress)}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                        autoSign ? 'translate-x-3' : ''
+                      }`}
+                    />
+                  </div>
+                </button>
+              </>
             ) : (
               // No local keys — show a single "Local Wallet" item
               <button
@@ -369,11 +498,21 @@ export default function ConnectModal({
             )}
           </div>
 
-          {/* FCL Wallet group */}
+          {/* External Wallets group */}
           <div className="px-2 pb-1">
             <div className="px-2 py-1.5 text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
               External Wallet
             </div>
+            <button
+              onClick={() => { onClose(); if (openRainbowKit) openRainbowKit(); }}
+              onMouseEnter={() => setHovered('evm')}
+              className={`w-full flex items-center gap-2 px-2 py-2 text-xs rounded-lg transition-colors ${
+                hovered === 'evm' ? 'bg-zinc-700/80 text-violet-400' : 'text-zinc-300 hover:bg-zinc-800'
+              }`}
+            >
+              <EthLogo size={20} className="flex-shrink-0" />
+              <span>EVM Wallet</span>
+            </button>
             <button
               onClick={handleFclConnect}
               onMouseEnter={() => setHovered('fcl')}
@@ -390,28 +529,6 @@ export default function ConnectModal({
 
           {/* Divider + actions */}
           <div className="mt-auto border-t border-zinc-700/80 px-2 py-2 space-y-0.5">
-            {/* Auto Sign toggle */}
-            <button
-              onClick={() => onToggleAutoSign(!autoSign)}
-              className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 rounded-lg transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <Zap className={`w-3.5 h-3.5 ${autoSign ? 'text-amber-400' : ''}`} />
-                <span>Auto Sign</span>
-              </div>
-              <div
-                className={`relative w-7 h-4 rounded-full transition-colors ${
-                  autoSign ? 'bg-amber-500' : 'bg-zinc-600'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
-                    autoSign ? 'translate-x-3' : ''
-                  }`}
-                />
-              </div>
-            </button>
-
             {/* Manage Keys */}
             {onOpenKeyManager && (
               <button
@@ -419,7 +536,7 @@ export default function ConnectModal({
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 rounded-lg transition-colors"
               >
                 <Key className="w-3.5 h-3.5" />
-                Manage Keys
+                Manage Wallets
               </button>
             )}
 
@@ -445,40 +562,55 @@ export default function ConnectModal({
           {/* Creating in progress — show progress steps */}
           {createStep ? renderCreateProgress() :
 
-          hovered && hovered !== 'fcl' && hovered !== 'local-wallet' ? (
-            // Show selected local key details
+          hovered && typeof hovered === 'object' && 'account' in hovered ? (
+            <LocalAccountDetail
+              entry={hovered}
+              balance={balance}
+              onConnect={() => handleSelect({ type: 'local', key: hovered.key, account: hovered.account })}
+            />
+          ) : hovered && typeof hovered === 'object' && 'eoa' in hovered ? (
+            // EOA-only key detail
             <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
               <Avatar
                 size={64}
-                name={`0x${hovered.account.flowAddress}`}
+                name={hovered.key.evmAddress!}
                 variant="beam"
-                colors={colorsFromAddress(hovered.account.flowAddress)}
+                colors={colorsFromAddress(hovered.key.evmAddress!)}
               />
               <div className="text-center">
                 <div className="text-sm font-medium text-zinc-200">
-                  {hovered.key.label || 'Local Wallet'}
-                </div>
-                <div className="text-xs text-zinc-500 mt-1 font-mono">
-                  0x{hovered.account.flowAddress}
-                </div>
-                <div className="text-[10px] text-zinc-600 mt-0.5">
-                  Key Index: {hovered.account.keyIndex}
+                  {hovered.key.label || 'Local Key'}
                 </div>
               </div>
-              {balance !== null ? (
-                <div className="flex items-center gap-2 bg-zinc-800/80 px-3 py-1.5 rounded-full">
-                  <span className="text-xs text-emerald-400 font-medium">{balance} FLOW</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 bg-zinc-800/80 px-3 py-1.5 rounded-full">
-                  <span className="text-xs text-zinc-500">Loading balance...</span>
-                </div>
-              )}
+              <div className="w-full max-w-[280px] space-y-1.5 bg-zinc-800/50 rounded-lg px-3 py-2">
+                <a href={`https://flowindex.io/account/${hovered.key.evmAddress}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group">
+                  <span className="text-[10px] text-violet-400 w-12 shrink-0">EOA</span>
+                  <span className="text-[11px] text-zinc-300 group-hover:text-violet-300 font-mono truncate transition-colors">{hovered.key.evmAddress}</span>
+                  <ExternalLink className="w-2.5 h-2.5 text-zinc-600 group-hover:text-zinc-400 shrink-0 transition-colors" />
+                </a>
+              </div>
               <button
-                onClick={() => handleSelect({ type: 'local', key: hovered.key, account: hovered.account })}
-                className="mt-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition-colors"
+                onClick={() => handleSelect({ type: 'eoa', key: hovered.key, evmAddress: hovered.key.evmAddress! })}
+                className="mt-2 px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors"
               >
                 Connect
+              </button>
+            </div>
+          ) : hovered === 'evm' ? (
+            // EVM Wallet — RainbowKit
+            <div className="flex flex-col items-center gap-4 animate-in fade-in duration-150">
+              <EthLogo size={64} />
+              <div className="text-center">
+                <div className="text-sm font-medium text-zinc-200">EVM Wallet</div>
+                <div className="text-xs text-zinc-500 mt-1 max-w-[220px] leading-relaxed">
+                  Connect MetaMask, Flow Wallet, WalletConnect, or any EVM wallet.
+                </div>
+              </div>
+              <button
+                onClick={() => { onClose(); if (openRainbowKit) openRainbowKit(); }}
+                className="mt-2 px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                Connect EVM Wallet
               </button>
             </div>
           ) : hovered === 'local-wallet' ? (

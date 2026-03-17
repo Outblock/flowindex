@@ -5,6 +5,7 @@ import Avatar from 'boring-avatars';
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import type { LocalKey, KeyAccount } from '../auth/localKeyManager';
+import { useEvmAddress } from '../auth/useEvmAddress';
 import type { FlowNetwork } from '../flow/networks';
 
 /** Derive 5 colors from an address (matches frontend AddressLink). */
@@ -69,8 +70,11 @@ export default function WalletButton({
   const localConnected = !!selectedLocalAccount;
   const flowConnected = fclConnected || localConnected;
 
-  // When editing Solidity and EVM wallet is connected, prefer showing EVM address
-  const showEvmWallet = evmConnected && activeFileLanguage === 'sol';
+  // Derive EOA from local key's secp256k1 public key via wallet-core
+  const localEoaAddress = useEvmAddress(localConnected ? selectedLocalAccount!.key : null);
+
+  // When editing Solidity, prefer showing EVM address (wagmi or local key EOA)
+  const showEvmWallet = activeFileLanguage === 'sol' && (evmConnected || (localConnected && !!localEoaAddress));
 
   const flowDisplayAddress = fclConnected
     ? fclUser.addr!
@@ -79,7 +83,7 @@ export default function WalletButton({
       : null;
 
   const displayAddress = showEvmWallet
-    ? evmAddress!
+    ? (evmConnected ? evmAddress! : localEoaAddress!)
     : flowDisplayAddress;
 
   const connected = flowConnected || evmConnected;
@@ -108,7 +112,7 @@ export default function WalletButton({
               className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-700 transition-colors"
             >
               <KeyIcon className="w-3.5 h-3.5" />
-              Local Key
+              Local Wallet
             </button>
             <button
               onClick={() => { fcl.authenticate(); setOpen(false); }}

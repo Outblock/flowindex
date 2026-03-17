@@ -5,7 +5,6 @@
  * private keys never leave the client.
  */
 
-import { keccak256 } from 'viem';
 import type { WalletCore } from '@outblock/wallet-core-lite';
 
 // ---------------------------------------------------------------------------
@@ -17,6 +16,7 @@ export interface LocalKey {
   label: string;
   publicKeyP256: string; // uncompressed P256 hex, no 04 prefix
   publicKeySecp256k1: string; // uncompressed secp256k1 hex, no 04 prefix
+  evmAddress?: string; // checksummed EVM EOA address (derived from ETH path for mnemonics)
   source: 'mnemonic' | 'privateKey' | 'keystore';
   encryptedKey: string; // wallet-core StoredKey JSON string
   hasPassword: boolean;
@@ -37,6 +37,7 @@ export interface KeyAccount {
 // ---------------------------------------------------------------------------
 
 const FLOW_BIP44_PATH = "m/44'/539'/0'/0/0";
+const ETH_BIP44_PATH = "m/44'/60'/0'/0/0";
 const STORAGE_KEY = 'flow-local-keys';
 
 // ---------------------------------------------------------------------------
@@ -141,6 +142,7 @@ export interface DerivedKeys {
   privateKeyHexSecp256k1: string;  // secp256k1-derived (used for secp256k1 signing)
   publicKeyP256: string;
   publicKeySecp256k1: string;
+  evmAddress: string;              // checksummed EVM EOA address
 }
 
 /**
@@ -182,6 +184,11 @@ export async function deriveFromMnemonic(
   pubSecp.delete();
   secpPrivateKey.delete();
 
+  // EVM EOA: derive from standard ETH path (m/44'/60'/0'/0/0), not Flow path
+  const ethKey = wallet.getKeyByCurve(core.Curve.secp256k1, ETH_BIP44_PATH);
+  const evmAddress = core.CoinTypeExt.deriveAddress(core.CoinType.ethereum, ethKey);
+  ethKey.delete();
+
   wallet.delete();
 
   return {
@@ -189,6 +196,7 @@ export async function deriveFromMnemonic(
     privateKeyHexSecp256k1: secpPrivHex,
     publicKeyP256: p256PubHex,
     publicKeySecp256k1: secpPubHex,
+    evmAddress,
   };
 }
 
@@ -217,8 +225,11 @@ export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
   // secp256k1
   const pubSecp = privateKey.getPublicKeySecp256k1(false);
   const secpHex = stripUncompressedPrefix(bytesToHex(pubSecp.data()));
-  pubSecp.delete();
 
+  // EVM EOA: derive from this raw key directly
+  const evmAddress = core.CoinTypeExt.deriveAddress(core.CoinType.ethereum, privateKey);
+
+  pubSecp.delete();
   privateKey.delete();
 
   return {
@@ -226,6 +237,7 @@ export async function deriveFromPrivateKey(hex: string): Promise<DerivedKeys> {
     privateKeyHexSecp256k1: privateKeyHex, // same key for raw imports
     publicKeyP256: p256Hex,
     publicKeySecp256k1: secpHex,
+    evmAddress,
   };
 }
 
@@ -331,6 +343,47 @@ export async function decryptFromKeystore(
   const hex = bytesToHex(privateKeyBytes);
   storedKey.delete();
 
+  return hex;
+}
+
+/**
+ * Get the EVM (ETH-path) secp256k1 private key from a keystore.
+ * For mnemonic keys: derives via m/44'/60'/0'/0/0 (standard ETH path).
+ * For raw private key imports: returns the raw key directly.
+ */
+export async function decryptEvmPrivateKey(
+  json: string,
+  password: string = '',
+): Promise<string> {
+  const core = await getWalletCore();
+  const jsonBytes = stringToBytes(json);
+  const pwBytes = stringToBytes(password);
+
+  const storedKey = core.StoredKey.importJSON(jsonBytes);
+
+  if (storedKey.isMnemonic()) {
+    const mnemonic = storedKey.decryptMnemonic(pwBytes);
+    storedKey.delete();
+    if (!mnemonic || mnemonic.length === 0) {
+      throw new Error('Failed to decrypt keystore — wrong password?');
+    }
+    // Derive secp256k1 key at ETH BIP44 path
+    const wallet = core.HDWallet.createWithMnemonic(mnemonic, '');
+    const ethKey = wallet.getKeyByCurve(core.Curve.secp256k1, ETH_BIP44_PATH);
+    const hex = bytesToHex(ethKey.data());
+    ethKey.delete();
+    wallet.delete();
+    return hex;
+  }
+
+  // Raw private key — same key regardless of path
+  const privateKeyBytes = storedKey.decryptPrivateKey(pwBytes);
+  if (!privateKeyBytes || privateKeyBytes.length === 0) {
+    storedKey.delete();
+    throw new Error('Failed to decrypt keystore — wrong password?');
+  }
+  const hex = bytesToHex(privateKeyBytes);
+  storedKey.delete();
   return hex;
 }
 
@@ -600,30 +653,32 @@ function normalizeHashAlgo(val: unknown): 'SHA2_256' | 'SHA3_256' {
 // ---------------------------------------------------------------------------
 
 /**
- * Derive an EVM address from a secp256k1 uncompressed public key hex string.
+ * Derive an EVM address from a secp256k1 uncompressed public key hex string
+ * using wallet-core's AnyAddress derivation.
  *
- * EVM address = last 20 bytes of keccak256(uncompressed_pubkey_without_04_prefix).
- * The 04 prefix (if present) is stripped before hashing, leaving the raw 64-byte
- * x||y coordinates.
- *
- * @param publicKeyHex  Uncompressed secp256k1 public key hex (with or without 04 prefix)
- * @returns EVM address as checksummed hex string (0x-prefixed, 42 chars)
+ * NOTE: This derives from the given public key directly. For mnemonic-based keys,
+ * the EOA should use the ETH BIP44 path (m/44'/60'/0'/0/0), not Flow's path.
+ * Prefer using key.evmAddress which is set correctly at creation time.
  */
-export function evmAddressFromSecp256k1(publicKeyHex: string): string {
-  // Strip 04 uncompressed prefix if present
-  const rawHex = publicKeyHex.startsWith('04') && publicKeyHex.length === 130
-    ? publicKeyHex.slice(2)
-    : publicKeyHex;
-
-  const hash = keccak256(`0x${rawHex}` as `0x${string}`);
-  // Take last 20 bytes (40 hex chars) and add 0x prefix
-  return `0x${hash.slice(-40)}`;
+export async function evmAddressFromSecp256k1(publicKeyHex: string): Promise<string> {
+  const core = await getWalletCore();
+  const withPrefix = publicKeyHex.startsWith('04') ? publicKeyHex : `04${publicKeyHex}`;
+  const pubKeyBytes = hexToBytes(withPrefix);
+  const pubKey = core.PublicKey.createWithData(pubKeyBytes, core.PublicKeyType.secp256k1Extended);
+  const addr = core.AnyAddress.createWithPublicKey(pubKey, core.CoinType.ethereum);
+  const result = addr.description();
+  addr.delete();
+  pubKey.delete();
+  return result;
 }
 
 /**
- * Convenience wrapper: get the EVM address for a LocalKey.
- * Uses the key's secp256k1 public key to derive the address.
+ * Get the EVM EOA address for a LocalKey.
+ * Uses the stored evmAddress (derived from ETH path for mnemonics).
+ * Falls back to deriving from the stored secp256k1 public key for legacy keys.
  */
-export function getEvmAddress(key: LocalKey): string {
+export async function getEvmAddress(key: LocalKey): Promise<string> {
+  if (key.evmAddress) return key.evmAddress;
+  // Fallback for keys created before evmAddress was stored
   return evmAddressFromSecp256k1(key.publicKeySecp256k1);
 }
