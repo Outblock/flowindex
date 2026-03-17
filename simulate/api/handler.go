@@ -87,6 +87,7 @@ type Handler struct {
 	lastBlockChange   atomic.Int64 // unix timestamp of last observed block height change
 	lastBlockHeight   atomic.Int64
 	recovering        atomic.Bool
+	baseSnapshot      atomic.Value // string: name of the post-warmup base snapshot
 }
 
 // HealthSnapshot captures watchdog-related health signals for external monitoring.
@@ -385,11 +386,13 @@ func (h *Handler) warmup() {
 
 	start := time.Now()
 
-	// Phase 1: Core token contracts (FlowToken transfer touches FungibleToken, FlowToken, FlowFees)
+	// Phase 1: Core token contracts + FLOW transfer (warms FungibleToken, FlowToken, FlowFees)
 	h.runWarmupTx(ctx, "core-tokens", `
 import FungibleToken from 0xf233dcee88fe0abe
 import FlowToken from 0x1654653399040a61
 import FungibleTokenSwitchboard from 0xf233dcee88fe0abe
+import FungibleTokenMetadataViews from 0xf233dcee88fe0abe
+import Burner from 0xf233dcee88fe0abe
 
 transaction(amount: UFix64, to: Address) {
     let sentVault: @{FungibleToken.Vault}
@@ -417,6 +420,7 @@ transaction(amount: UFix64, to: Address) {
 import NonFungibleToken from 0x1d7e57aa55817448
 import MetadataViews from 0x1d7e57aa55817448
 import ViewResolver from 0x1d7e57aa55817448
+import CrossVMMetadataViews from 0x1d7e57aa55817448
 import NFTCatalog from 0x49a7cda3a1eecc29
 import NFTRetrieval from 0x49a7cda3a1eecc29
 import NFTStorefrontV2 from 0x4eb8a10cb9f87357
@@ -431,6 +435,7 @@ import FlowIDTableStaking from 0x8624b52f9ddcd04a
 import FlowStakingCollection from 0x8d0e87b65159ae63
 import FlowEpoch from 0x8624b52f9ddcd04a
 import FlowClusterQC from 0x8624b52f9ddcd04a
+import FlowDKG from 0x8624b52f9ddcd04a
 import LockedTokens from 0x8d0e87b65159ae63
 
 transaction {
@@ -468,7 +473,7 @@ transaction {
     prepare(signer: &Account) { log("naming-utils warmup") }
 }`, nil)
 
-	// Phase 7: Misc contracts
+	// Phase 7: Misc contracts + TransactionGeneration
 	h.runWarmupTx(ctx, "misc", `
 import TransactionGeneration from 0xe52522745adf5c34
 import FlowviewAccountBookmark from 0x39b144ab4d348e2b
@@ -477,11 +482,17 @@ transaction {
     prepare(signer: &Account) { log("misc warmup") }
 }`, nil)
 
-	// Phase 7b: System accounts accessed by the Flow runtime on every transaction
-	// (execution parameters, fee computation, authorization). These are NOT imported
-	// by user code but still trigger slow gRPC register fetches if uncached.
+	// Phase 8: System/runtime accounts accessed on every transaction
+	// (FlowExecutionParameters, fee computation, authorization).
+	// Also touch service account contracts (FlowServiceAccount, FlowStorageFees, etc.)
 	h.runWarmupTx(ctx, "runtime-system", `
 import FlowExecutionParameters from 0xf426ff57ee8f6110
+import FlowServiceAccount from 0xe467b9dd11fa00df
+import FlowStorageFees from 0xe467b9dd11fa00df
+import FlowTransactionScheduler from 0xe467b9dd11fa00df
+import NodeVersionBeacon from 0xe467b9dd11fa00df
+import RandomBeaconHistory from 0xe467b9dd11fa00df
+import FlowFees from 0xf919ee77447b7497
 
 transaction {
     prepare(signer: &Account) {
@@ -495,11 +506,7 @@ transaction {
     }
 }`, nil)
 
-	// Phase 8: Pre-cache FlowToken vault storage for common signer addresses.
-	// The warmup above caches contract code, but when a user simulates a FLOW transfer
-	// using an address as signer, the emulator also fetches that account's storage registers
-	// (e.g., /storage/flowTokenVault). This forces the emulator to do slow gRPC round-trips.
-	// Pre-cache by running a FLOW transfer FROM each key address to warm the storage.
+	// Phase 9: Pre-cache FlowToken vault storage for common signer addresses.
 	popularSigners := []struct {
 		name string
 		addr string
@@ -535,13 +542,29 @@ transaction(amount: UFix64, to: Address) {
 			}, acc.addr)
 	}
 
+	// Create a base snapshot AFTER warmup so all cached registers are included.
+	// Simulations revert to this snapshot instead of creating fresh ones,
+	// preserving the warm register cache across requests.
+	baseCtx, baseCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer baseCancel()
+	h.mu.Lock()
+	baseName := fmt.Sprintf("base-%d", time.Now().UnixNano())
+	if _, err := h.client.CreateSnapshot(baseCtx, baseName); err != nil {
+		log.Printf("[simulator] warmup: failed to create base snapshot: %v", err)
+	} else {
+		h.baseSnapshot.Store(baseName)
+		log.Printf("[simulator] warmup: base snapshot created: %s", baseName)
+	}
+	h.mu.Unlock()
+
 	elapsed := time.Since(start)
 	log.Printf("[simulator] warmup: all phases completed in %s", elapsed)
 }
 
-// runWarmupTx sends a single warmup transaction with a per-tx timeout.
-// It acquires the mutex only for the duration of this single tx, so user
-// requests can interleave between warmup phases.
+// runWarmupTx sends a single warmup transaction WITHOUT snapshot/revert.
+// This lets the emulator's remote register cache accumulate across all warmup
+// phases. The base snapshot is created after all warmup phases complete, so
+// simulations that revert to base retain the warm cache.
 // Optional signerOverride uses a specific address as the authorizer (to pre-cache its storage).
 func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, args []json.RawMessage, signerOverride ...string) {
 	signer := "e467b9dd11fa00df"
@@ -569,39 +592,19 @@ func (h *Handler) runWarmupTx(_ context.Context, name string, cadence string, ar
 		return
 	}
 
-	snapName, err := h.createStateSnapshot(txCtx, "warmup")
-	if err != nil {
-		log.Printf("[simulator] warmup [%s]: snapshot unavailable, skipping: %v", name, err)
-		return
-	}
-
 	start := time.Now()
 	result, err := h.client.SendTransaction(txCtx, txReq)
 	elapsed := time.Since(start)
 
-	// Wait for block to commit before reverting the warmup state.
+	// Wait for block to commit
 	waitErr := h.client.WaitForBlockReady(txCtx)
-	revertErr := h.revertStateSnapshot(txCtx, snapName)
 
 	if err != nil {
-		if waitErr != nil {
-			log.Printf("[simulator] warmup [%s]: failed after %s: %v (wait error: %v)", name, elapsed, err, waitErr)
-			return
-		}
-		if revertErr != nil {
-			log.Printf("[simulator] warmup [%s]: failed after %s: %v (revert error: %v)", name, elapsed, err, revertErr)
-			return
-		}
 		log.Printf("[simulator] warmup [%s]: failed after %s: %v", name, elapsed, err)
 		return
 	}
-
 	if waitErr != nil {
 		log.Printf("[simulator] warmup [%s]: block did not settle after %s: %v", name, elapsed, waitErr)
-		return
-	}
-	if revertErr != nil {
-		log.Printf("[simulator] warmup [%s]: revert failed after %s: %v", name, elapsed, revertErr)
 		return
 	}
 
@@ -716,20 +719,30 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 	logSimStage(requestID, "wait_ready_pre", preReadyStart, "")
 
-	// Simulations must run against an isolated snapshot so transaction side
-	// effects never leak into the next request.
+	// Use the base snapshot (created after warmup) for isolation.
+	// After simulation, we revert to base — this restores the warm register
+	// cache while discarding transaction side effects.
+	// If no base snapshot exists yet (warmup still running), fall back to
+	// creating a per-request snapshot.
 	snapshotStart := time.Now()
-	snapName, err := h.createStateSnapshot(r.Context(), "sim")
-	if err != nil {
-		log.Printf("[simulate %s] snapshot create failed after %s: %v", requestID, time.Since(requestStart), err)
-		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(SimulateResponse{
-			Success: false,
-			Error:   "simulation state isolation unavailable: " + err.Error(),
-		})
-		return
+	var snapName string
+	if base, ok := h.baseSnapshot.Load().(string); ok && base != "" {
+		snapName = base
+		logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s (base)", snapName)
+	} else {
+		var err error
+		snapName, err = h.createStateSnapshot(r.Context(), "sim")
+		if err != nil {
+			log.Printf("[simulate %s] snapshot create failed after %s: %v", requestID, time.Since(requestStart), err)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(SimulateResponse{
+				Success: false,
+				Error:   "simulation state isolation unavailable: " + err.Error(),
+			})
+			return
+		}
+		logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s (fallback)", snapName)
 	}
-	logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s", snapName)
 
 	// Build and send the transaction
 	txReq := &TxRequest{
