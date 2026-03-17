@@ -42,17 +42,14 @@ export default function CadenceEditor({
 
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     monacoRef.current = monaco;
-    if (isSolidity) {
-      registerSolidityLanguage(monaco);
-    } else {
-      // Register Monarch as fallback first — TextMate will override once WASM loads
-      registerCadenceLanguage(monaco);
-      registerCadenceThemes(monaco);
-      // Load TextMate grammar async (overrides Monarch tokenizer)
-      activateCadenceTextmate(monaco).then(() => setTmReady(true)).catch(console.error);
-    }
+    // Register both languages — beforeMount only fires once per editor instance
+    registerSolidityLanguage(monaco);
+    registerCadenceLanguage(monaco);
+    registerCadenceThemes(monaco);
+    // Load TextMate grammar async (overrides Monarch tokenizer for Cadence)
+    activateCadenceTextmate(monaco).then(() => setTmReady(true)).catch(console.error);
     onMonacoReady?.(monaco);
-  }, [onMonacoReady, isSolidity]);
+  }, [onMonacoReady]);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
