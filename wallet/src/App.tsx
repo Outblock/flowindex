@@ -13,6 +13,8 @@ import Activity from './pages/Activity';
 import Settings from './pages/Settings';
 import AI from './pages/AI';
 import Approve from './pages/Approve';
+import WalletConnect from './pages/WalletConnect';
+import ConnectPopup from './pages/ConnectPopup';
 
 export default function App() {
   return (
@@ -24,6 +26,7 @@ export default function App() {
           <Route path="/authz" element={<Authz />} />
           <Route path="/sign-message" element={<SignMessage />} />
           <Route path="/approve/:requestId" element={<Approve />} />
+          <Route path="/connect/popup" element={<ConnectPopup />} />
           <Route path="/test" element={<TestHost />} />
 
           {/* Dashboard routes - with layout */}
@@ -34,6 +37,7 @@ export default function App() {
             <Route path="/activity" element={<Activity />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/ai" element={<AI />} />
+            <Route path="/connect" element={<WalletConnect />} />
           </Route>
         </Routes>
       </WalletProvider>

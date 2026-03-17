@@ -1,16 +1,6 @@
 import type { Address } from "viem"
 import type { EvmWalletProvider } from "./provider"
 
-interface Web3WalletType {
-  on: (event: string, handler: (...args: any[]) => void) => void
-  approveSession: (params: any) => Promise<any>
-  rejectSession: (params: any) => Promise<void>
-  respondSessionRequest: (params: any) => Promise<void>
-  pair: (params: { uri: string }) => Promise<void>
-  getActiveSessions: () => Record<string, any>
-  disconnectSession: (params: { topic: string; reason: any }) => Promise<void>
-}
-
 export interface WalletConnectConfig {
   projectId: string
   provider: EvmWalletProvider
@@ -38,12 +28,12 @@ export async function createWalletConnectManager(config: WalletConnectConfig) {
     },
   } = config
 
-  // @ts-expect-error — optional peer dependency, resolved at runtime
-  const { Web3Wallet } = await import("@walletconnect/web3wallet")
-  const { Core } = await import("@walletconnect/core")
+  // Dynamic imports — optional peer dependencies resolved at runtime
+  const { Web3Wallet } = await import("@walletconnect/web3wallet") as any
+  const { Core } = await import("@walletconnect/core") as any
 
-  const core = new Core({ projectId })
-  const web3wallet: Web3WalletType = await Web3Wallet.init({ core, metadata })
+  const core = new (Core as any)({ projectId })
+  const web3wallet: any = await (Web3Wallet as any).init({ core, metadata })
 
   const eip155Chain = `eip155:${chainId}`
   const accounts = [`${eip155Chain}:${smartWalletAddress}`]
