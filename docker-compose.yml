@@ -167,6 +167,8 @@ services:
       SUPABASE_URL: http://supabase-gateway:8000
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_KEY}
+      EVM_WALLET_FACTORY_ADDRESS: ${EVM_WALLET_FACTORY_ADDRESS:-}
+      EVM_RPC_URL: ${EVM_RPC_URL:-https://mainnet.evm.nodes.onflow.org}
       DENO_NO_UPDATE_CHECK: "1"
     volumes:
       - ./supabase/functions/passkey-auth/index.ts:/app/index.ts:ro
@@ -346,6 +348,32 @@ services:
       - "3001:8080"
     depends_on:
       - backend
+
+  alto-bundler:
+    image: ghcr.io/pimlicolabs/alto:latest
+    restart: unless-stopped
+    ports:
+      - "4337:4337"
+    env_file:
+      - wallet/bundler/.env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        node src/esm/cli/alto.js run
+        --rpc-url $$ALTO_RPC_URL
+        --executor-private-keys $$ALTO_EXECUTOR_PRIVATE_KEY
+        --utility-private-key $$ALTO_UTILITY_PRIVATE_KEY
+        --entrypoints $$ALTO_ENTRYPOINTS
+        --safe-mode false
+        --chain-type default
+        --deploy-simulations-contract true
+        --log-level debug
+        --port 4337
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4337/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:

@@ -1,0 +1,27 @@
+{
+  "name": "@flowindex/evm-wallet",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "viem": "^2.25.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@walletconnect/web3wallet": "^1.17.0",
+    "@walletconnect/core": "^2.18.0"
+  },
+  "peerDependenciesMeta": {
+    "@walletconnect/web3wallet": { "optional": true },
+    "@walletconnect/core": { "optional": true }
+  }
+}

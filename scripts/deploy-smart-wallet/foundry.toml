@@ -1,0 +1,13 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.23"
+bytecode_hash = "none"
+evm_version = "paris"
+optimizer = true
+optimizer_runs = 1000000
+
+[rpc_endpoints]
+flow_evm_testnet = "${FLOW_EVM_TESTNET_RPC}"
+flow_evm_mainnet = "${FLOW_EVM_MAINNET_RPC}"

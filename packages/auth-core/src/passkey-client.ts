@@ -199,6 +199,13 @@ export function createPasskeyAuthClient(config: PasskeyClientConfig) {
     },
 
     /**
+     * Save a computed EVM smart wallet address for a passkey credential.
+     */
+    async saveEvmAddress(accessToken: string, credentialId: string, evmAddress: string): Promise<void> {
+      await passkeyApi('/wallet/save-evm-address', { credentialId, evmAddress }, accessToken);
+    },
+
+    /**
      * List all passkeys for the authenticated user.
      */
     async listPasskeys(accessToken: string): Promise<PasskeyInfo[]> {
