@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -16,7 +16,9 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-const CURL_TEXT = `curl -X POST https://simulator.flowindex.io/api/simulate \\
+// ── Plain text for copy ──
+
+const CURL_ONCE = `curl -X POST https://simulator.flowindex.io/api/simulate \\
   -H "Content-Type: application/json" \\
   -d '{
     "cadence": "transaction(amount: UFix64) { ... }",
@@ -25,23 +27,32 @@ const CURL_TEXT = `curl -X POST https://simulator.flowindex.io/api/simulate \\
     "payer": "0x1654653399040a61"
   }'`
 
-const RESPONSE_TEXT = `{
+const CURL_SCHEDULED = `curl -X POST https://simulator.flowindex.io/api/simulate \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "cadence": "transaction(amount: UFix64) { ... }",
+    "arguments": [{"type": "UFix64", "value": "10.0"}],
+    "authorizers": ["0x1654653399040a61"],
+    "payer": "0x1654653399040a61",
+    "scheduled": {
+      "advance_seconds": 2.5,
+      "advance_blocks": 2
+    }
+  }'`
+
+const RESPONSE_ONCE = `{
   "success": true,
   "summary": "Transfer 10.0 FLOW",
-  "summaryItems": [{ "icon": "💸", "text": "Transfer 10.0 FlowToken" }],
-  "transfers": [
-    {
-      "token": "A.1654653399040a61.FlowToken",
-      "amount": "10.00000000",
-      "from_address": "0x1654653399040a61",
-      "to_address": "0xf8d6e0586b0a20c7",
-      "transfer_type": "transfer"
-    }
-  ],
-  "nftTransfers": [],
+  "transfers": [{
+    "token": "A.1654653399040a61.FlowToken",
+    "amount": "10.00000000",
+    "from_address": "0x1654653399040a61",
+    "to_address": "0xf8d6e0586b0a20c7",
+    "transfer_type": "transfer"
+  }],
   "balanceChanges": [
-    { "address": "1654653399040a61", "token": "FlowToken", "delta": "-10.0", "before": "100.0", "after": "90.0" },
-    { "address": "f8d6e0586b0a20c7", "token": "FlowToken", "delta": "10.0", "before": "25.0", "after": "35.0" }
+    { "address": "1654653399040a61", "delta": "-10.0" },
+    { "address": "f8d6e0586b0a20c7", "delta": "+10.0" }
   ],
   "computationUsed": 1204,
   "fee": 0.00001,
@@ -49,10 +60,35 @@ const RESPONSE_TEXT = `{
   "events": [...]
 }`
 
-function CurlHighlighted() {
+const RESPONSE_SCHEDULED = `{
+  "success": true,
+  "summary": "Transfer 10.0 FLOW",
+  "transfers": [{
+    "token": "A.1654653399040a61.FlowToken",
+    "amount": "10.00000000",
+    "from_address": "0x1654653399040a61",
+    "to_address": "0xf8d6e0586b0a20c7",
+    "transfer_type": "transfer"
+  }],
+  "balanceChanges": [
+    { "address": "1654653399040a61", "delta": "-10.0" },
+    { "address": "f8d6e0586b0a20c7", "delta": "+10.0" }
+  ],
+  "scheduledResults": [{
+    "tx_id": "a9ca...e14f",
+    "success": true,
+    "computation_used": 318
+  }],
+  "computationUsed": 1204,
+  "fee": 0.00001,
+  "tags": ["ft-transfer"],
+  "events": [...]
+}`
+
+// ── Highlighted JSX ──
+
+function CurlOnce() {
   return (
-    <div className="relative">
-      <CopyButton text={CURL_TEXT} />
     <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
       <code>
         <span className="text-yellow-300">curl</span>
@@ -94,14 +130,70 @@ function CurlHighlighted() {
         <span className="text-emerald-400">{"'"}</span>
       </code>
     </pre>
-    </div>
   )
 }
 
-function ResponseHighlighted() {
+function CurlScheduled() {
   return (
-    <div className="relative">
-      <CopyButton text={RESPONSE_TEXT} />
+    <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
+      <code>
+        <span className="text-yellow-300">curl</span>
+        <span className="text-zinc-400"> -X </span>
+        <span className="text-cyan-400">POST</span>
+        <span className="text-zinc-400"> https://simulator.flowindex.io/api/simulate \{'\n'}</span>
+        <span className="text-zinc-400">  -H </span>
+        <span className="text-emerald-400">"Content-Type: application/json"</span>
+        <span className="text-zinc-400"> \{'\n'}</span>
+        <span className="text-zinc-400">  -d </span>
+        <span className="text-emerald-400">{"'"}</span>
+        <span className="text-zinc-400">{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"cadence"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"transaction(amount: UFix64) {'{ ... }'}"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"arguments"</span>
+        <span className="text-zinc-400">: [{'{'}</span>
+        <span className="text-purple-400">"type"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"UFix64"</span>
+        <span className="text-zinc-400">, </span>
+        <span className="text-purple-400">"value"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"10.0"</span>
+        <span className="text-zinc-400">{'}'}],{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"authorizers"</span>
+        <span className="text-zinc-400">: [</span>
+        <span className="text-emerald-400">"0x1654653399040a61"</span>
+        <span className="text-zinc-400">],{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"payer"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"0x1654653399040a61"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"scheduled"</span>
+        <span className="text-zinc-400">: {'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'      '}</span>
+        <span className="text-purple-400">"advance_seconds"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">2.5</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'      '}</span>
+        <span className="text-purple-400">"advance_blocks"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">2</span>
+        <span className="text-zinc-400">{'\n'}{'    }'}{'\n'}{'  }'}</span>
+        <span className="text-emerald-400">{"'"}</span>
+      </code>
+    </pre>
+  )
+}
+
+function ResponseOnce() {
+  return (
     <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
       <code>
         <span className="text-zinc-400">{'{'}{'\n'}</span>
@@ -127,16 +219,6 @@ function ResponseHighlighted() {
         <span className="text-purple-400">"amount"</span>
         <span className="text-zinc-400">: </span>
         <span className="text-emerald-400">"10.00000000"</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"from_address"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-emerald-400">"0x1654653399040a61"</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"to_address"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-emerald-400">"0xf8d6e0586b0a20c7"</span>
         <span className="text-zinc-400">,{'\n'}</span>
         <span className="text-zinc-400">{'    '}</span>
         <span className="text-purple-400">"transfer_type"</span>
@@ -186,22 +268,150 @@ function ResponseHighlighted() {
         <span className="text-zinc-400">{'\n'}{'}'}</span>
       </code>
     </pre>
+  )
+}
+
+function ResponseScheduled() {
+  return (
+    <pre className="p-5 text-[11px] leading-relaxed overflow-x-auto">
+      <code>
+        <span className="text-zinc-400">{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"success"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-cyan-400">true</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"summary"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"Transfer 10.0 FLOW"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"transfers"</span>
+        <span className="text-zinc-400">: [{'{'} ... {'}'}],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"balanceChanges"</span>
+        <span className="text-zinc-400">: [...],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"scheduledResults"</span>
+        <span className="text-zinc-400">: [{'{'}{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"tx_id"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-emerald-400">"a9ca...e14f"</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"success"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-cyan-400">true</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"events"</span>
+        <span className="text-zinc-400">: [...],{'\n'}</span>
+        <span className="text-zinc-400">{'    '}</span>
+        <span className="text-purple-400">"computation_used"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">318</span>
+        <span className="text-zinc-400">{'\n'}{'  '}],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"computationUsed"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">1204</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"fee"</span>
+        <span className="text-zinc-400">: </span>
+        <span className="text-orange-300">0.00001</span>
+        <span className="text-zinc-400">,{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"tags"</span>
+        <span className="text-zinc-400">: [</span>
+        <span className="text-emerald-400">"ft-transfer"</span>
+        <span className="text-zinc-400">],{'\n'}</span>
+        <span className="text-zinc-400">{'  '}</span>
+        <span className="text-purple-400">"events"</span>
+        <span className="text-zinc-400">: [...]</span>
+        <span className="text-zinc-400">{'\n'}{'}'}</span>
+      </code>
+    </pre>
+  )
+}
+
+// ── Animated panel wrapper ──
+
+function AnimatedPanel({ children, activeKey }: { children: React.ReactNode; activeKey: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState<number | 'auto'>('auto')
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // measure the new height
+    setHeight(el.scrollHeight)
+    const timeout = setTimeout(() => setHeight('auto'), 300)
+    return () => clearTimeout(timeout)
+  }, [activeKey])
+
+  return (
+    <div
+      style={{ height: height === 'auto' ? 'auto' : `${height}px` }}
+      className="transition-[height] duration-300 ease-out overflow-hidden"
+    >
+      <div ref={ref} key={activeKey} className="animate-fade-in">
+        {children}
+      </div>
     </div>
   )
 }
 
+// ── Main section ──
+
+type Tab = 'once' | 'scheduled'
+
 export function ApiSection() {
+  const [tab, setTab] = useState<Tab>('once')
+
+  const curlText = tab === 'once' ? CURL_ONCE : CURL_SCHEDULED
+  const responseText = tab === 'once' ? RESPONSE_ONCE : RESPONSE_SCHEDULED
+
   return (
     <section className="py-24 px-6 border-t border-zinc-800/50 glow-divider">
       <div className="mx-auto max-w-5xl">
-        <div className="text-[10px] text-flow-green/60 tracking-[3px] mb-4 crt-glow">// REST API</div>
-        <h2 className="text-xl font-bold text-zinc-100 mb-2">Programmatic Access</h2>
-        <p className="text-xs text-zinc-400 mb-8">
-          Use the simulate endpoint directly from your scripts, CI pipelines, or dApps.{' '}
-          <a href="https://docs.flowindex.io" target="_blank" rel="noopener" className="text-flow-green hover:underline">
-            Full API docs &rarr;
-          </a>
-        </p>
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <div>
+            <div className="text-[10px] text-flow-green/60 tracking-[3px] mb-4 crt-glow">// REST API</div>
+            <h2 className="text-xl font-bold text-zinc-100 mb-2">Programmatic Access</h2>
+            <p className="text-xs text-zinc-400">
+              Use the simulate endpoint directly from your scripts, CI pipelines, or dApps.{' '}
+              <a href="https://docs.flowindex.io" target="_blank" rel="noopener" className="text-flow-green hover:underline">
+                Full API docs &rarr;
+              </a>
+            </p>
+          </div>
+          {/* Tabs */}
+          <div className="flex items-center gap-1 bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-0.5 shrink-0">
+            <button
+              onClick={() => setTab('once')}
+              className={`px-3 py-1.5 text-[10px] tracking-wider rounded-md transition-all duration-200 ${
+                tab === 'once'
+                  ? 'bg-flow-green/10 text-flow-green border border-flow-green/30 shadow-[0_0_8px_rgba(0,239,139,0.1)]'
+                  : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+              }`}
+            >
+              ONCE
+            </button>
+            <button
+              onClick={() => setTab('scheduled')}
+              className={`px-3 py-1.5 text-[10px] tracking-wider rounded-md transition-all duration-200 ${
+                tab === 'scheduled'
+                  ? 'bg-flow-green/10 text-flow-green border border-flow-green/30 shadow-[0_0_8px_rgba(0,239,139,0.1)]'
+                  : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+              }`}
+            >
+              SCHEDULED
+            </button>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="crt-bezel">
@@ -209,7 +419,12 @@ export function ApiSection() {
               <div className="px-4 py-2 border-b border-zinc-800/60 text-[10px] text-zinc-500 tracking-wider flex items-center gap-1.5 bg-black/40">
                 <span className="text-flow-green/60">$</span> REQUEST
               </div>
-              <CurlHighlighted />
+              <AnimatedPanel activeKey={`curl-${tab}`}>
+                <div className="relative">
+                  <CopyButton text={curlText} />
+                  {tab === 'once' ? <CurlOnce /> : <CurlScheduled />}
+                </div>
+              </AnimatedPanel>
             </div>
           </div>
           <div className="crt-bezel">
@@ -217,10 +432,17 @@ export function ApiSection() {
               <div className="px-4 py-2 border-b border-zinc-800/60 text-[10px] text-zinc-500 tracking-wider flex items-center gap-1.5 bg-black/40">
                 <span className="text-flow-green/60">&gt;</span> RESPONSE
               </div>
-              <ResponseHighlighted />
+              <AnimatedPanel activeKey={`resp-${tab}`}>
+                <div className="relative">
+                  <CopyButton text={responseText} />
+                  {tab === 'once' ? <ResponseOnce /> : <ResponseScheduled />}
+                </div>
+              </AnimatedPanel>
             </div>
           </div>
         </div>
+
+        {/* Info boxes */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="rounded border border-zinc-800/60 bg-black/30 px-4 py-3">
             <div className="text-[10px] tracking-[2px] text-flow-green/70 mb-1">SCHEDULED OPTIONS</div>
