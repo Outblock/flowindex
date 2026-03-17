@@ -61,9 +61,9 @@ export function ResultPanel({ result }: ResultPanelProps) {
             <div className="text-[10px] text-zinc-500 tracking-wider mb-2">SUMMARY</div>
             <div className="space-y-1">
               {result.summaryItems.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 bg-black/40 border border-zinc-800/30 rounded px-3 py-1.5">
+                <div key={i} className="flex items-center gap-2 bg-black/40 border border-zinc-800/30 rounded px-3 py-1.5 min-w-0 overflow-hidden">
                   <span className="text-[9px] text-zinc-500 uppercase w-14 shrink-0">{item.icon}</span>
-                  <span className="text-[11px] text-zinc-300">{item.text}</span>
+                  <span className="text-[11px] text-zinc-300 truncate">{item.text}</span>
                 </div>
               ))}
             </div>
