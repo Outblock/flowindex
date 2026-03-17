@@ -747,11 +747,14 @@ jobs:
               ${{ env.REGISTRY }}/ai-chat:${{ github.sha }}
           '
 
-  build-wallet:
+  build-wallet-group:
     needs: changes
-    if: needs.changes.outputs.wallet == 'true'
+    if: |
+      needs.changes.outputs.wallet == 'true' ||
+      needs.changes.outputs.bundler == 'true' ||
+      needs.changes.outputs.paymaster == 'true'
     concurrency:
-      group: deploy-wallet-${{ github.ref }}
+      group: deploy-wallet-group-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
@@ -767,13 +770,17 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v3
 
+      # ── Wallet UI (flowindex-frontend VM) ──
       - name: Configure Docker
+        if: needs.changes.outputs.wallet == 'true'
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
+        if: needs.changes.outputs.wallet == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Build & push wallet
+        if: needs.changes.outputs.wallet == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -791,6 +798,7 @@ jobs:
           cache-to: type=gha,scope=wallet,mode=max
 
       - name: Deploy wallet (pull & restart on GCE)
+        if: needs.changes.outputs.wallet == 'true'
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
@@ -803,6 +811,7 @@ jobs:
           '
 
       - name: Update Caddy config for TLS
+        if: needs.changes.outputs.wallet == 'true'
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
             cat > /home/hao/Caddyfile <<'CADDYEOF'
@@ -811,27 +820,9 @@ jobs:
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
 
-  build-bundler:
-    needs: changes
-    if: needs.changes.outputs.bundler == 'true'
-    concurrency:
-      group: deploy-bundler-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v3
-
+      # ── Alto Bundler (flowindex-bundler VM) ──
       - name: Deploy Alto bundler
+        if: needs.changes.outputs.bundler == 'true'
         run: |
           gcloud compute ssh flowindex-bundler --zone=us-central1-a --command='
             source /mnt/stateful_partition/alto-bundler.env && \
@@ -853,27 +844,9 @@ jobs:
                 --port ${ALTO_PORT:-4337}"
           '
 
-  build-paymaster:
-    needs: changes
-    if: needs.changes.outputs.paymaster == 'true'
-    concurrency:
-      group: deploy-paymaster-${{ github.ref }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - uses: google-github-actions/setup-gcloud@v3
-
+      # ── Paymaster Service (flowindex-bundler VM) ──
       - name: Upload paymaster service
+        if: needs.changes.outputs.paymaster == 'true'
         run: |
           gcloud compute scp wallet/bundler/paymaster-service.ts wallet/bundler/package.json \
             flowindex-bundler:/tmp/ --zone=us-central1-a
@@ -883,6 +856,7 @@ jobs:
           '
 
       - name: Deploy paymaster service
+        if: needs.changes.outputs.paymaster == 'true'
         run: |
           gcloud compute ssh flowindex-bundler --zone=us-central1-a --command='
             source /mnt/stateful_partition/alto-bundler.env && \
