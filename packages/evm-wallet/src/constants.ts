@@ -25,6 +25,8 @@ export const flowEvmTestnet = defineChain({
 export const ENTRYPOINT_V07_ADDRESS = "0x0000000071727De22E5E9d8BAf0edAc6f37da032" as const
 // Deployed on Flow-EVM testnet (chain 545) — update for mainnet
 export const FACTORY_ADDRESS = "0xAc396ed9a5E949C685C3799657E26fE1d6fFf7E7" as const
+// Deployed on Flow-EVM testnet (chain 545) — update for mainnet
+export const PAYMASTER_ADDRESS = "0x348C96e048A6A01B1bD75b6218b65986717CC15a" as const
 
 export const FACTORY_ABI = [
   {

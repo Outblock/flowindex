@@ -10,6 +10,7 @@ import type { EvmWalletProvider } from '@flowindex/evm-wallet';
 import type { PasskeyAccount } from '@flowindex/auth-core';
 
 const BUNDLER_URL = import.meta.env.VITE_BUNDLER_URL || 'https://bundler.flowindex.io';
+const PAYMASTER_URL = import.meta.env.VITE_PAYMASTER_URL || '';
 const EVM_RPC_URL = flowEvmTestnet.rpcUrls.default.http[0];
 
 export function useEvmWallet(account: PasskeyAccount | null) {
@@ -65,6 +66,7 @@ export function useEvmWallet(account: PasskeyAccount | null) {
       publicKeySec1Hex: account.publicKeySec1Hex,
       credentialId: account.credentialId,
       isDeployed: false,
+      paymasterUrl: PAYMASTER_URL || undefined,
     });
   }, [evmAddress, account?.credentialId]);
 

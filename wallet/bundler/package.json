@@ -1,0 +1,11 @@
+{
+  "name": "@flowindex/paymaster-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run paymaster-service.ts"
+  },
+  "dependencies": {
+    "viem": "^2.25.0"
+  }
+}
