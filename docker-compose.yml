@@ -350,4 +350,3 @@ services:
 volumes:
   postgres_data:
   supabase_db_data:
-  simulator_data:

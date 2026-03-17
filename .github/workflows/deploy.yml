@@ -1338,14 +1338,14 @@ jobs:
         run: |
           gcloud compute ssh flowindex-simulator --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true
-            docker image prune -af --filter "until=1h" 2>/dev/null || true
             docker pull ${{ env.REGISTRY }}/simulator:${{ github.sha }}
             docker pull ${{ env.REGISTRY }}/simulator-api:${{ github.sha }}
             docker stop simulator 2>/dev/null; docker rm simulator 2>/dev/null
             docker stop simulator-api 2>/dev/null; docker rm simulator-api 2>/dev/null
+            docker image prune -af 2>/dev/null || true
+            docker volume prune -f 2>/dev/null || true
             docker run -d --restart=always --name simulator \
               --network=host \
-              -v simulator-data:/data \
               ${{ env.REGISTRY }}/simulator:${{ github.sha }}
             sleep 3
             docker run -d --restart=always --name simulator-api \
