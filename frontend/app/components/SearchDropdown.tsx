@@ -687,12 +687,15 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                       : item.address
                         ? `${item.address.slice(0, 8)}...${item.address.slice(-6)}`
                         : undefined;
+                    const evmIcon = item.icon_url
+                      ? <img src={item.icon_url} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      : <Hexagon className="h-4 w-4 text-blue-400" />;
                     return (
                       <ResultRow
-                        key={`evm-${i}-${item.address}`}
+                        key={`evm-${i}-${item.address || item.address_hash}`}
                         idx={idx}
                         isActive={activeIndex === idx}
-                        icon={<Hexagon className="h-4 w-4 text-blue-400" />}
+                        icon={evmIcon}
                         label={
                           <HighlightMatch text={displayLabel} query={highlightQuery} />
                         }

@@ -146,6 +146,7 @@ export interface BSSearchItem {
   url: string;
   symbol: string | null;
   token_type: string | null;
+  icon_url?: string | null;
   is_smart_contract_verified: boolean | null;
   exchange_rate: string | null;
 }
