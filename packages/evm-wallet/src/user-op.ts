@@ -71,6 +71,7 @@ export async function buildUserOperation(opts: {
   rpcUrl: string
   bundlerClient: BundlerClient
   entryPoint?: Address
+  paymasterUrl?: string
 }): Promise<PackedUserOperation> {
   const {
     sender,
@@ -116,7 +117,7 @@ export async function buildUserOperation(opts: {
   const maxFeePerGas = baseFee * 2n > 1000000n ? baseFee * 2n : 1000000n
   const maxPriorityFeePerGas = 0n
 
-  return {
+  const result: PackedUserOperation = {
     sender,
     nonce: toHex(nonce),
     initCode,
@@ -130,4 +131,18 @@ export async function buildUserOperation(opts: {
     paymasterAndData: "0x",
     signature: "0x",
   }
+
+  if (opts.paymasterUrl) {
+    const pmResponse = await fetch(opts.paymasterUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userOp: result }),
+    })
+    const pmData = await pmResponse.json()
+    if (pmData.paymasterAndData) {
+      result.paymasterAndData = pmData.paymasterAndData
+    }
+  }
+
+  return result
 }

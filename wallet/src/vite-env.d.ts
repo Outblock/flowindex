@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL: string;
   readonly VITE_RP_ID: string;
   readonly VITE_BUNDLER_URL: string;
+  readonly VITE_PAYMASTER_URL: string;
 }
 
 interface ImportMeta {
