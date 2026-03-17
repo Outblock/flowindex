@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, Activity, ArrowRightLeft, Coins, Wallet, ExternalLink, FileCode2, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Activity, ArrowRightLeft, Coins, Wallet, ExternalLink, FileCode2, ImageIcon, ChartLine } from 'lucide-react';
 import Avatar from 'boring-avatars';
 import { colorsFromAddress, avatarVariant } from '@/components/AddressLink';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
@@ -14,6 +14,8 @@ import { EVMTokenTransfers } from './EVMTokenTransfers';
 import { EVMTokenHoldings } from './EVMTokenHoldings';
 import { AccountTokensTab } from '@/components/account/AccountTokensTab';
 import { EVMNFTsTab } from './EVMNFTsTab';
+import { AccountDefiTab } from '@/components/account/AccountDefiTab';
+import { fetchNetworkStats } from '@/api/heyapi';
 import type { BSAddress } from '@/types/blockscout';
 
 interface EVMAccountPageProps {
@@ -23,9 +25,9 @@ interface EVMAccountPageProps {
   initialTab?: string;
 }
 
-type EVMTab = 'transactions' | 'internal' | 'transfers' | 'tokens' | 'nfts';
+type EVMTab = 'transactions' | 'internal' | 'transfers' | 'tokens' | 'nfts' | 'defi';
 
-const VALID_TABS: EVMTab[] = ['transactions', 'internal', 'transfers', 'tokens', 'nfts'];
+const VALID_TABS: EVMTab[] = ['transactions', 'internal', 'transfers', 'tokens', 'nfts', 'defi'];
 
 export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMAccountPageProps) {
   const navigate = useNavigate();
@@ -39,6 +41,13 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
     setActiveTab(tab);
     navigate({ search: (prev: Record<string, unknown>) => ({ ...prev, tab }) } as any);
   };
+
+  const [flowPrice, setFlowPrice] = useState(0);
+  useEffect(() => {
+    fetchNetworkStats({ timeoutMs: 4000 }).then((stats) => {
+      if (stats?.price > 0) setFlowPrice(stats.price);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +76,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
     { id: 'transfers', label: 'Token Transfers', icon: Coins },
     { id: 'tokens', label: 'Tokens', icon: Wallet },
     { id: 'nfts', label: 'NFTs', icon: ImageIcon },
+    { id: 'defi', label: 'DeFi', icon: ChartLine },
   ];
 
   return (
@@ -279,6 +289,7 @@ export function EVMAccountPage({ address, flowAddress, isCOA, initialTab }: EVMA
               )
             )}
             {activeTab === 'nfts' && <EVMNFTsTab address={address} />}
+            {activeTab === 'defi' && <AccountDefiTab address="" coaAddress={address} flowPriceUsd={flowPrice} />}
           </div>
         </div>
       </div>
