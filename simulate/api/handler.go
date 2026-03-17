@@ -477,6 +477,24 @@ transaction {
     prepare(signer: &Account) { log("misc warmup") }
 }`, nil)
 
+	// Phase 7b: System accounts accessed by the Flow runtime on every transaction
+	// (execution parameters, fee computation, authorization). These are NOT imported
+	// by user code but still trigger slow gRPC register fetches if uncached.
+	h.runWarmupTx(ctx, "runtime-system", `
+import FlowExecutionParameters from 0xf426ff57ee8f6110
+
+transaction {
+    prepare(signer: &Account) {
+        // Touch system accounts so their metadata registers get cached
+        let a1 = getAccount(0xf426ff57ee8f6110)
+        let a2 = getAccount(0xd421a63faae318f9)
+        let a3 = getAccount(0x45df3724e7c13957)
+        log(a1.balance)
+        log(a2.balance)
+        log(a3.balance)
+    }
+}`, nil)
+
 	// Phase 8: Pre-cache FlowToken vault storage for common signer addresses.
 	// The warmup above caches contract code, but when a user simulates a FLOW transfer
 	// using an address as signer, the emulator also fetches that account's storage registers
