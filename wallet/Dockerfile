@@ -18,11 +18,12 @@ RUN bun -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')
 # Install all workspace deps
 RUN cd wallet && bun install
 
-# Build shared packages (generate dist/ via tsup)
+# Build shared packages (generate dist/ via tsup/tsc)
 RUN cd packages/flow-passkey && bun run build \
  && cd ../auth-core && bun run build \
  && cd ../auth-ui && bun run build \
- && cd ../flow-ui && bun run build
+ && cd ../flow-ui && bun run build \
+ && cd ../evm-wallet && bun run build
 
 # Copy wallet source and build
 COPY wallet/ ./wallet/
@@ -30,7 +31,7 @@ WORKDIR /app/wallet
 
 ARG VITE_API_URL=https://flowindex.io
 ENV VITE_API_URL=$VITE_API_URL
-ARG VITE_SUPABASE_URL=https://run.flowindex.io
+ARG VITE_SUPABASE_URL=https://flowindex.io
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ARG VITE_RP_ID=flowindex.io
 ENV VITE_RP_ID=$VITE_RP_ID
