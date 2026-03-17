@@ -56,6 +56,7 @@ type SimulateResponse struct {
 const (
 	maxScheduledAdvanceSeconds = 5.0
 	maxScheduledAdvanceBlocks  = 20
+	baseSnapshotName           = "base"
 )
 
 var (
@@ -556,12 +557,12 @@ transaction(amount: UFix64, to: Address) {
 	baseCtx, baseCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer baseCancel()
 	h.mu.Lock()
-	baseName := fmt.Sprintf("base-%d", time.Now().UnixNano())
-	if _, err := h.client.CreateSnapshot(baseCtx, baseName); err != nil {
+	baseName := baseSnapshotName
+	if _, err := h.client.CreateOrReplaceSnapshot(baseCtx, baseName); err != nil {
 		log.Printf("[simulator] warmup: failed to create base snapshot: %v", err)
 	} else {
 		h.baseSnapshot.Store(baseName)
-		log.Printf("[simulator] warmup: base snapshot created: %s", baseName)
+		log.Printf("[simulator] warmup: base snapshot refreshed: %s", baseName)
 	}
 	h.mu.Unlock()
 

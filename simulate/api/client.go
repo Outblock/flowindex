@@ -658,11 +658,12 @@ func (c *Client) WaitForBlockReady(ctx context.Context) error {
 	return fmt.Errorf("emulator still has pending block after 5s")
 }
 
-// CreateSnapshot creates a named snapshot of the emulator state.
-// Returns the snapshot block height or an error.
-func (c *Client) CreateSnapshot(ctx context.Context, name string) (string, error) {
+func (c *Client) createSnapshot(ctx context.Context, name string, replace bool) (string, error) {
 	form := url.Values{}
 	form.Set("name", name)
+	if replace {
+		form.Set("replace", "true")
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", c.adminURL+"/emulator/snapshots", strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("building snapshot request: %w", err)
@@ -690,6 +691,17 @@ func (c *Client) CreateSnapshot(ctx context.Context, name string) (string, error
 	}
 
 	return snapResp.BlockHeight, nil
+}
+
+// CreateSnapshot creates a named snapshot of the emulator state.
+// Returns the snapshot block height or an error.
+func (c *Client) CreateSnapshot(ctx context.Context, name string) (string, error) {
+	return c.createSnapshot(ctx, name, false)
+}
+
+// CreateOrReplaceSnapshot creates a snapshot, replacing an existing one with the same name.
+func (c *Client) CreateOrReplaceSnapshot(ctx context.Context, name string) (string, error) {
+	return c.createSnapshot(ctx, name, true)
 }
 
 // RevertSnapshot reverts the emulator state to a named snapshot.
