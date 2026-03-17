@@ -18,6 +18,12 @@ yarn-error.log*
 .turbo
 coverage/
 
+# Foundry
+scripts/deploy-smart-wallet/lib/
+scripts/deploy-smart-wallet/out/
+scripts/deploy-smart-wallet/cache/
+scripts/deploy-smart-wallet/broadcast/
+
 # Go
 bin/
 *.exe

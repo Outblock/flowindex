@@ -786,6 +786,30 @@ jobs:
               ${{ env.REGISTRY }}/wallet:${{ github.sha }}
           '
 
+      - name: Deploy Alto bundler (ERC-4337) on backend VM
+        run: |
+          gcloud compute ssh flowindex-backend --zone=us-central1-a --command='
+            docker pull ghcr.io/pimlicolabs/alto:latest && \
+            docker stop alto-bundler 2>/dev/null; docker rm alto-bundler 2>/dev/null; \
+            source /mnt/stateful_partition/pgdata/alto-bundler.env && \
+            docker run -d --restart=always --name alto-bundler \
+              --network=host \
+              -e ALTO_RPC_URL -e ALTO_EXECUTOR_PRIVATE_KEY -e ALTO_UTILITY_PRIVATE_KEY \
+              -e ALTO_ENTRYPOINTS -e ALTO_PORT \
+              --entrypoint /bin/sh \
+              ghcr.io/pimlicolabs/alto:latest \
+              -c "node src/esm/cli/alto.js run \
+                --rpc-url \$ALTO_RPC_URL \
+                --executor-private-keys \$ALTO_EXECUTOR_PRIVATE_KEY \
+                --utility-private-key \$ALTO_UTILITY_PRIVATE_KEY \
+                --entrypoints \$ALTO_ENTRYPOINTS \
+                --safe-mode false \
+                --chain-type default \
+                --deploy-simulations-contract true \
+                --log-level info \
+                --port \$ALTO_PORT"
+          '
+
       - name: Update Caddy config for TLS
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="

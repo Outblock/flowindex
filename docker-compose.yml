@@ -355,7 +355,7 @@ services:
     ports:
       - "4337:4337"
     env_file:
-      - bundler/.env
+      - wallet/bundler/.env
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >
