@@ -5,7 +5,7 @@ export async function fetchIncrementFiPositions(
   flowPriceUsd: number,
 ): Promise<ProtocolResult> {
   try {
-    const { cadenceService } = await import('../fclConfig')
+    const { cadenceService } = await import('../../fclConfig')
     const positions: DeFiPosition[] = []
 
     const tokenRes = await cadenceService.getToken(flowAddress).catch(() => null)

@@ -39,7 +39,7 @@ export async function fetchKittyPunchPositions(
 /** Fetch V2 LP positions from curated pair list */
 async function fetchV2Positions(
   user: `0x${string}`,
-  pairs: readonly { address: `0x${string}`; token0Symbol: string; token1Symbol: string }[],
+  pairs: readonly { address: `0x${string}`; token0Symbol: string; token1Symbol: string; token0Decimals: number; token1Decimals: number }[],
   prices: PriceMap,
 ): Promise<DeFiPosition[]> {
   if (pairs.length === 0) return []
