@@ -19,6 +19,7 @@ export interface EvmWalletProviderConfig {
   credentialId: string
   isDeployed: boolean
   chainId?: number
+  paymasterUrl?: string
 }
 
 export function createEvmWalletProvider(config: EvmWalletProviderConfig) {
@@ -29,6 +30,7 @@ export function createEvmWalletProvider(config: EvmWalletProviderConfig) {
     publicKeySec1Hex,
     credentialId,
     chainId = 747,
+    paymasterUrl,
   } = config
   let isDeployed = config.isDeployed
 
@@ -96,6 +98,7 @@ export function createEvmWalletProvider(config: EvmWalletProviderConfig) {
           isDeployed,
           rpcUrl,
           bundlerClient,
+          paymasterUrl,
         })
 
         const userOpHash = computeUserOpHash(userOp, ENTRYPOINT_V07_ADDRESS, chainId)
