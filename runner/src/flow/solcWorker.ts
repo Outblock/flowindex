@@ -101,6 +101,120 @@ async function loadSolcVersion(version?: string) {
   return loadBundledSolc();
 }
 
+// ---------------------------------------------------------------------------
+// npm import resolver — fetches Solidity sources from jsdelivr CDN
+// ---------------------------------------------------------------------------
+
+const JSDELIVR_BASE = 'https://cdn.jsdelivr.net/npm';
+
+/** Cache fetched npm files so repeat compiles don't re-download */
+const npmCache = new Map<string, string>();
+
+/** Extract all import paths from Solidity source */
+function extractImports(source: string): string[] {
+  const imports: string[] = [];
+  // Match: import "path"; import { X } from "path"; import "path" as Y;
+  const re = /import\s+(?:[^"']*\s+from\s+)?["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(source)) !== null) {
+    imports.push(m[1]);
+  }
+  return imports;
+}
+
+/** Check if an import path is an npm package (not relative/absolute) */
+function isNpmImport(path: string): boolean {
+  return !path.startsWith('.') && !path.startsWith('/');
+}
+
+/**
+ * Resolve an npm import path to a jsdelivr URL.
+ * e.g. "@openzeppelin/contracts/token/ERC20/ERC20.sol"
+ *   -> "https://cdn.jsdelivr.net/npm/@openzeppelin/contracts/token/ERC20/ERC20.sol"
+ */
+function npmToUrl(importPath: string): string {
+  return `${JSDELIVR_BASE}/${importPath}`;
+}
+
+/**
+ * Resolve a relative import from within an npm package.
+ * e.g. base="@openzeppelin/contracts/token/ERC20/ERC20.sol", rel="../utils/Context.sol"
+ *   -> "@openzeppelin/contracts/token/utils/Context.sol"
+ */
+function resolveRelative(basePath: string, relPath: string): string {
+  const parts = basePath.split('/');
+  parts.pop(); // remove filename
+  for (const seg of relPath.split('/')) {
+    if (seg === '..') parts.pop();
+    else if (seg !== '.') parts.push(seg);
+  }
+  return parts.join('/');
+}
+
+/**
+ * Recursively resolve all npm imports for the given sources.
+ * Fetches from jsdelivr CDN and adds to the resolved map.
+ */
+async function resolveNpmImports(
+  localSources: Record<string, string>,
+  resolved: Map<string, string>,
+  maxDepth = 20,
+): Promise<void> {
+  // Collect all sources to scan (local + already resolved)
+  const toScan: [string, string][] = [
+    ...Object.entries(localSources),
+    ...resolved.entries(),
+  ];
+
+  const pending = new Set<string>();
+
+  for (const [filePath, content] of toScan) {
+    for (const imp of extractImports(content)) {
+      let npmPath: string;
+      if (isNpmImport(imp)) {
+        npmPath = imp;
+      } else if (imp.startsWith('.') && isNpmImport(filePath)) {
+        // Relative import inside an npm package
+        npmPath = resolveRelative(filePath, imp);
+      } else {
+        continue; // local relative import — skip
+      }
+
+      if (localSources[npmPath] || resolved.has(npmPath)) continue;
+      pending.add(npmPath);
+    }
+  }
+
+  if (pending.size === 0 || maxDepth <= 0) return;
+
+  // Fetch all pending in parallel
+  const fetches = [...pending].map(async (npmPath) => {
+    if (npmCache.has(npmPath)) {
+      return { path: npmPath, content: npmCache.get(npmPath)! };
+    }
+    const url = npmToUrl(npmPath);
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      throw new Error(`Failed to fetch ${npmPath} from CDN (${resp.status}): ${url}`);
+    }
+    const content = await resp.text();
+    npmCache.set(npmPath, content);
+    return { path: npmPath, content };
+  });
+
+  const results = await Promise.all(fetches);
+  for (const { path, content } of results) {
+    resolved.set(path, content);
+  }
+
+  // Recurse to resolve transitive dependencies
+  await resolveNpmImports(localSources, resolved, maxDepth - 1);
+}
+
+// ---------------------------------------------------------------------------
+// Worker message handler
+// ---------------------------------------------------------------------------
+
 interface CompileRequest {
   id: number;
   source: string;
@@ -117,14 +231,38 @@ self.onmessage = async (e: MessageEvent<CompileRequest>) => {
   try {
     const compiler = await loadSolcVersion(solcVersion);
 
-    // Build sources from either multi-file or single-file input
-    const allSources: Record<string, { content: string }> = {};
+    // Build local sources from either multi-file or single-file input
+    const localSources: Record<string, string> = {};
     if (multiSources) {
       for (const [name, content] of Object.entries(multiSources)) {
-        allSources[name] = { content };
+        localSources[name] = content;
       }
     } else {
-      allSources[fileName] = { content: source };
+      localSources[fileName] = source;
+    }
+
+    // Resolve npm imports (e.g. @openzeppelin/contracts/...)
+    const npmResolved = new Map<string, string>();
+    try {
+      await resolveNpmImports(localSources, npmResolved);
+    } catch (resolveErr: any) {
+      self.postMessage({
+        id,
+        success: false,
+        contracts: [],
+        errors: [`Import resolution failed: ${resolveErr.message}`],
+        warnings: [],
+      });
+      return;
+    }
+
+    // Merge local + npm sources
+    const allSources: Record<string, { content: string }> = {};
+    for (const [name, content] of Object.entries(localSources)) {
+      allSources[name] = { content };
+    }
+    for (const [name, content] of npmResolved.entries()) {
+      allSources[name] = { content };
     }
 
     const input = {
