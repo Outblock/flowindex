@@ -5,10 +5,8 @@ libs = ["lib"]
 solc_version = "0.8.23"
 bytecode_hash = "none"
 evm_version = "paris"
-
-[profile.default.optimizer]
-enabled = true
-runs = 1000000
+optimizer = true
+optimizer_runs = 1000000
 
 [rpc_endpoints]
 flow_evm_testnet = "${FLOW_EVM_TESTNET_RPC}"
