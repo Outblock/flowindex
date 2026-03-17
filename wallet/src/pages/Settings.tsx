@@ -262,6 +262,19 @@ function AccountRow({
             {network}
           </Badge>
         </div>
+        {account.evmAddress && (
+          <div className="flex items-center gap-2 mt-1">
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 h-4 rounded-lg text-violet-400 border-violet-400/30 bg-violet-400/10"
+            >
+              EVM
+            </Badge>
+            <p className="text-[11px] font-mono text-wallet-muted truncate">
+              {formatShort(account.evmAddress, 6, 4)}
+            </p>
+          </div>
+        )}
         <p className="text-[11px] text-wallet-muted mt-1 font-mono truncate">
           Key: {formatShort(account.publicKeySec1Hex, 8, 6)}
         </p>

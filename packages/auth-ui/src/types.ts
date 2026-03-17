@@ -32,6 +32,7 @@ export interface PasskeyState {
   provisionAccounts(credentialId: string): Promise<ProvisionResult>;
   pollProvisionTx(txId: string, network: 'mainnet' | 'testnet'): Promise<string>;
   saveProvisionedAddress(credentialId: string, network: string, address: string): Promise<void>;
+  saveEvmAddress(credentialId: string, evmAddress: string): Promise<void>;
   refreshState(): Promise<void>;
 }
 

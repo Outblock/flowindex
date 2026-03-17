@@ -499,6 +499,7 @@
       "dependencies": {
         "@flowindex/auth-core": "workspace:*",
         "@flowindex/auth-ui": "workspace:*",
+        "@flowindex/evm-wallet": "workspace:*",
         "@flowindex/flow-passkey": "workspace:*",
         "@flowindex/flow-ui": "workspace:*",
         "@onflow/fcl": "^1.21.9",
