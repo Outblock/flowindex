@@ -26,6 +26,7 @@ import { AccountStorageTab } from '../../components/account/AccountStorageTab';
 import { AccountLinkedAccountsTab } from '../../components/account/AccountLinkedAccountsTab';
 import { AccountStakingTab } from '../../components/account/AccountStakingTab';
 import { AccountBalanceTab } from '../../components/account/AccountBalanceTab';
+import { AccountDefiTab } from '../../components/account/AccountDefiTab';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { CopyButton } from '@/components/animate-ui/components/buttons/copy';
 import { GlassCard, cn } from '@flowindex/flow-ui';
@@ -46,7 +47,7 @@ const LABEL_CATEGORY_CONFIG: Record<string, { icon: LucideIcon; className: strin
     custom:   { icon: Tag,              className: "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700" },
 };
 
-const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
+const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'defi', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 const VALID_SUBTABS = ['all', 'ft', 'nft', 'staking', 'scheduled', 'cadence', 'evm'] as const;
@@ -290,6 +291,7 @@ function AccountDetail() {
         { id: 'activity' as const, label: 'Activity', icon: Activity },
         { id: 'tokens' as const, label: 'Tokens', icon: Coins },
         { id: 'nfts' as const, label: 'NFTs', icon: ImageIcon },
+        { id: 'defi' as const, label: 'DeFi', icon: ChartLine },
         { id: 'staking' as const, label: 'Staking', icon: Landmark },
         { id: 'keys' as const, label: 'Public Keys', icon: Key },
         { id: 'contracts' as const, label: `Contracts (${account.contracts?.length || 0})`, icon: FileText },
@@ -629,6 +631,7 @@ function AccountDetail() {
                                 {activeTab === 'balance' && <AccountBalanceTab address={normalizedAddress} staking={onChainData?.staking} tokens={onChainData?.tokens} />}
                                 {activeTab === 'tokens' && <AccountTokensTab address={address} coaAddress={onChainData?.coaAddress} subtab={activeSubTab} onSubTabChange={setActiveSubTab} />}
                                 {activeTab === 'nfts' && <AccountNFTsTab address={address} />}
+                                {activeTab === 'defi' && <AccountDefiTab address={normalizedAddress} coaAddress={onChainData?.coaAddress} flowPriceUsd={flowPrice} />}
                                 {activeTab === 'staking' && <AccountStakingTab address={address} />}
                                 {activeTab === 'keys' && <AccountKeysTab account={account} />}
                                 {activeTab === 'contracts' && <AccountContractsTab address={address} contracts={account.contracts || []} />}
