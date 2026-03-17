@@ -3,6 +3,7 @@ import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { registerCadenceLanguage, CADENCE_LANGUAGE_ID } from './cadenceLanguage';
 import { registerCadenceThemes, CADENCE_DARK_THEME, CADENCE_LIGHT_THEME } from './cadenceTheme';
+import { registerSolidityLanguage } from './solidityLanguage';
 import { activateCadenceTextmate } from './cadenceTextmate';
 
 interface CadenceEditorProps {
@@ -41,7 +42,9 @@ export default function CadenceEditor({
 
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     monacoRef.current = monaco;
-    if (!isSolidity) {
+    if (isSolidity) {
+      registerSolidityLanguage(monaco);
+    } else {
       // Register Monarch as fallback first — TextMate will override once WASM loads
       registerCadenceLanguage(monaco);
       registerCadenceThemes(monaco);
