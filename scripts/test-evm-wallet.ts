@@ -13,7 +13,7 @@ import {
   getSmartWalletAddress,
   createBundlerClient,
   ENTRYPOINT_V07_ADDRESS,
-} from "@flowindex/evm-wallet"
+} from "../packages/evm-wallet/src/index"
 
 const RPC_URL = process.env.EVM_RPC_URL ?? "https://testnet.evm.nodes.onflow.org"
 const BUNDLER_URL = process.env.BUNDLER_URL ?? "http://localhost:4337"
