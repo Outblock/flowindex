@@ -105,12 +105,15 @@ jobs:
 
       - name: Upload paymaster service
         run: |
-          gcloud compute scp wallet/bundler/paymaster-service.ts wallet/bundler/package.json \
-            flowindex-bundler:/tmp/ --zone=${{ env.ZONE }}
-          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
-            sudo mkdir -p /mnt/stateful_partition/paymaster && \
-            sudo cp /tmp/paymaster-service.ts /tmp/package.json /mnt/stateful_partition/paymaster/
-          '
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command="
+            sudo mkdir -p /mnt/stateful_partition/paymaster
+            sudo tee /mnt/stateful_partition/paymaster/paymaster-service.ts > /dev/null << 'TSEOF'
+          $(cat wallet/bundler/paymaster-service.ts)
+          TSEOF
+            sudo tee /mnt/stateful_partition/paymaster/package.json > /dev/null << 'PKGEOF'
+          $(cat wallet/bundler/package.json)
+          PKGEOF
+          "
 
       - name: Deploy paymaster service
         run: |
