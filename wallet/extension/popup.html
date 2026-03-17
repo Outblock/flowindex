@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=320">
+  <title>FlowIndex Wallet</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 320px;
+      min-height: 200px;
+      background: #0a0a0a;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: rgba(0, 239, 139, 0.15);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: monospace;
+      font-weight: bold;
+      font-size: 13px;
+      color: #00EF8B;
+    }
+    .title { font-size: 15px; font-weight: 600; }
+    .subtitle { font-size: 11px; color: #666; margin-top: 2px; }
+    .status {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #222;
+      background: #111;
+      margin-bottom: 16px;
+    }
+    .status-label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .status-value { font-size: 12px; font-family: monospace; word-break: break-all; }
+    .connected { color: #00EF8B; }
+    .disconnected { color: #666; }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-primary { background: #00EF8B; color: #000; }
+    .btn-danger { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .btn + .btn { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">FI</div>
+    <div>
+      <div class="title">FlowIndex Wallet</div>
+      <div class="subtitle">Flow-EVM Testnet</div>
+    </div>
+  </div>
+
+  <div class="status">
+    <div class="status-label">Status</div>
+    <div id="status" class="status-value disconnected">Not connected</div>
+  </div>
+
+  <div id="address-section" class="status" style="display:none">
+    <div class="status-label">EVM Address</div>
+    <div id="address" class="status-value"></div>
+  </div>
+
+  <button id="connect-btn" class="btn btn-primary">Connect Wallet</button>
+  <button id="disconnect-btn" class="btn btn-danger" style="display:none">Disconnect</button>
+
+  <script src="popup-script.js"></script>
+</body>
+</html>

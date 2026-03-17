@@ -7,6 +7,7 @@ import {
   Settings,
   ArrowUpRight,
   ArrowDownLeft,
+  Link2,
 } from 'lucide-react';
 import { cn } from '@flowindex/flow-ui';
 import NetworkBadge from './NetworkBadge';
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/nfts', label: 'NFTs', icon: Image },
   { to: '/ai', label: 'AI', icon: Sparkles },
   { to: '/activity', label: 'Activity', icon: Clock },
+  { to: '/connect', label: 'Connect', icon: Link2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const;
 
