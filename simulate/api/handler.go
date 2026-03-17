@@ -429,6 +429,35 @@ transaction {
     prepare(signer: &Account) { log("nft-metadata warmup") }
 }`, nil)
 
+	// Phase 2b: Popular NFT collections (TopShot, NFL, UFC, etc.)
+	h.runWarmupTx(ctx, "popular-nfts", `
+import TopShot from 0x0b2a3299cc857e29
+import TopShotMarketV3 from 0xc1e4f4f4c4257510
+import NFL_ALL_DAY from 0xe4cf4bdc1751c65d
+import UFC_NFT from 0x329feb3ab062d289
+import Flovatar from 0x921ea449dffec68a
+import FlovatarComponent from 0x921ea449dffec68a
+import FlowtyWrapped from 0x2f3b85e17f0e1965
+import Wearables from 0xe81193c424cfd10b
+
+transaction {
+    prepare(signer: &Account) { log("popular-nfts warmup") }
+}`, nil)
+
+	// Phase 2c: Popular DeFi + FT contracts
+	h.runWarmupTx(ctx, "defi-ft", `
+import FUSD from 0x3c5959b568896393
+import SwapRouter from 0xa6850776a94e6551
+import SwapFactory from 0xb063c16cac85dbd1
+import SwapInterfaces from 0xb78ef7afa52ff906
+import SwapConfig from 0xb78ef7afa52ff906
+import stFlowToken from 0xd6f80565193ad727
+import LiquidStaking from 0xd6f80565193ad727
+
+transaction {
+    prepare(signer: &Account) { log("defi-ft warmup") }
+}`, nil)
+
 	// Phase 3: Staking contracts
 	h.runWarmupTx(ctx, "staking", `
 import FlowIDTableStaking from 0x8624b52f9ddcd04a
