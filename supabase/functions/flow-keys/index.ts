@@ -252,12 +252,7 @@ serve(async (req: Request) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers':
-          'Content-Type, Authorization, apikey, x-client-info',
-      },
+      status: 204,
     });
   }
 
@@ -284,7 +279,7 @@ serve(async (req: Request) => {
       if (!publicKey || !/^[0-9a-fA-F]{128}$/.test(publicKey)) {
         return new Response(
           JSON.stringify(error('INVALID_KEY', 'publicKey must be 128 hex characters (64 bytes uncompressed, no 04 prefix)')),
-          { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
         );
       }
 
@@ -297,12 +292,12 @@ serve(async (req: Request) => {
         );
         return new Response(
           JSON.stringify(success({ txId: result.txId, network: network || 'testnet' })),
-          { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          { headers: { 'Content-Type': 'application/json' } },
         );
       } catch (e) {
         return new Response(
           JSON.stringify(error('ACCOUNT_CREATION_FAILED', e instanceof Error ? e.message : 'Failed to create account')),
-          { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+          { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
       }
     }
@@ -316,7 +311,6 @@ serve(async (req: Request) => {
           status: 401,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
           },
         },
       );
@@ -559,7 +553,6 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify(result), {
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (e) {
@@ -572,10 +565,7 @@ serve(async (req: Request) => {
       ),
       {
         status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: { 'Content-Type': 'application/json' },
       },
     );
   }

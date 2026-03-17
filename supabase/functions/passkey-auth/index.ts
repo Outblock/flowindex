@@ -154,14 +154,9 @@ function generateWebAuthnUserId(): string {
 }
 
 serve(async (req: Request) => {
+  // CORS is handled by the nginx gateway — don't add headers here (causes duplicate * values)
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
-      },
-    });
+    return new Response(null, { status: 204 });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -829,14 +824,14 @@ serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (e) {
     console.error('[passkey-auth] Unhandled error:', e);
     const msg = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify(error('UNKNOWN_ERROR', msg)), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 }, { port: Number(Deno.env.get('PORT')) || 8000 });

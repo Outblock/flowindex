@@ -69,16 +69,9 @@ function generateSlug(name: string): string {
 // ---------------------------------------------------------------------------
 
 serve(async (req: Request) => {
-  // CORS preflight
+  // CORS is handled by the nginx gateway — don't add headers here (causes duplicate * values)
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers':
-          'Content-Type, Authorization, apikey, x-client-info',
-      },
-    });
+    return new Response(null, { status: 204 });
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -103,8 +96,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -186,8 +178,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -359,8 +350,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -401,8 +391,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -501,8 +490,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -561,8 +549,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -588,8 +575,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -616,8 +602,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -642,8 +627,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -688,8 +672,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -756,8 +739,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -805,8 +787,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -867,8 +848,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -913,8 +893,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -953,8 +932,7 @@ serve(async (req: Request) => {
               status: 401,
               headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-              },
+                              },
             },
           );
         }
@@ -1005,7 +983,7 @@ serve(async (req: Request) => {
         if (!user) {
           return new Response(
             JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
-            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
           );
         }
         const { data: addrs, error: addrsErr } = await supabaseAdmin
@@ -1029,7 +1007,7 @@ serve(async (req: Request) => {
         if (!user) {
           return new Response(
             JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
-            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
           );
         }
         const {
@@ -1074,7 +1052,7 @@ serve(async (req: Request) => {
         if (!user) {
           return new Response(
             JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
-            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
           );
         }
         const {
@@ -1125,7 +1103,7 @@ serve(async (req: Request) => {
         if (!user) {
           return new Response(
             JSON.stringify(error('UNAUTHORIZED', 'Authentication required')),
-            { status: 401, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } },
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
           );
         }
         const { id: deleteAddrId } = data as { id: string };
@@ -1153,8 +1131,7 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify(result), {
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
+              },
     });
   } catch (e) {
     return new Response(
@@ -1168,8 +1145,7 @@ serve(async (req: Request) => {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+                  },
       },
     );
   }
