@@ -2,16 +2,22 @@ import type { languages } from 'monaco-editor';
 
 export const SOLIDITY_LANGUAGE_ID = 'sol';
 
+let registered = false;
+
 export function registerSolidityLanguage(monaco: typeof import('monaco-editor')) {
-  // Only register once
-  if (monaco.languages.getLanguages().some(l => l.id === SOLIDITY_LANGUAGE_ID)) return;
+  if (registered) return;
+  registered = true;
 
-  monaco.languages.register({
-    id: SOLIDITY_LANGUAGE_ID,
-    extensions: ['.sol'],
-    aliases: ['Solidity', 'solidity', 'sol'],
-  });
+  // Monaco may already have a basic 'sol' language — register anyway to ensure metadata
+  if (!monaco.languages.getLanguages().some(l => l.id === SOLIDITY_LANGUAGE_ID)) {
+    monaco.languages.register({
+      id: SOLIDITY_LANGUAGE_ID,
+      extensions: ['.sol'],
+      aliases: ['Solidity', 'solidity', 'sol'],
+    });
+  }
 
+  // Always override the tokenizer with our Monarch grammar
   monaco.languages.setMonarchTokensProvider(SOLIDITY_LANGUAGE_ID, solidityTokens);
 }
 
