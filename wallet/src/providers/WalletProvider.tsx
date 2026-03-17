@@ -1,12 +1,17 @@
 import { createContext, useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@flowindex/auth-ui';
 import type { PasskeyAccount } from '@flowindex/auth-core';
+import type { EvmWalletProvider } from '@flowindex/evm-wallet';
+import { useEvmWallet } from '@/hooks/useEvmWallet';
 
 export interface WalletContextValue {
   activeAccount: PasskeyAccount | null;
   accounts: PasskeyAccount[];
   network: 'mainnet' | 'testnet';
   loading: boolean;
+  evmAddress: string | null;
+  evmComputing: boolean;
+  evmProvider: EvmWalletProvider | null;
   switchAccount: (credentialId: string) => void;
   switchNetwork: (network: 'mainnet' | 'testnet') => void;
   refreshAccounts: () => Promise<void>;
@@ -86,11 +91,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [passkey]);
 
+  // EVM wallet — computes smart wallet address from active account's public key
+  const { evmAddress, isComputing: evmComputing, provider: evmProvider } = useEvmWallet(activeAccount);
+
   const value: WalletContextValue = {
     activeAccount,
     accounts,
     network,
     loading: loading || authLoading,
+    evmAddress,
+    evmComputing,
+    evmProvider,
     switchAccount,
     switchNetwork,
     refreshAccounts,

@@ -398,6 +398,11 @@ export function AuthProvider({ children, config }: { children: React.ReactNode; 
       await passkeyClient.saveProvisionedAddress(accessToken, credentialId, network, address);
     },
 
+    async saveEvmAddress(credentialId: string, evmAddress: string) {
+      if (!accessToken) throw new Error('Not authenticated');
+      await passkeyClient.saveEvmAddress(accessToken, credentialId, evmAddress);
+    },
+
     async refreshState() {
       await refreshPasskeyState();
     },

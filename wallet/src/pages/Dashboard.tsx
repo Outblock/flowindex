@@ -178,7 +178,7 @@ function TxRow({ tx }: { tx: AccountTransaction }) {
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const { activeAccount, network, loading: walletLoading } = useWallet();
+  const { activeAccount, network, loading: walletLoading, evmAddress, evmComputing } = useWallet();
 
   const [account, setAccount] = useState<AccountData | null>(null);
   const [holdings, setHoldings] = useState<FtHolding[]>([]);
@@ -186,6 +186,7 @@ export default function Dashboard() {
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [dataLoading, setDataLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedEvm, setCopiedEvm] = useState(false);
   const [tab, setTab] = useState<DashTab>('crypto');
 
   const address =
@@ -224,6 +225,14 @@ export default function Dashboard() {
       setTimeout(() => setCopied(false), 2000);
     });
   }, [address]);
+
+  const copyEvmAddress = useCallback(() => {
+    if (!evmAddress) return;
+    navigator.clipboard.writeText(evmAddress).then(() => {
+      setCopiedEvm(true);
+      setTimeout(() => setCopiedEvm(false), 2000);
+    });
+  }, [evmAddress]);
 
   // Build enriched vault list
   const flowBalance = account?.flowBalance ?? 0;
@@ -310,19 +319,39 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center justify-between mb-1">
           <p className="text-sm text-wallet-muted font-medium">Balance</p>
-          {address && (
-            <button
-              onClick={copyAddress}
-              className="flex items-center gap-1.5 text-xs text-wallet-muted hover:text-white transition-colors rounded-xl px-2 py-1 hover:bg-wallet-surface"
-            >
-              <span className="font-mono">0x{formatShort(address, 4, 4)}</span>
-              {copied ? (
-                <Check className="w-3 h-3 text-wallet-accent" />
-              ) : (
-                <Copy className="w-3 h-3" />
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {address && (
+              <button
+                onClick={copyAddress}
+                className="flex items-center gap-1.5 text-xs text-wallet-muted hover:text-white transition-colors rounded-xl px-2 py-1 hover:bg-wallet-surface"
+              >
+                <span className="text-[10px] font-semibold text-wallet-muted/70">FLOW</span>
+                <span className="font-mono">0x{formatShort(address, 4, 4)}</span>
+                {copied ? (
+                  <Check className="w-3 h-3 text-wallet-accent" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </button>
+            )}
+            {evmAddress && (
+              <button
+                onClick={copyEvmAddress}
+                className="flex items-center gap-1.5 text-xs text-wallet-muted hover:text-white transition-colors rounded-xl px-2 py-1 hover:bg-wallet-surface"
+              >
+                <span className="text-[10px] font-semibold text-violet-400/70">EVM</span>
+                <span className="font-mono">{formatShort(evmAddress, 4, 4)}</span>
+                {copiedEvm ? (
+                  <Check className="w-3 h-3 text-wallet-accent" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </button>
+            )}
+            {evmComputing && (
+              <span className="text-[10px] text-wallet-muted animate-pulse">EVM...</span>
+            )}
+          </div>
         </div>
 
         {loading ? (
