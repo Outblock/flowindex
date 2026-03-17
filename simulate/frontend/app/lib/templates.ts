@@ -149,6 +149,160 @@ transaction(recipientAddr: Address, momentID: UInt64) {
     ],
   },
   {
+    id: 'evm-transfer-flow',
+    name: 'EVM: Transfer FLOW',
+    filename: 'evm-transfer-flow.cdc',
+    cadence: `import FungibleToken from 0xf233dcee88fe0abe
+import FlowToken from 0x1654653399040a61
+import EVM from 0xe467b9dd11fa00df
+
+/// Transfer FLOW to an EVM address via a Cadence-Owned Account (COA).
+/// The signer's Cadence FLOW vault funds the COA, which then calls
+/// the recipient EVM address with the specified value.
+transaction(recipientEVMAddressHex: String, amount: UFix64) {
+    let coa: auth(EVM.Withdraw, EVM.Call) &EVM.CadenceOwnedAccount
+    var sentVault: @FlowToken.Vault
+
+    prepare(signer: auth(BorrowValue, SaveValue, Storage) &Account) {
+        if signer.storage.type(at: /storage/evm) == nil {
+            signer.storage.save(<-EVM.createCadenceOwnedAccount(), to: /storage/evm)
+        }
+        self.coa = signer.storage.borrow<auth(EVM.Withdraw, EVM.Call) &EVM.CadenceOwnedAccount>(
+            from: /storage/evm
+        ) ?? panic("Could not borrow COA")
+
+        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+            from: /storage/flowTokenVault
+        ) ?? panic("Could not borrow FLOW vault")
+        self.sentVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
+    }
+
+    execute {
+        self.coa.deposit(from: <-self.sentVault)
+        let recipientAddr = EVM.addressFromString(recipientEVMAddressHex)
+        let valueBalance = EVM.Balance(attoflow: 0)
+        valueBalance.setFLOW(flow: amount)
+        let txResult = self.coa.call(
+            to: recipientAddr,
+            data: [],
+            gasLimit: 21000,
+            value: valueBalance
+        )
+        assert(
+            txResult.status == EVM.Status.successful,
+            message: "EVM transfer failed: ".concat(txResult.errorMessage)
+        )
+    }
+}`,
+    args: [
+      { name: 'recipientEVMAddressHex', type: 'String', defaultValue: '0x000000000000000000000000000000000000dEaD' },
+      { name: 'amount', type: 'UFix64', defaultValue: '1.0' },
+    ],
+  },
+  {
+    id: 'evm-call-contract',
+    name: 'EVM: Call Contract',
+    filename: 'evm-call-contract.cdc',
+    cadence: `import FungibleToken from 0xf233dcee88fe0abe
+import FlowToken from 0x1654653399040a61
+import EVM from 0xe467b9dd11fa00df
+
+/// Call an EVM smart contract via a Cadence-Owned Account (COA).
+/// Provide the contract address, ABI-encoded calldata (hex), value
+/// to send (in FLOW), and a gas limit. The COA is funded from the
+/// signer's Cadence FLOW vault before making the call.
+transaction(evmContractHex: String, calldata: String, amount: UFix64, gasLimit: UInt64) {
+    let coa: auth(EVM.Withdraw, EVM.Call) &EVM.CadenceOwnedAccount
+    var sentVault: @FlowToken.Vault
+
+    prepare(signer: auth(BorrowValue, SaveValue, Storage) &Account) {
+        if signer.storage.type(at: /storage/evm) == nil {
+            signer.storage.save(<-EVM.createCadenceOwnedAccount(), to: /storage/evm)
+        }
+        self.coa = signer.storage.borrow<auth(EVM.Withdraw, EVM.Call) &EVM.CadenceOwnedAccount>(
+            from: /storage/evm
+        ) ?? panic("Could not borrow COA")
+
+        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+            from: /storage/flowTokenVault
+        ) ?? panic("Could not borrow FLOW vault")
+        self.sentVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
+    }
+
+    execute {
+        self.coa.deposit(from: <-self.sentVault)
+        let contractAddr = EVM.addressFromString(evmContractHex)
+        let data = calldata.decodeHex()
+        let valueBalance = EVM.Balance(attoflow: 0)
+        valueBalance.setFLOW(flow: amount)
+        let txResult = self.coa.call(
+            to: contractAddr,
+            data: data,
+            gasLimit: gasLimit,
+            value: valueBalance
+        )
+        assert(
+            txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful,
+            message: "EVM call reverted: ".concat(txResult.errorMessage)
+        )
+    }
+}`,
+    args: [
+      { name: 'evmContractHex', type: 'String', defaultValue: '0xd3bF53DAC106A0290B0483EcBC89d40FcC961f3e' },
+      { name: 'calldata', type: 'String', defaultValue: '70a08231000000000000000000000000000000000000000000000000000000000000dEaD' },
+      { name: 'amount', type: 'UFix64', defaultValue: '0.0' },
+      { name: 'gasLimit', type: 'UInt64', defaultValue: '100000' },
+    ],
+  },
+  {
+    id: 'evm-deploy-contract',
+    name: 'EVM: Deploy Contract',
+    filename: 'evm-deploy-contract.cdc',
+    cadence: `import FungibleToken from 0xf233dcee88fe0abe
+import FlowToken from 0x1654653399040a61
+import EVM from 0xe467b9dd11fa00df
+
+/// Deploy an EVM smart contract via a Cadence-Owned Account (COA).
+/// Provide the contract bytecode (hex) and an initial FLOW value to
+/// send with the deployment (usually 0.0).
+transaction(bytecode: String, amount: UFix64, gasLimit: UInt64) {
+    let coa: auth(EVM.Withdraw, EVM.Deploy) &EVM.CadenceOwnedAccount
+    var sentVault: @FlowToken.Vault
+
+    prepare(signer: auth(BorrowValue, SaveValue, Storage) &Account) {
+        if signer.storage.type(at: /storage/evm) == nil {
+            signer.storage.save(<-EVM.createCadenceOwnedAccount(), to: /storage/evm)
+        }
+        self.coa = signer.storage.borrow<auth(EVM.Withdraw, EVM.Deploy) &EVM.CadenceOwnedAccount>(
+            from: /storage/evm
+        ) ?? panic("Could not borrow COA")
+
+        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+            from: /storage/flowTokenVault
+        ) ?? panic("Could not borrow FLOW vault")
+        self.sentVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
+    }
+
+    execute {
+        self.coa.deposit(from: <-self.sentVault)
+        let code = bytecode.decodeHex()
+        let valueBalance = EVM.Balance(attoflow: 0)
+        valueBalance.setFLOW(flow: amount)
+        let deployedAddr = self.coa.deploy(
+            code: code,
+            gasLimit: gasLimit,
+            value: valueBalance
+        )
+        log("Deployed to: ".concat(deployedAddr.toString()))
+    }
+}`,
+    args: [
+      { name: 'bytecode', type: 'String', defaultValue: '6080604052348015600e575f5ffd5b50608580601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c8063c605f76c14602a575b5f5ffd5b60306044565b604051603b9190606a565b60405180910390f35b5f602a905090565b5f819050919050565b6064816054565b82525050565b5f602082019050607b5f830184605d565b9291505056fea164736f6c634300081d000a' },
+      { name: 'amount', type: 'UFix64', defaultValue: '0.0' },
+      { name: 'gasLimit', type: 'UInt64', defaultValue: '1000000' },
+    ],
+  },
+  {
     id: 'transfer-flow-multi',
     name: 'Multi Transfer',
     filename: 'multi-transfer.cdc',

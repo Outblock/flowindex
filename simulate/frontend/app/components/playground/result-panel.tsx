@@ -127,6 +127,75 @@ export function ResultPanel({ result }: ResultPanelProps) {
           </div>
         )}
 
+        {/* EVM Executions */}
+        {result.evmExecutions.length > 0 && (
+          <div>
+            <div className="text-[10px] text-zinc-500 tracking-wider mb-2">EVM TRANSACTIONS</div>
+            <div className="space-y-1">
+              {result.evmExecutions.map((evm, i) => {
+                const gasUsed = Number(evm.gas_used).toLocaleString()
+                const value = evm.value && evm.value !== '0' ? `${(Number(evm.value) / 1e18).toFixed(4)} FLOW` : null
+                return (
+                  <div key={i} className="bg-black/40 border border-zinc-800/30 rounded px-3 py-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-medium text-purple-400">EVM Call</span>
+                      <span className="text-[9px] text-zinc-500 font-mono">{gasUsed} gas</span>
+                    </div>
+                    {evm.hash && (
+                      <div className="text-[9px] text-zinc-500 font-mono mt-0.5 truncate">
+                        tx: {evm.hash.slice(0, 18)}...
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-mono mt-0.5">
+                      {evm.from && <span>{evm.from.slice(0, 12)}...</span>}
+                      {evm.from && evm.to && <span className="text-zinc-600">&rarr;</span>}
+                      {evm.to && <span>{evm.to.slice(0, 12)}...</span>}
+                    </div>
+                    {value && (
+                      <div className="text-[10px] text-purple-300 mt-0.5">{value}</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* EVM Token Transfers (from logs) */}
+        {result.evmLogTransfers.length > 0 && (
+          <div>
+            <div className="text-[10px] text-zinc-500 tracking-wider mb-2">EVM TOKEN TRANSFERS</div>
+            <div className="space-y-1">
+              {result.evmLogTransfers.map((transfer, i) => {
+                const isNFT = transfer.standard === 'erc721' || transfer.standard === 'erc1155'
+                const label = transfer.standard.toUpperCase()
+                return (
+                  <div key={i} className="bg-black/40 border border-zinc-800/30 rounded px-3 py-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[9px] font-medium text-purple-400">{label}</span>
+                        {isNFT ? (
+                          <span className="text-[11px] text-zinc-200 font-mono">#{transfer.tokenId}</span>
+                        ) : (
+                          <span className="text-[11px] text-zinc-200 font-mono">{transfer.amount}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-[9px] text-zinc-500 font-mono mt-0.5">
+                      <span>{transfer.from.slice(0, 12)}...</span>
+                      <span className="text-zinc-600">&rarr;</span>
+                      <span>{transfer.to.slice(0, 12)}...</span>
+                    </div>
+                    <div className="text-[9px] text-zinc-600 font-mono mt-0.5 truncate">
+                      {transfer.contractAddress}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* System events (account changes) */}
         {result.systemEvents.length > 0 && (
           <div>
