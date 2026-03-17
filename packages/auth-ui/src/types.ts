@@ -36,6 +36,18 @@ export interface PasskeyState {
   refreshState(): Promise<void>;
 }
 
+export interface ProvisionStatus {
+  txId?: string;
+  address?: string;
+  error?: string;
+  status: 'idle' | 'pending' | 'polling' | 'sealed' | 'error';
+}
+
+export interface ProvisionState {
+  mainnet: ProvisionStatus;
+  testnet: ProvisionStatus;
+}
+
 export interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;

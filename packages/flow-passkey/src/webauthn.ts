@@ -45,7 +45,8 @@ export async function createPasskeyCredential(options: CreatePasskeyOptions): Pr
       displayName: userName,
     },
     pubKeyCredParams: [
-      { alg: -7, type: 'public-key' },  // ES256 (P-256)
+      { alg: -7, type: 'public-key' },   // ES256 (P-256) — required for Flow
+      { alg: -257, type: 'public-key' },  // RS256 — Chrome compatibility fallback
     ],
     authenticatorSelection: {
       residentKey: 'preferred',

@@ -1,5 +1,13 @@
 flowindex.io {
-	reverse_proxy localhost:8080
+	handle /functions/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle /auth/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle {
+		reverse_proxy localhost:8080
+	}
 }
 
 www.flowindex.io {
@@ -39,7 +47,15 @@ studio.flowindex.io {
 }
 
 wallet.flowindex.io {
-	reverse_proxy localhost:5174
+	handle /functions/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle /auth/v1/* {
+		reverse_proxy 10.128.0.4:54321
+	}
+	handle {
+		reverse_proxy localhost:5174
+	}
 }
 
 analytics.flowindex.io {

@@ -1,26 +1,31 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useAuth, LoginModal } from '@flowindex/auth-ui';
+import { useAuth, LoginModal, PasskeyOnboardingModal } from '@flowindex/auth-ui';
 import { Button, Card, CardContent, CardHeader, CardTitle, cn, formatShort } from '@flowindex/flow-ui';
-import { Loader2, Check, Plus, X, Wallet } from 'lucide-react';
-import { sendReady, onReadyResponse, approve, decline } from '@/fcl/messaging';
+import { Loader2, Check, X, Wallet } from 'lucide-react';
+import { onReadyResponse, approve, decline } from '@/fcl/messaging';
 import { buildAuthnResponse } from '@/fcl/services';
 import { useWallet } from '@/hooks/useWallet';
 import type { PasskeyAccount } from '@flowindex/auth-core';
 
 export default function Authn() {
   const { user, passkey, loading: authLoading } = useAuth();
-  const { accounts, activeAccount, switchAccount, loading: walletLoading } = useWallet();
+  const { accounts, activeAccount, switchAccount, network, loading: walletLoading } = useWallet();
 
   const [hostReady, setHostReady] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<PasskeyAccount | null>(null);
   const [showLogin, setShowLogin] = useState(false);
-  const [provisioning, setProvisioning] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // On mount: send ready signal and listen for host response
+  const [dappNetwork, setDappNetwork] = useState<string | null>(null);
+
+  // On mount: FCL handshake (sends READY, listens for READY:RESPONSE)
   useEffect(() => {
-    sendReady();
-    const cleanup = onReadyResponse(() => {
+    const cleanup = onReadyResponse((data) => {
+      console.log('[Authn] FCL:VIEW:READY:RESPONSE', data);
+      // Extract network from FCL config.client.network
+      const net = (data as any)?.config?.client?.network;
+      if (net) setDappNetwork(net);
       setHostReady(true);
     });
     return cleanup;
@@ -41,11 +46,18 @@ export default function Authn() {
   }, [switchAccount]);
 
   const handleConnect = useCallback(() => {
-    if (!selectedAccount) return;
+    if (!selectedAccount) {
+      setError('No account selected');
+      return;
+    }
 
-    const address = selectedAccount.flowAddress;
+    // Use dApp's requested network, fallback to wallet network
+    const effectiveNetwork = dappNetwork || network;
+    const address = effectiveNetwork === 'testnet'
+      ? selectedAccount.flowAddressTestnet || selectedAccount.flowAddress
+      : selectedAccount.flowAddress;
     if (!address) {
-      setError('Selected account has no Flow address');
+      setError(`Selected account has no ${effectiveNetwork} address`);
       return;
     }
 
@@ -54,9 +66,13 @@ export default function Authn() {
         address,
         keyId: 0,
         origin: window.location.origin,
+        network: effectiveNetwork,
       });
+      console.log('[Authn] approve response:', response);
+      console.log('[Authn] window.opener:', !!window.opener, 'window.parent !== window:', window.parent !== window);
       approve(response);
-      window.close();
+      // Small delay before closing to ensure message is sent
+      setTimeout(() => window.close(), 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to build auth response');
     }
@@ -66,26 +82,6 @@ export default function Authn() {
     decline('User cancelled');
     window.close();
   }, []);
-
-  const handleCreateAccount = useCallback(async () => {
-    if (!passkey || !accounts.length) return;
-    setProvisioning(true);
-    setError(null);
-    try {
-      // Use the first credential to provision accounts
-      const cred = accounts[0] ?? passkey.accounts[0];
-      if (!cred) {
-        setError('No passkey credential found');
-        return;
-      }
-      await passkey.provisionAccounts(cred.credentialId);
-      await passkey.refreshState();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create account');
-    } finally {
-      setProvisioning(false);
-    }
-  }, [passkey, accounts]);
 
   // Loading state
   if (loading) {
@@ -103,6 +99,18 @@ export default function Authn() {
 
   // Not logged in
   if (!user) {
+    if (showLogin) {
+      return (
+        <div className="min-h-screen bg-nothing-dark">
+          <LoginModal
+            open={true}
+            onClose={() => setShowLogin(false)}
+            showPasskey={true}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-center min-h-screen bg-nothing-dark">
         <Card className="w-full max-w-[400px] mx-4 bg-nothing-dark border-zinc-800">
@@ -129,62 +137,49 @@ export default function Authn() {
             </Button>
           </CardContent>
         </Card>
-
-        <LoginModal
-          open={showLogin}
-          onClose={() => setShowLogin(false)}
-          showPasskey={true}
-        />
       </div>
     );
   }
 
-  // Logged in but no accounts with Flow addresses
-  const accountsWithAddress = accounts.filter((a) => !!a.flowAddress);
+  // Logged in but no accounts with Flow addresses — show onboarding
+  const effectiveNet = dappNetwork || network;
+  const accountsWithAddress = accounts.filter((a) =>
+    effectiveNet === 'testnet' ? !!(a.flowAddressTestnet || a.flowAddress) : !!a.flowAddress
+  );
 
   if (accountsWithAddress.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-nothing-dark">
-        <Card className="w-full max-w-[400px] mx-4 bg-nothing-dark border-zinc-800">
-          <CardHeader className="text-center pb-2">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Wallet className="w-5 h-5 text-nothing-green" />
-              <CardTitle className="text-base font-semibold text-white">FlowIndex Wallet</CardTitle>
-            </div>
-            <p className="text-xs text-zinc-500 font-mono">No Flow accounts yet</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {error && (
-              <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-xs font-mono">
-                {error}
-              </div>
-            )}
-            <Button
-              onClick={handleCreateAccount}
-              disabled={provisioning}
-              className="w-full bg-nothing-green hover:bg-nothing-green/90 text-black font-semibold"
-            >
-              {provisioning ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Account
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="w-full border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-600"
-            >
-              Cancel
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-nothing-dark">
+        <PasskeyOnboardingModal
+          open={true}
+          email={user.email}
+          onCreatePasskey={async (walletName) => {
+            if (!passkey) throw new Error('Passkey not configured');
+            // If already have a passkey (registered but provision failed), reuse it
+            if (passkey.passkeys.length > 0) {
+              const existing = passkey.passkeys[0];
+              return { credentialId: existing.id, publicKeySec1Hex: '' };
+            }
+            return passkey.register(walletName);
+          }}
+          onProvisionAccounts={async (credentialId) => {
+            if (!passkey) throw new Error('Passkey not configured');
+            return passkey.provisionAccounts(credentialId);
+          }}
+          onPollTx={async (txId, network) => {
+            if (!passkey) throw new Error('Passkey not configured');
+            return passkey.pollProvisionTx(txId, network);
+          }}
+          onSaveAddress={async (credentialId, network, address) => {
+            if (!passkey) throw new Error('Passkey not configured');
+            await passkey.saveProvisionedAddress(credentialId, network, address);
+          }}
+          onDone={async () => {
+            if (passkey) await passkey.refreshState();
+          }}
+          onSkip={handleCancel}
+          onDontShowAgain={handleCancel}
+        />
       </div>
     );
   }
@@ -219,9 +214,10 @@ export default function Authn() {
             {accountsWithAddress.map((account) => {
               const isSelected = selectedAccount?.credentialId === account.credentialId;
               const isActive = activeAccount?.credentialId === account.credentialId;
-              const addr = account.flowAddress.startsWith('0x')
-                ? account.flowAddress
-                : '0x' + account.flowAddress;
+              const rawAddr = effectiveNet === 'testnet'
+                ? (account.flowAddressTestnet || account.flowAddress)
+                : account.flowAddress;
+              const addr = rawAddr.startsWith('0x') ? rawAddr : '0x' + rawAddr;
 
               return (
                 <button

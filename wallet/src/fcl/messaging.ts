@@ -1,57 +1,30 @@
-type MessageTarget = Window | null;
-
-function getTarget(): MessageTarget {
-  // Prefer window.opener (popup), fallback to window.parent (iframe)
-  if (window.opener && window.opener !== window) return window.opener;
-  if (window.parent && window.parent !== window) return window.parent;
-  return null;
-}
+import * as fcl from '@onflow/fcl';
 
 export function sendReady() {
-  getTarget()?.postMessage({ type: 'FCL:VIEW:READY' }, '*');
+  fcl.WalletUtils.sendMsgToFCL('FCL:VIEW:READY');
 }
 
 export function approve(data: unknown) {
-  getTarget()?.postMessage(
-    {
-      type: 'FCL:VIEW:RESPONSE',
-      f_type: 'PollingResponse',
-      f_vsn: '1.0.0',
-      status: 'APPROVED',
-      reason: null,
-      data,
-    },
-    '*',
-  );
+  fcl.WalletUtils.approve(data);
 }
 
 export function decline(reason: string) {
-  getTarget()?.postMessage(
-    {
-      type: 'FCL:VIEW:RESPONSE',
-      f_type: 'PollingResponse',
-      f_vsn: '1.0.0',
-      status: 'DECLINED',
-      reason,
-      data: null,
-    },
-    '*',
-  );
+  fcl.WalletUtils.decline(reason);
 }
 
 export function close() {
-  getTarget()?.postMessage({ type: 'FCL:VIEW:CLOSE' }, '*');
+  fcl.WalletUtils.close();
 }
 
 export interface ReadyResponseData {
   type: string;
-  body?: unknown;
+  body?: Record<string, unknown>;
   data?: unknown;
-  config?: unknown;
+  config?: Record<string, unknown>;
 }
 
 /**
- * Listen for FCL:VIEW:READY:RESPONSE from the host app.
+ * Send READY and listen for FCL:VIEW:READY:RESPONSE from the host app.
  * Returns cleanup function.
  */
 export function onReadyResponse(
@@ -63,5 +36,7 @@ export function onReadyResponse(
     }
   };
   window.addEventListener('message', handler);
+  // Send READY to trigger the response
+  sendReady();
   return () => window.removeEventListener('message', handler);
 }

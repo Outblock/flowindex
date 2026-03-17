@@ -153,7 +153,7 @@ export function createPasskeyAuthClient(config: PasskeyClientConfig) {
      * Start provisioning Flow accounts (mainnet + testnet) for a credential.
      */
     async provisionAccounts(accessToken: string, credentialId: string): Promise<ProvisionResult> {
-      return passkeyApi('/wallet/provision-start', { credentialId }, accessToken);
+      return passkeyApi('/wallet/provision', { credentialId }, accessToken);
     },
 
     /**
@@ -171,7 +171,7 @@ export function createPasskeyAuthClient(config: PasskeyClientConfig) {
           const res = await fetch(`${accessNode}/v1/transaction_results/${txId}`);
           if (!res.ok) continue;
           const txResult = await res.json();
-          if (txResult.status !== 'SEALED') continue;
+          if (txResult.status?.toLowerCase() !== 'sealed') continue;
           if (txResult.error_message) throw new Error(`Tx failed: ${txResult.error_message}`);
           for (const event of txResult.events || []) {
             if (event.type === 'flow.AccountCreated') {

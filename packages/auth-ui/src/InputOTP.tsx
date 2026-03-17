@@ -24,8 +24,9 @@ function InputOTP({
       disabled={disabled}
       autoFocus={autoFocus}
       containerClassName="flex items-center gap-1"
-      render={() => <>{children}</>}
-    />
+    >
+      {children}
+    </OTPInput>
   );
 }
 

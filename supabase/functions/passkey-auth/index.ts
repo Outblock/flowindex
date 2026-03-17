@@ -756,7 +756,7 @@ serve(async (req: Request) => {
           const txRes = await fetch(`${accessNode}/v1/transaction_results/${txId}`);
           if (!txRes.ok) continue;
           const txResult = await txRes.json();
-          if (txResult.status !== 'SEALED') continue;
+          if (txResult.status?.toLowerCase() !== 'sealed') continue;
           if (txResult.error_message) {
             result = error('PROVISION_FAILED', `Account tx failed: ${txResult.error_message}`);
             break;
@@ -805,9 +805,9 @@ serve(async (req: Request) => {
         }
 
         const { data: credentials } = await supabaseAdmin.from('passkey_credentials')
-          .select('id, public_key_sec1_hex, flow_address, evm_address, authenticator_name, created_at')
+          .select('id, public_key_sec1_hex, flow_address, flow_address_testnet, evm_address, authenticator_name, created_at')
           .eq('user_id', user.id)
-          .or('flow_address.not.is.null,evm_address.not.is.null')
+          .or('flow_address.not.is.null,flow_address_testnet.not.is.null,evm_address.not.is.null')
           .order('created_at', { ascending: false });
 
         result = success({
@@ -815,6 +815,7 @@ serve(async (req: Request) => {
             credentialId: c.id,
             publicKeySec1Hex: c.public_key_sec1_hex,
             flowAddress: c.flow_address,
+            flowAddressTestnet: c.flow_address_testnet,
             evmAddress: c.evm_address,
             authenticatorName: c.authenticator_name,
             createdAt: c.created_at,

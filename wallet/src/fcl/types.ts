@@ -1,29 +1,38 @@
+export interface FclServiceIdentity {
+  address: string;
+  keyId?: number;
+}
+
+export interface FclServiceProvider {
+  f_type: 'ServiceProvider';
+  f_vsn: '1.0.0';
+  address: string;
+  name?: string;
+  icon?: string;
+  description?: string;
+}
+
 export interface FclService {
   f_type: 'Service';
   f_vsn: '1.0.0';
-  type: 'authn' | 'authz' | 'user-signature' | 'pre-authz';
-  method: 'POP/RPC';
+  type: 'authn' | 'authz' | 'user-signature' | 'pre-authz' | 'account-proof';
   uid: string;
-  endpoint: string;
-  id: string;
-  identity?: {
-    f_type: 'Identity';
-    f_vsn: '1.0.0';
-    address: string;
-    keyId?: number;
-  };
-  provider?: {
-    f_type: 'ServiceProvider';
-    address: string;
-    name?: string;
-    icon?: string;
-  };
+  id?: string;
+  method?: 'POP/RPC' | 'HTTP/POST';
+  endpoint?: string;
+  network?: string;
+  identity?: FclServiceIdentity;
+  provider?: FclServiceProvider;
+  data?: unknown;
+  params?: unknown;
 }
 
 export interface FclAuthnResponse {
   f_type: 'AuthnResponse';
   f_vsn: '1.0.0';
   addr: string;
+  paddr?: string | null;
+  network?: string;
   services: FclService[];
 }
 

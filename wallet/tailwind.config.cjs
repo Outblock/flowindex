@@ -2,7 +2,12 @@ const preset = require('@flowindex/flow-ui/tailwind-preset');
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   presets: [preset],
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: [
+    './index.html',
+    './src/**/*.{ts,tsx}',
+    '../packages/auth-ui/src/**/*.{ts,tsx}',
+    '../packages/flow-ui/src/**/*.{ts,tsx}',
+  ],
   darkMode: 'class',
   theme: {
     extend: {

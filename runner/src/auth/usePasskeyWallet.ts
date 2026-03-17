@@ -1,21 +1,9 @@
 import { useMemo } from 'react';
 import { useAuth } from '@flowindex/auth-ui';
-import type { PasskeyAccount, ProvisionResult } from '@flowindex/auth-ui';
+import type { PasskeyAccount, ProvisionResult, ProvisionStatus, ProvisionState } from '@flowindex/auth-ui';
 import type { PasskeySignResult } from '@flowindex/flow-passkey';
 
-export type { PasskeyAccount, PasskeySignResult };
-
-export interface ProvisionStatus {
-  txId?: string;
-  address?: string;
-  error?: string;
-  status: 'idle' | 'pending' | 'polling' | 'sealed' | 'error';
-}
-
-export interface ProvisionState {
-  mainnet: ProvisionStatus;
-  testnet: ProvisionStatus;
-}
+export type { PasskeyAccount, PasskeySignResult, ProvisionStatus, ProvisionState };
 
 function notConfigured(name: string): never {
   throw new Error(`Passkey not configured: ${name}`);

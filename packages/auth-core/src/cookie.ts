@@ -82,7 +82,10 @@ export function persistTokens(
   if (typeof document !== 'undefined') {
     try {
       const value = JSON.stringify({ access_token: accessToken, refresh_token: refreshToken });
-      document.cookie = `fi_auth=${encodeURIComponent(value)}; domain=${domain}; path=/; max-age=${60 * 60 * 24 * 30}; secure; samesite=lax`;
+      const isLocalDomain = domain === 'localhost' || domain === '127.0.0.1';
+      const domainPart = isLocalDomain ? '' : `domain=${domain};`;
+      const securePart = isLocalDomain ? '' : ' secure;';
+      document.cookie = `fi_auth=${encodeURIComponent(value)}; ${domainPart} path=/; max-age=${60 * 60 * 24 * 30};${securePart} samesite=lax`;
     } catch { /* ignore */ }
   }
 }
@@ -104,7 +107,10 @@ export function clearTokens(
 
   if (typeof document !== 'undefined') {
     try {
-      document.cookie = `fi_auth=; domain=${domain}; path=/; max-age=0; secure; samesite=lax`;
+      const isLocalDomain = domain === 'localhost' || domain === '127.0.0.1';
+      const domainPart = isLocalDomain ? '' : `domain=${domain};`;
+      const securePart = isLocalDomain ? '' : ' secure;';
+      document.cookie = `fi_auth=; ${domainPart} path=/; max-age=0;${securePart} samesite=lax`;
     } catch { /* ignore */ }
   }
 }
