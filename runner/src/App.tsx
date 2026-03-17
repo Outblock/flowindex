@@ -1103,12 +1103,26 @@ export default function App() {
         }, null, 2),
       };
 
-      // Deploy if wallet connected
-      if (evmConnected && walletClient) {
+      // Deploy if wallet connected (external wagmi or local EOA)
+      let deployClient = walletClient as import('viem').WalletClient | undefined;
+      if (!deployClient && selectedSigner.type === 'eoa') {
+        try {
+          const { createWalletClient, http } = await import('viem');
+          const { privateKeyToAccount } = await import('viem/accounts');
+          const privHex = await getPrivateKey(selectedSigner.key.id, undefined, 'ECDSA_secp256k1');
+          const account = privateKeyToAccount(`0x${privHex}` as `0x${string}`);
+          deployClient = createWalletClient({ account, chain: evmChain, transport: http() });
+        } catch (err: any) {
+          setResults([compileResult, { type: 'error', data: `Failed to create EOA wallet: ${err.message}` }]);
+          return;
+        }
+      }
+
+      if (deployClient) {
         setResults([compileResult, { type: 'log', data: 'Deploying to Flow EVM...' }]);
         try {
-          const result = await deploySolidity(walletClient, contract.abi, contract.bytecode, contract.name);
-          const chainId = walletClient.chain?.id ?? evmChain.id;
+          const result = await deploySolidity(deployClient, contract.abi, contract.bytecode, contract.name);
+          const chainId = deployClient.chain?.id ?? evmChain.id;
           setDeployedContract({
             address: result.contractAddress,
             name: result.contractName,
@@ -1137,7 +1151,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain]);
+  }, [activeCode, loading, project.activeFile, project.files, evmConnected, walletClient, evmChain, selectedSigner, getPrivateKey]);
 
   const handleRun = useCallback(async () => {
     if (loading) return;
@@ -2041,7 +2055,7 @@ export default function App() {
                 <Play className="w-3.5 h-3.5" />
               )}
               {isSolidityFile
-                ? (evmConnected ? 'Compile & Deploy' : 'Compile')
+                ? (evmConnected || selectedSigner.type === 'eoa' ? 'Compile & Deploy' : 'Compile')
                 : codeType === 'script' ? 'Run Script' : codeType === 'contract' ? 'Deploy' : 'Send Transaction'}
               <span className="ml-1.5 flex items-center gap-0.5 opacity-60">
                 <kbd className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-mono leading-none bg-white/15 border border-white/20 rounded shadow-[0_1px_0_rgba(0,0,0,0.3)]">
