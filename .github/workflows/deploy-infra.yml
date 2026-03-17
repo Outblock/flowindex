@@ -1,0 +1,139 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wallet/bundler/**'
+      - 'packages/evm-wallet/**'
+      - '.github/workflows/deploy-infra.yml'
+  workflow_dispatch:
+    inputs:
+      bundler:
+        description: "Deploy Alto Bundler"
+        type: boolean
+        default: false
+      paymaster:
+        description: "Deploy Paymaster"
+        type: boolean
+        default: false
+      all:
+        description: "Deploy ALL infra"
+        type: boolean
+        default: false
+
+env:
+  ZONE: us-central1-a
+
+jobs:
+  deploy-bundler:
+    if: |
+      github.event_name == 'push' ||
+      inputs.all == true ||
+      inputs.bundler == true
+    concurrency:
+      group: deploy-bundler-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy Alto bundler
+        run: |
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
+            source /mnt/stateful_partition/alto-bundler.env && \
+            docker pull ghcr.io/pimlicolabs/alto:latest && \
+            docker stop alto-bundler 2>/dev/null; docker rm alto-bundler 2>/dev/null; \
+            docker run -d --restart=always --name alto-bundler \
+              --network=host \
+              --entrypoint /bin/sh \
+              ghcr.io/pimlicolabs/alto:latest \
+              -c "node src/esm/cli/alto.js run \
+                --rpc-url $ALTO_RPC_URL \
+                --executor-private-keys $ALTO_EXECUTOR_PRIVATE_KEY \
+                --utility-private-key $ALTO_UTILITY_PRIVATE_KEY \
+                --entrypoints $ALTO_ENTRYPOINTS \
+                --safe-mode false \
+                --chain-type default \
+                --deploy-simulations-contract true \
+                --log-level info \
+                --port ${ALTO_PORT:-4337}"
+          '
+
+      - name: Verify bundler health
+        run: |
+          sleep 10
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
+            curl -sf http://localhost:4337 \
+              -H "Content-Type: application/json" \
+              -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_supportedEntryPoints\",\"id\":1}" \
+              | grep -q "0x0000000071727De22E5E9d8BAf0edAc6f37da032" && echo "Bundler OK" || (echo "Bundler FAILED" && exit 1)
+          '
+
+  deploy-paymaster:
+    if: |
+      github.event_name == 'push' ||
+      inputs.all == true ||
+      inputs.paymaster == true
+    concurrency:
+      group: deploy-paymaster-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: wallet/bundler
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Upload paymaster service
+        run: |
+          gcloud compute scp wallet/bundler/paymaster-service.ts wallet/bundler/package.json \
+            flowindex-bundler:/tmp/ --zone=${{ env.ZONE }}
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
+            sudo mkdir -p /mnt/stateful_partition/paymaster && \
+            sudo cp /tmp/paymaster-service.ts /tmp/package.json /mnt/stateful_partition/paymaster/
+          '
+
+      - name: Deploy paymaster service
+        run: |
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
+            source /mnt/stateful_partition/alto-bundler.env && \
+            docker stop paymaster 2>/dev/null; docker rm paymaster 2>/dev/null; \
+            docker run -d --restart=always --name paymaster \
+              --network=host \
+              -v /mnt/stateful_partition/paymaster:/app \
+              -e PAYMASTER_SIGNER_KEY=$PAYMASTER_SIGNER_KEY \
+              -e PAYMASTER_PORT=${PAYMASTER_PORT:-4338} \
+              -w /app \
+              oven/bun:1.3 \
+              sh -c "bun install && bun run paymaster-service.ts"
+          '
+
+      - name: Verify paymaster health
+        run: |
+          sleep 5
+          gcloud compute ssh flowindex-bundler --zone=${{ env.ZONE }} --command='
+            curl -sf http://localhost:4338 \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -d "{\"userOp\":{\"sender\":\"0x0000000000000000000000000000000000000001\",\"nonce\":\"0x0\",\"initCode\":\"0x\",\"callData\":\"0x\",\"accountGasLimits\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"preVerificationGas\":\"0x0\",\"gasFees\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"paymasterAndData\":\"0x\",\"signature\":\"0x\"}}" \
+              | grep -q "paymasterAndData" && echo "Paymaster OK" || (echo "Paymaster FAILED" && exit 1)
+          '

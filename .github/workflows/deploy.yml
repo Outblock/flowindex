@@ -54,14 +54,6 @@ on:
         description: "Simulate Landing"
         type: boolean
         default: false
-      bundler:
-        description: "Alto Bundler"
-        type: boolean
-        default: false
-      paymaster:
-        description: "Paymaster"
-        type: boolean
-        default: false
 
 env:
   PROJECT_ID: flowindex-mainnet
@@ -85,8 +77,6 @@ jobs:
       sim-studio-images: ${{ steps.result.outputs.sim-studio-images }}
       sim-studio-seed: ${{ steps.result.outputs.sim-studio-seed }}
       wallet: ${{ steps.result.outputs.wallet }}
-      bundler: ${{ steps.result.outputs.bundler }}
-      paymaster: ${{ steps.result.outputs.paymaster }}
       simulator: ${{ steps.result.outputs.simulator }}
       simulate-landing: ${{ steps.result.outputs.simulate-landing }}
     steps:
@@ -130,8 +120,6 @@ jobs:
           changed sim-studio-images ':(glob)sim-workflow/**'
           changed sim-studio-seed 'studio/seed/simstudio_seed.sql'
           changed wallet ':(glob)wallet/src/**' ':(glob)wallet/Dockerfile' ':(glob)wallet/package.json' ':(glob)packages/**' '.github/workflows/deploy.yml'
-          changed bundler ':(glob)wallet/bundler/.env.example' '.github/workflows/deploy.yml'
-          changed paymaster ':(glob)wallet/bundler/paymaster-service.ts' ':(glob)wallet/bundler/package.json' '.github/workflows/deploy.yml'
           changed simulator ':(glob)simulate/emulator/**' ':(glob)simulate/api/**' '.github/workflows/deploy.yml'
           changed simulate-landing ':(glob)simulate/frontend/**'
       - name: Resolve outputs
@@ -147,8 +135,6 @@ jobs:
             echo "ai-chat=${{ inputs.all == true || inputs.ai-chat == true }}" >> $GITHUB_OUTPUT
             echo "studio=${{ inputs.all == true || inputs.studio == true }}" >> $GITHUB_OUTPUT
             echo "wallet=${{ inputs.all == true || inputs.wallet == true }}" >> $GITHUB_OUTPUT
-            echo "bundler=${{ inputs.all == true || inputs.bundler == true }}" >> $GITHUB_OUTPUT
-            echo "paymaster=${{ inputs.all == true || inputs.paymaster == true }}" >> $GITHUB_OUTPUT
             echo "simulator=${{ inputs.all == true || inputs.simulator == true }}" >> $GITHUB_OUTPUT
             echo "simulate-landing=${{ inputs.all == true || inputs.simulate-landing == true }}" >> $GITHUB_OUTPUT
             SIM=${{ inputs.all == true || inputs.sim-studio == true }}
@@ -164,8 +150,6 @@ jobs:
             echo "ai-chat=${{ steps.filter.outputs.ai-chat }}" >> $GITHUB_OUTPUT
             echo "studio=${{ steps.filter.outputs.studio }}" >> $GITHUB_OUTPUT
             echo "wallet=${{ steps.filter.outputs.wallet }}" >> $GITHUB_OUTPUT
-            echo "bundler=${{ steps.filter.outputs.bundler }}" >> $GITHUB_OUTPUT
-            echo "paymaster=${{ steps.filter.outputs.paymaster }}" >> $GITHUB_OUTPUT
             echo "simulator=${{ steps.filter.outputs.simulator }}" >> $GITHUB_OUTPUT
             echo "simulate-landing=${{ steps.filter.outputs.simulate-landing }}" >> $GITHUB_OUTPUT
             echo "sim-studio=${{ steps.filter.outputs.sim-studio }}" >> $GITHUB_OUTPUT
@@ -747,14 +731,11 @@ jobs:
               ${{ env.REGISTRY }}/ai-chat:${{ github.sha }}
           '
 
-  build-wallet-group:
+  build-wallet:
     needs: changes
-    if: |
-      needs.changes.outputs.wallet == 'true' ||
-      needs.changes.outputs.bundler == 'true' ||
-      needs.changes.outputs.paymaster == 'true'
+    if: needs.changes.outputs.wallet == 'true'
     concurrency:
-      group: deploy-wallet-group-${{ github.ref }}
+      group: deploy-wallet-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
@@ -770,17 +751,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v3
 
-      # ── Wallet UI (flowindex-frontend VM) ──
       - name: Configure Docker
-        if: needs.changes.outputs.wallet == 'true'
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Set up Docker Buildx
-        if: needs.changes.outputs.wallet == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Build & push wallet
-        if: needs.changes.outputs.wallet == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -798,7 +775,6 @@ jobs:
           cache-to: type=gha,scope=wallet,mode=max
 
       - name: Deploy wallet (pull & restart on GCE)
-        if: needs.changes.outputs.wallet == 'true'
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command='
             docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev 2>/dev/null || true; \
@@ -811,7 +787,6 @@ jobs:
           '
 
       - name: Update Caddy config for TLS
-        if: needs.changes.outputs.wallet == 'true'
         run: |
           gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
             cat > /home/hao/Caddyfile <<'CADDYEOF'
@@ -819,57 +794,6 @@ jobs:
           CADDYEOF
             docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
           "
-
-      # ── Alto Bundler (flowindex-bundler VM) ──
-      - name: Deploy Alto bundler
-        if: needs.changes.outputs.bundler == 'true'
-        run: |
-          gcloud compute ssh flowindex-bundler --zone=us-central1-a --command='
-            source /mnt/stateful_partition/alto-bundler.env && \
-            docker pull ghcr.io/pimlicolabs/alto:latest && \
-            docker stop alto-bundler 2>/dev/null; docker rm alto-bundler 2>/dev/null; \
-            docker run -d --restart=always --name alto-bundler \
-              --network=host \
-              --entrypoint /bin/sh \
-              ghcr.io/pimlicolabs/alto:latest \
-              -c "node src/esm/cli/alto.js run \
-                --rpc-url $ALTO_RPC_URL \
-                --executor-private-keys $ALTO_EXECUTOR_PRIVATE_KEY \
-                --utility-private-key $ALTO_UTILITY_PRIVATE_KEY \
-                --entrypoints $ALTO_ENTRYPOINTS \
-                --safe-mode false \
-                --chain-type default \
-                --deploy-simulations-contract true \
-                --log-level info \
-                --port ${ALTO_PORT:-4337}"
-          '
-
-      # ── Paymaster Service (flowindex-bundler VM) ──
-      - name: Upload paymaster service
-        if: needs.changes.outputs.paymaster == 'true'
-        run: |
-          gcloud compute scp wallet/bundler/paymaster-service.ts wallet/bundler/package.json \
-            flowindex-bundler:/tmp/ --zone=us-central1-a
-          gcloud compute ssh flowindex-bundler --zone=us-central1-a --command='
-            sudo mkdir -p /mnt/stateful_partition/paymaster && \
-            sudo cp /tmp/paymaster-service.ts /tmp/package.json /mnt/stateful_partition/paymaster/
-          '
-
-      - name: Deploy paymaster service
-        if: needs.changes.outputs.paymaster == 'true'
-        run: |
-          gcloud compute ssh flowindex-bundler --zone=us-central1-a --command='
-            source /mnt/stateful_partition/alto-bundler.env && \
-            docker stop paymaster 2>/dev/null; docker rm paymaster 2>/dev/null; \
-            docker run -d --restart=always --name paymaster \
-              --network=host \
-              -v /mnt/stateful_partition/paymaster:/app \
-              -e PAYMASTER_SIGNER_KEY=$PAYMASTER_SIGNER_KEY \
-              -e PAYMASTER_PORT=${PAYMASTER_PORT:-4338} \
-              -w /app \
-              oven/bun:1.3 \
-              sh -c "bun install && bun run paymaster-service.ts"
-          '
 
   build-studio:
     needs: changes
