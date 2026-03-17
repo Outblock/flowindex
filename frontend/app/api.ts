@@ -62,6 +62,8 @@ export interface SearchTokenResult {
   address: string;
   contract_name: string;
   market_symbol?: string;
+  logo?: string;
+  is_verified?: boolean;
 }
 
 export interface SearchNFTCollectionResult {
@@ -69,6 +71,8 @@ export interface SearchNFTCollectionResult {
   address: string;
   contract_name: string;
   item_count: number;
+  square_image?: string;
+  is_verified?: boolean;
 }
 
 export interface SearchAllResponse {

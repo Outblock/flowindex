@@ -20,6 +20,8 @@ type SearchTokenResult struct {
 	Name         string `json:"name"`
 	Symbol       string `json:"symbol"`
 	MarketSymbol string `json:"market_symbol,omitempty"`
+	Logo         string `json:"logo,omitempty"`
+	IsVerified   bool   `json:"is_verified"`
 }
 
 // SearchNFTCollectionResult represents an NFT collection match from unified search.
@@ -28,6 +30,8 @@ type SearchNFTCollectionResult struct {
 	ContractName string `json:"contract_name"`
 	Name         string `json:"name"`
 	ItemCount    int64  `json:"item_count"`
+	SquareImage  string `json:"square_image,omitempty"`
+	IsVerified   bool   `json:"is_verified"`
 }
 
 // SearchAllResult aggregates results from all search categories.
@@ -89,12 +93,12 @@ func (r *Repository) SearchAll(ctx context.Context, query string, limit int) (*S
 	go func() {
 		defer wg.Done()
 		rows, err := r.db.Query(ctx, `
-			SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), COALESCE(name, ''), COALESCE(symbol, ''), COALESCE(market_symbol, '')
+			SELECT encode(contract_address, 'hex'), COALESCE(contract_name, ''), COALESCE(name, ''), COALESCE(symbol, ''), COALESCE(market_symbol, ''), COALESCE(logo, ''), COALESCE(is_verified, false)
 			FROM app.ft_tokens
 			WHERE COALESCE(name, '') ILIKE $1
 			   OR COALESCE(symbol, '') ILIKE $1
 			   OR COALESCE(contract_name, '') ILIKE $1
-			ORDER BY contract_address ASC
+			ORDER BY COALESCE(is_verified, false) DESC, contract_address ASC
 			LIMIT $2`, pattern, limit)
 		if err != nil {
 			errTokens = err
@@ -103,7 +107,7 @@ func (r *Repository) SearchAll(ctx context.Context, query string, limit int) (*S
 		defer rows.Close()
 		for rows.Next() {
 			var t SearchTokenResult
-			if err := rows.Scan(&t.Address, &t.ContractName, &t.Name, &t.Symbol, &t.MarketSymbol); err != nil {
+			if err := rows.Scan(&t.Address, &t.ContractName, &t.Name, &t.Symbol, &t.MarketSymbol, &t.Logo, &t.IsVerified); err != nil {
 				errTokens = err
 				return
 			}
@@ -116,13 +120,13 @@ func (r *Repository) SearchAll(ctx context.Context, query string, limit int) (*S
 	go func() {
 		defer wg.Done()
 		rows, err := r.db.Query(ctx, `
-			SELECT encode(c.contract_address, 'hex'), COALESCE(c.contract_name, ''), COALESCE(c.name, ''), COALESCE(s.nft_count, 0)
+			SELECT encode(c.contract_address, 'hex'), COALESCE(c.contract_name, ''), COALESCE(c.name, ''), COALESCE(s.nft_count, 0), COALESCE(c.square_image, ''), COALESCE(c.is_verified, false)
 			FROM app.nft_collections c
 			LEFT JOIN app.nft_collection_stats s ON s.contract_address = c.contract_address AND s.contract_name = c.contract_name
 			WHERE COALESCE(c.name, '') ILIKE $1
 			   OR COALESCE(c.contract_name, '') ILIKE $1
 			   OR encode(c.contract_address, 'hex') ILIKE $1
-			ORDER BY COALESCE(s.nft_count, 0) DESC, c.contract_address ASC
+			ORDER BY COALESCE(c.is_verified, false) DESC, COALESCE(s.nft_count, 0) DESC, c.contract_address ASC
 			LIMIT $2`, pattern, limit)
 		if err != nil {
 			errCollections = err
@@ -131,7 +135,7 @@ func (r *Repository) SearchAll(ctx context.Context, query string, limit int) (*S
 		defer rows.Close()
 		for rows.Next() {
 			var n SearchNFTCollectionResult
-			if err := rows.Scan(&n.Address, &n.ContractName, &n.Name, &n.ItemCount); err != nil {
+			if err := rows.Scan(&n.Address, &n.ContractName, &n.Name, &n.ItemCount, &n.SquareImage, &n.IsVerified); err != nil {
 				errCollections = err
 				return
 			}

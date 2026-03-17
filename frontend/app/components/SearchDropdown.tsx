@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { ArrowRight, Coins, FileCode, ImageIcon, Hexagon } from 'lucide-react';
+import { ArrowRight, Coins, FileCode, ImageIcon, Hexagon, BadgeCheck } from 'lucide-react';
 import type { SearchState, QuickMatchItem } from '../hooks/useSearch';
 import type {
   SearchAllResponse,
@@ -618,14 +618,20 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                   <SectionLabel label="Tokens" />
                   {state.fuzzyResults.tokens.map((t: SearchTokenResult) => {
                     const idx = globalIdx++;
+                    const tokenIcon = t.logo
+                      ? <img src={t.logo} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      : <Coins className="h-4 w-4 text-nothing-green" />;
                     return (
                       <ResultRow
                         key={`t-${t.address}-${t.contract_name}`}
                         idx={idx}
                         isActive={activeIndex === idx}
-                        icon={<Coins className="h-4 w-4 text-nothing-green" />}
+                        icon={tokenIcon}
                         label={
-                          <HighlightMatch text={t.name || t.contract_name} query={highlightQuery} />
+                          <span className="inline-flex items-center gap-1">
+                            <HighlightMatch text={t.name || t.contract_name} query={highlightQuery} />
+                            {t.is_verified && <BadgeCheck className="h-3.5 w-3.5 text-nothing-green flex-shrink-0" />}
+                          </span>
                         }
                         sublabel={t.symbol || t.contract_name}
                         badge="FT"
@@ -645,19 +651,23 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                   {state.fuzzyResults.nft_collections.map(
                     (n: SearchNFTCollectionResult) => {
                       const idx = globalIdx++;
+                      const nftIcon = n.square_image
+                        ? <img src={n.square_image} alt="" className="h-4 w-4 rounded object-cover" />
+                        : <ImageIcon className="h-4 w-4 text-purple-400" />;
                       return (
                         <ResultRow
                           key={`n-${n.address}-${n.contract_name}`}
                           idx={idx}
                           isActive={activeIndex === idx}
-                          icon={
-                            <ImageIcon className="h-4 w-4 text-purple-400" />
-                          }
+                          icon={nftIcon}
                           label={
-                            <HighlightMatch
-                              text={n.name}
-                              query={highlightQuery}
-                            />
+                            <span className="inline-flex items-center gap-1">
+                              <HighlightMatch
+                                text={n.name}
+                                query={highlightQuery}
+                              />
+                              {n.is_verified && <BadgeCheck className="h-3.5 w-3.5 text-purple-400 flex-shrink-0" />}
+                            </span>
                           }
                           sublabel={n.contract_name}
                           badge="NFT"
