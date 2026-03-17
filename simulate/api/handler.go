@@ -415,30 +415,22 @@ transaction(amount: UFix64, to: Address) {
 		},
 	)
 
-	// Phase 2: NFT + metadata contracts
+	// Phase 2: NFT + metadata contracts (only Cadence 1.0 compatible)
 	h.runWarmupTx(ctx, "nft-metadata", `
 import NonFungibleToken from 0x1d7e57aa55817448
 import MetadataViews from 0x1d7e57aa55817448
 import ViewResolver from 0x1d7e57aa55817448
 import CrossVMMetadataViews from 0x1d7e57aa55817448
-import NFTCatalog from 0x49a7cda3a1eecc29
-import NFTRetrieval from 0x49a7cda3a1eecc29
 import NFTStorefrontV2 from 0x4eb8a10cb9f87357
 
 transaction {
     prepare(signer: &Account) { log("nft-metadata warmup") }
 }`, nil)
 
-	// Phase 2b: Popular NFT collections (TopShot, NFL, UFC, etc.)
+	// Phase 2b: Popular NFT collections
 	h.runWarmupTx(ctx, "popular-nfts", `
 import TopShot from 0x0b2a3299cc857e29
 import TopShotMarketV3 from 0xc1e4f4f4c4257510
-import NFL_ALL_DAY from 0xe4cf4bdc1751c65d
-import UFC_NFT from 0x329feb3ab062d289
-import Flovatar from 0x921ea449dffec68a
-import FlovatarComponent from 0x921ea449dffec68a
-import FlowtyWrapped from 0x2f3b85e17f0e1965
-import Wearables from 0xe81193c424cfd10b
 
 transaction {
     prepare(signer: &Account) { log("popular-nfts warmup") }
@@ -490,25 +482,12 @@ transaction {
     prepare(signer: &Account) { log("hybrid-custody warmup") }
 }`, nil)
 
-	// Phase 6: Naming + utility contracts
+	// Phase 6: Naming + utility contracts (only Cadence 1.0 compatible)
 	h.runWarmupTx(ctx, "naming-utils", `
-import Find from 0x097bafa4e0b48eef
-import Flowns from 0x233eb012d34b0070
-import Domains from 0x233eb012d34b0070
 import StringUtils from 0xa340dc0a4ec828ab
-import FlowDomainUtils from 0x1b3930856571a52b
 
 transaction {
     prepare(signer: &Account) { log("naming-utils warmup") }
-}`, nil)
-
-	// Phase 7: Misc contracts + TransactionGeneration
-	h.runWarmupTx(ctx, "misc", `
-import TransactionGeneration from 0xe52522745adf5c34
-import FlowviewAccountBookmark from 0x39b144ab4d348e2b
-
-transaction {
-    prepare(signer: &Account) { log("misc warmup") }
 }`, nil)
 
 	// Phase 8: System/runtime accounts accessed on every transaction
