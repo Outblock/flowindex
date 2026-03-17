@@ -19,13 +19,16 @@ Always verify which server/project/directory a change should go in before starti
 - `simulate/` — Transaction simulator (frontend landing page + Flow Emulator)
   - `simulate/frontend/` — TanStack Start landing page (deployed to Cloud Run)
   - `simulate/emulator/` — Flow Emulator in mainnet-fork mode (deployed to GCE VM)
-- `packages/` — Shared workspace packages (event-decoder, auth-core, webhooks-sdk, etc.)
+- `wallet/` — Passkey wallet app (Vite + React 19, supports Flow Cadence + EVM)
+  - `wallet/bundler/` — Alto ERC-4337 bundler + paymaster signing service (deployed to `flowindex-bundler` VM)
+- `packages/` — Shared workspace packages (event-decoder, auth-core, evm-wallet, webhooks-sdk, etc.)
 - `supabase/` — Self-hosted Supabase auth stack (edge functions, migrations, gateway)
 - `devportal/` — Developer portal (Fumadocs + Scalar)
 - `ai/` — AI chat assistant
 - `sim-workflow/` — Simulation workflow
 - `studio/` — Supabase Studio proxy
 - `scripts/` — Utility scripts
+  - `scripts/deploy-smart-wallet/` — Foundry project for deploying Coinbase Smart Wallet + VerifyingPaymaster to Flow-EVM
 
 ## Pre-Commit Checklist
 
@@ -197,7 +200,28 @@ The frontend is a **TanStack Start SSR app** (NOT a plain React SPA). Source cod
 
 ### Docker Compose Services
 
-14+ services: `db` (PostgreSQL), `backend`, `frontend`, `supabase-db`, `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-gateway` (nginx), `supabase-meta`, `supabase-studio`, `studio-auth`, `passkey-auth`, `flow-keys`, `runner-projects`, `docs` (devportal)
+14+ services: `db` (PostgreSQL), `backend`, `frontend`, `supabase-db`, `supabase-auth` (GoTrue), `supabase-rest` (PostgREST), `supabase-gateway` (nginx), `supabase-meta`, `supabase-studio`, `studio-auth`, `passkey-auth`, `flow-keys`, `runner-projects`, `docs` (devportal), `alto-bundler`
+
+### ERC-4337 Infrastructure (Flow-EVM)
+
+**VM:** `flowindex-bundler` (GCE e2-micro, COS, us-central1-a, `10.128.0.6`)
+**DNS:** `bundler.flowindex.io` (static IP `136.112.57.126`)
+
+| Service | Port | URL |
+|---------|------|-----|
+| Alto Bundler | 4337 | `https://bundler.flowindex.io` |
+| Paymaster Signer | 4338 | `https://bundler.flowindex.io/paymaster` |
+| Caddy (TLS) | 443 | Routes to above |
+
+**Deployed Contracts (Flow-EVM Testnet, chain 545):**
+- EntryPoint v0.7: `0x0000000071727De22E5E9d8BAf0edAc6f37da032` (canonical, pre-deployed)
+- CoinbaseSmartWalletFactory: `0xAc396ed9a5E949C685C3799657E26fE1d6fFf7E7`
+- CoinbaseSmartWallet (impl): `0x0d956a72774534DE5bFc0dA88Fca589ba2378De0`
+- VerifyingPaymaster: `0x348C96e048A6A01B1bD75b6218b65986717CC15a`
+
+**Key package:** `packages/evm-wallet/` — ERC-4337 client SDK (factory, signer, bundler-client, UserOp construction, EIP-1193 provider, WalletConnect v2)
+
+**CI/CD:** `deploy-infra.yml` (separate from `deploy.yml`) — triggers on `wallet/bundler/**` or `packages/evm-wallet/**` changes
 
 ## Workers (17 types)
 
