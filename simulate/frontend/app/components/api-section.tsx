@@ -22,11 +22,7 @@ const CURL_TEXT = `curl -X POST https://simulator.flowindex.io/api/simulate \\
     "cadence": "transaction(amount: UFix64) { ... }",
     "arguments": [{"type": "UFix64", "value": "10.0"}],
     "authorizers": ["0x1654653399040a61"],
-    "payer": "0x1654653399040a61",
-    "scheduled": {
-      "advance_seconds": 2.5,
-      "advance_blocks": 2
-    }
+    "payer": "0x1654653399040a61"
   }'`
 
 const RESPONSE_TEXT = `{
@@ -46,14 +42,6 @@ const RESPONSE_TEXT = `{
   "balanceChanges": [
     { "address": "1654653399040a61", "token": "FlowToken", "delta": "-10.0", "before": "100.0", "after": "90.0" },
     { "address": "f8d6e0586b0a20c7", "token": "FlowToken", "delta": "10.0", "before": "25.0", "after": "35.0" }
-  ],
-  "scheduledResults": [
-    {
-      "tx_id": "a9ca...e14f",
-      "success": true,
-      "events": [...],
-      "computation_used": 318
-    }
   ],
   "computationUsed": 1204,
   "fee": 0.00001,
@@ -102,20 +90,7 @@ function CurlHighlighted() {
         <span className="text-purple-400">"payer"</span>
         <span className="text-zinc-400">: </span>
         <span className="text-emerald-400">"0x1654653399040a61"</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"scheduled"</span>
-        <span className="text-zinc-400">: {'{'}{'\n'}</span>
-        <span className="text-zinc-400">{'      '}</span>
-        <span className="text-purple-400">"advance_seconds"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-orange-300">2.5</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'      '}</span>
-        <span className="text-purple-400">"advance_blocks"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-orange-300">2</span>
-        <span className="text-zinc-400">{'\n'}{'    }'}{'\n'}{'  }'}</span>
+        <span className="text-zinc-400">{'\n'}{'  }'}</span>
         <span className="text-emerald-400">{"'"}</span>
       </code>
     </pre>
@@ -190,24 +165,6 @@ function ResponseHighlighted() {
         <span className="text-flow-green">"+10.0"</span>
         <span className="text-zinc-400"> {'}'}{'\n'}</span>
         <span className="text-zinc-400">{'  '}],{'\n'}</span>
-        <span className="text-zinc-400">{'  '}</span>
-        <span className="text-purple-400">"scheduledResults"</span>
-        <span className="text-zinc-400">: [{'{'}{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"tx_id"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-emerald-400">"a9ca...e14f"</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"success"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-cyan-400">true</span>
-        <span className="text-zinc-400">,{'\n'}</span>
-        <span className="text-zinc-400">{'    '}</span>
-        <span className="text-purple-400">"computation_used"</span>
-        <span className="text-zinc-400">: </span>
-        <span className="text-orange-300">318</span>
-        <span className="text-zinc-400">{'\n'}{'  '}],{'\n'}</span>
         <span className="text-zinc-400">{'  '}</span>
         <span className="text-purple-400">"computationUsed"</span>
         <span className="text-zinc-400">: </span>
