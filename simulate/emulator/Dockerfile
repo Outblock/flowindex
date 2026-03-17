@@ -23,7 +23,9 @@ EXPOSE 8888 3569 8080
 CMD [ \
   "emulator", "start", \
   "--fork-host", "access.mainnet.nodes.onflow.org:9000", \
+  "--persist", \
   "--snapshot", \
+  "--dbpath", "/data/flowdb", \
   "--skip-tx-validation", \
   "--chain-id", "mainnet", \
   "--rest-port", "8888", \
