@@ -1,13 +1,8 @@
 name: Deploy Infrastructure
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'wallet/bundler/**'
-      - 'packages/evm-wallet/**'
-      - '.github/workflows/deploy-infra.yml'
+  # Only deploy on manual trigger — bundler/paymaster are stable infra
+  # that rarely need redeployment. Use workflow_dispatch to deploy.
   workflow_dispatch:
     inputs:
       bundler:
