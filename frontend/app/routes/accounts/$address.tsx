@@ -47,7 +47,8 @@ const LABEL_CATEGORY_CONFIG: Record<string, { icon: LucideIcon; className: strin
     custom:   { icon: Tag,              className: "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700" },
 };
 
-const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'defi', 'staking', 'keys', 'contracts', 'storage', 'linked'] as const;
+// Cadence account tabs + EVM account tabs (both share this route)
+const VALID_TABS = ['activity', 'balance', 'tokens', 'nfts', 'defi', 'staking', 'keys', 'contracts', 'storage', 'linked', 'transactions', 'internal', 'transfers'] as const;
 type AccountTab = (typeof VALID_TABS)[number];
 
 const VALID_SUBTABS = ['all', 'ft', 'nft', 'staking', 'scheduled', 'cadence', 'evm'] as const;

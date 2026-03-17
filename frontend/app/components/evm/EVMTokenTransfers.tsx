@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { List, Calendar } from 'lucide-react';
-import { getEVMAddressTokenTransfers, getEVMTransactionTokenTransfers } from '@/api/evm';
+import { getEVMAddressTokenTransfers, getEVMTransactionTokenTransfers, getEVMAddressTransactions } from '@/api/evm';
 import { formatWei, weiToNumber } from '@/lib/evmUtils';
 import { TransferRow, TransferRowHeader } from '@/components/TransferRow';
 import { LoadMorePagination } from '@/components/LoadMorePagination';
-import type { BSTokenTransfer, BSPageParams } from '@/types/blockscout';
+import type { BSTokenTransfer, BSTransaction, BSPageParams } from '@/types/blockscout';
 
 type ViewMode = 'pages' | 'timeline';
 
@@ -24,6 +24,29 @@ function getTimeSection(timestamp: string, now: Date): string {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     if (d >= monthStart) return 'Earlier This Month';
     return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Convert a native FLOW transaction (value > 0) into BSTokenTransfer shape */
+function nativeTxToTransfer(tx: BSTransaction): BSTokenTransfer {
+    return {
+        tx_hash: tx.hash,
+        transaction_hash: tx.hash,
+        from: tx.from,
+        to: tx.to,
+        timestamp: tx.timestamp,
+        block_number: tx.block,
+        log_index: -1,
+        total: { value: tx.value, decimals: '18' },
+        token: {
+            type: 'FLOW',
+            symbol: 'FLOW',
+            name: 'Flow',
+            decimals: '18',
+            address: '',
+            icon_url: null,
+            exchange_rate: null,
+        },
+    } as BSTokenTransfer;
 }
 
 function normalizeTransfer(transfer: BSTokenTransfer, viewedAddress?: string) {
@@ -87,31 +110,41 @@ export function EVMTokenTransfers({ address, txHash }: EVMTokenTransfersProps) {
         setItems([]);
         setNextPage(null);
 
-        const fetchFn = address
-            ? getEVMAddressTokenTransfers(address)
-            : txHash
-                ? getEVMTransactionTokenTransfers(txHash)
-                : null;
-
-        if (!fetchFn) {
+        if (!address && !txHash) {
             setLoading(false);
             setError('No address or transaction hash provided');
             return;
         }
 
-        fetchFn
-            .then((res) => {
+        if (txHash) {
+            // Transaction view: token transfers only
+            getEVMTransactionTokenTransfers(txHash)
+                .then((res) => { if (!cancelled) { setItems(res.items); setNextPage(res.next_page_params); } })
+                .catch((e) => { if (!cancelled) setError(e?.message || 'Failed to load token transfers'); })
+                .finally(() => { if (!cancelled) setLoading(false); });
+        } else if (address) {
+            // Address view: merge token transfers + native FLOW transfers
+            Promise.all([
+                getEVMAddressTokenTransfers(address).catch(() => ({ items: [] as BSTokenTransfer[], next_page_params: null })),
+                getEVMAddressTransactions(address).catch(() => ({ items: [] as BSTransaction[], next_page_params: null })),
+            ]).then(([tokenRes, txRes]) => {
                 if (cancelled) return;
-                setItems(res.items);
-                setNextPage(res.next_page_params);
-            })
-            .catch((e) => {
-                if (cancelled) return;
-                setError(e?.message || 'Failed to load token transfers');
-            })
-            .finally(() => {
+                // Convert native FLOW transactions with value > 0 to transfer format
+                const nativeTransfers = (txRes.items || [])
+                    .filter((tx: BSTransaction) => tx.value && tx.value !== '0')
+                    .map(nativeTxToTransfer);
+                // Merge and sort by block number descending
+                const merged = [...(tokenRes.items || []), ...nativeTransfers]
+                    .sort((a, b) => (b.block_number ?? 0) - (a.block_number ?? 0));
+                setItems(merged);
+                // Only use token transfer pagination (native transfers are from first page of txs)
+                setNextPage(tokenRes.next_page_params);
+            }).catch((e) => {
+                if (!cancelled) setError(e?.message || 'Failed to load transfers');
+            }).finally(() => {
                 if (!cancelled) setLoading(false);
             });
+        }
 
         return () => { cancelled = true; };
     }, [address, txHash]);
