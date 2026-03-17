@@ -20,7 +20,7 @@ let nextId = 0;
 const activeTabs = new Set();
 
 // Open (or focus) the wallet popup
-async function openWalletPopup() {
+async function openWalletPopup(action) {
   // Check if existing popup is still open
   if (walletPopupId !== null) {
     try {
@@ -34,8 +34,9 @@ async function openWalletPopup() {
     }
   }
 
+  const url = action ? `${WALLET_URL}?action=${action}` : WALLET_URL;
   const popup = await chrome.windows.create({
-    url: WALLET_URL,
+    url,
     type: "popup",
     width: 420,
     height: 640,
@@ -188,8 +189,8 @@ async function handleRpcRequest(message, sender) {
     };
   }
 
-  // Make sure popup is open
-  await openWalletPopup();
+  // Make sure popup is open — use signing action so popup auto-connects
+  await openWalletPopup("sign");
 
   // Send RPC request to popup via injected postMessage
   const internalId = ++nextId;

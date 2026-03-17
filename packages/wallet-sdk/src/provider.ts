@@ -20,6 +20,17 @@ interface PendingRequest {
   reject: (error: any) => void
 }
 
+// Methods that require user approval in the popup
+const SIGNING_METHODS = new Set([
+  "eth_sendTransaction",
+  "eth_signTransaction",
+  "personal_sign",
+  "eth_sign",
+  "eth_signTypedData",
+  "eth_signTypedData_v3",
+  "eth_signTypedData_v4",
+])
+
 export function createFlowIndexProvider(config: FlowIndexProviderConfig = {}) {
   const {
     walletUrl = "http://localhost:5174/connect/popup",
@@ -29,6 +40,7 @@ export function createFlowIndexProvider(config: FlowIndexProviderConfig = {}) {
   let popup: Window | null = null
   let connectedAddress: string | null = null
   let chainId: number | null = null
+  let popupReady = false
   let requestId = 0
   const pending = new Map<number, PendingRequest>()
   const listeners = new Map<EventName, Set<Handler>>()
@@ -37,21 +49,43 @@ export function createFlowIndexProvider(config: FlowIndexProviderConfig = {}) {
     listeners.get(event)?.forEach((fn) => fn(...args))
   }
 
+  // Queued requests waiting for popup to be ready
+  let readyResolvers: Array<() => void> = []
+
   // Listen for messages from the popup
   function onMessage(event: MessageEvent) {
     const { data } = event
     if (!data?.type?.startsWith("flowindex_")) return
 
+    if (data.type === "flowindex_ready") {
+      popupReady = true
+      // Update address if popup sends it (re-auth after popup reopen)
+      if (data.address) {
+        connectedAddress = data.address
+        chainId = data.chainId
+      }
+      // Flush any waiting requests
+      const resolvers = readyResolvers
+      readyResolvers = []
+      resolvers.forEach((r) => r())
+    }
+
     if (data.type === "flowindex_connected") {
       connectedAddress = data.address
       chainId = data.chainId
+      popupReady = true
       emit("connect", { chainId: `0x${chainId!.toString(16)}` })
       emit("accountsChanged", [connectedAddress])
+      // Also flush ready waiters (connected implies ready)
+      const resolvers = readyResolvers
+      readyResolvers = []
+      resolvers.forEach((r) => r())
     }
 
     if (data.type === "flowindex_disconnected") {
       connectedAddress = null
       chainId = null
+      popupReady = false
       emit("disconnect", { code: 4900, message: "Disconnected" })
       emit("accountsChanged", [])
     }
@@ -72,11 +106,28 @@ export function createFlowIndexProvider(config: FlowIndexProviderConfig = {}) {
     window.addEventListener("message", onMessage)
   }
 
-  function openPopup(): Window {
+  function openPopup(action?: string): Window {
     if (popup && !popup.closed) return popup
-    popup = window.open(walletUrl, "flowindex-wallet", popupFeatures)
+    popupReady = false
+    const url = action ? `${walletUrl}?action=${action}` : walletUrl
+    popup = window.open(url, "flowindex-wallet", popupFeatures)
     if (!popup) throw new Error("Popup blocked. Please allow popups for this site.")
     return popup
+  }
+
+  /** Wait for popup to send flowindex_ready or flowindex_connected */
+  function waitForReady(): Promise<void> {
+    if (popupReady) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        readyResolvers = readyResolvers.filter((r) => r !== resolve)
+        reject(new Error("Popup load timed out"))
+      }, 30_000)
+      readyResolvers.push(() => {
+        clearTimeout(timeout)
+        resolve()
+      })
+    })
   }
 
   function sendRequest(method: string, params?: any[]): Promise<any> {
@@ -130,6 +181,18 @@ export function createFlowIndexProvider(config: FlowIndexProviderConfig = {}) {
 
       if (method === "eth_chainId") {
         return chainId ? `0x${chainId.toString(16)}` : "0x221" // 545
+      }
+
+      // Signing methods — reopen popup if closed, wait for ready
+      if (SIGNING_METHODS.has(method)) {
+        if (!connectedAddress) {
+          throw new Error("Wallet not connected. Call eth_requestAccounts first.")
+        }
+        if (!popup || popup.closed) {
+          openPopup("sign")
+          await waitForReady()
+        }
+        return sendRequest(method, params)
       }
 
       // All other methods — proxy to popup
