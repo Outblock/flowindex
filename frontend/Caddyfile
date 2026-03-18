@@ -42,7 +42,7 @@ studio.flowindex.io {
 		reverse_proxy 10.128.0.4:3202
 	}
 
-	# Sim Studio app routes — proxy to Next.js
+	# Sim Studio app routes — proxy to Next.js on backend VM
 	handle /workspace* {
 		reverse_proxy 10.128.0.4:3200
 	}
@@ -62,9 +62,11 @@ studio.flowindex.io {
 		reverse_proxy 10.128.0.4:3200
 	}
 
-	# Landing page (unauthenticated entry point)
+	# Landing page — static files served by Caddy on frontend VM
 	handle {
-		reverse_proxy 10.128.0.4:3201
+		root * /srv/studio-landing
+		try_files {path} /index.html
+		file_server
 	}
 }
 

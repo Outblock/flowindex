@@ -1228,8 +1228,8 @@ jobs:
             fi
 
             # Stop existing containers
-            docker stop sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis sim-studio-landing 2>/dev/null || true
-            docker rm sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis sim-studio-landing 2>/dev/null || true
+            docker stop sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
+            docker rm sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
 
             # Start Redis for Sim Studio tool approval flow
             if ! docker ps --filter name=sim-studio-redis --format "{{.Names}}" | grep -q sim-studio-redis; then
@@ -1295,20 +1295,7 @@ jobs:
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               "$SIM_STUDIO_REALTIME_IMAGE"
 
-            # Run Landing Page (port 3201)
-            LANDING_IMAGE="us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/studio-landing:latest"
-            docker pull "$LANDING_IMAGE" 2>/dev/null || true
-            if docker image inspect "$LANDING_IMAGE" >/dev/null 2>&1; then
-              docker run -d --restart=always --name sim-studio-landing \
-                --network=host \
-                -e PORT=3201 \
-                "$LANDING_IMAGE"
-              echo "Landing page started on port 3201"
-            else
-              echo "WARNING: Landing page image not found, skipping"
-            fi
-
-            echo "Sim Studio deployed (web: 3200, landing: 3201, realtime: 3202)"
+            echo "Sim Studio deployed (web: 3200, realtime: 3202)"
             docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
 
             # Set up systemd timer to poll schedule execution endpoint every minute
@@ -1318,6 +1305,26 @@ jobs:
             sudo systemctl enable --now sim-schedule.timer
             echo "Schedule timer installed"
           '
+
+      - name: Deploy studio landing page into Caddy container
+        run: |
+          # Extract landing page static files from the Docker image
+          LANDING_IMAGE="${{ env.REGISTRY }}/studio-landing:latest"
+          docker pull "$LANDING_IMAGE"
+          CONTAINER_ID=$(docker create "$LANDING_IMAGE")
+          mkdir -p /tmp/studio-landing
+          docker cp "$CONTAINER_ID:/usr/share/nginx/html/." /tmp/studio-landing/
+          docker rm "$CONTAINER_ID"
+
+          # Upload to frontend VM and copy into Caddy container
+          gcloud compute scp --recurse /tmp/studio-landing flowindex-frontend:/tmp/studio-landing --zone=us-central1-a
+          gcloud compute ssh flowindex-frontend --zone=us-central1-a --command="
+            docker exec caddy rm -rf /srv/studio-landing
+            docker cp /tmp/studio-landing caddy:/srv/studio-landing
+            rm -rf /tmp/studio-landing
+            echo 'Landing page deployed into Caddy container at /srv/studio-landing'
+            docker exec caddy ls -la /srv/studio-landing/
+          "
 
       - name: Update Caddy config for studio.flowindex.io TLS
         run: |
