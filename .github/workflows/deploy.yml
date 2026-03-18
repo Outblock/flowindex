@@ -531,6 +531,7 @@ jobs:
               -e GOTRUE_DB_DRIVER=postgres \
               -e GOTRUE_DB_DATABASE_URL="$GOTRUE_DB_URL" \
               -e GOTRUE_SITE_URL=https://flowindex.io \
+              -e "GOTRUE_URI_ALLOW_LIST=https://*.flowindex.io" \
               -e GOTRUE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
               -e GOTRUE_JWT_EXP=3600 \
               -e GOTRUE_DISABLE_SIGNUP=false \
