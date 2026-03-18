@@ -1301,7 +1301,6 @@ const CHAT_MODES: { key: ChatMode; label: string; icon: typeof Zap; desc: string
   { key: 'deep', label: 'Deep', icon: Brain, desc: 'Extended thinking', model: 'Opus' },
 ];
 const MODE_STORAGE_KEY = 'runner-chat-mode';
-const AUTO_APPLY_STORAGE_KEY = 'runner-ai-auto-apply';
 
 function getStoredMode(): ChatMode {
   try {
@@ -1309,16 +1308,6 @@ function getStoredMode(): ChatMode {
     if (v === 'fast' || v === 'balanced' || v === 'deep') return v;
   } catch { /* noop */ }
   return 'balanced';
-}
-
-function getStoredAutoApply(): boolean {
-  try {
-    const v = localStorage.getItem(AUTO_APPLY_STORAGE_KEY);
-    if (v === null) return false;
-    return v === 'true';
-  } catch {
-    return false;
-  }
 }
 
 function parseFenceInfo(infoRaw: string): { language: string; meta?: string } {
@@ -1428,28 +1417,6 @@ function extractEditsFromAssistantMessage(message: UIMessage, allowPartialFence 
   for (const part of message.parts as any[]) {
     if (part.type === 'text') {
       raw.push(...extractEditsFromText(part.text || '', allowPartialFence));
-      continue;
-    }
-
-    if (part.type === 'tool-invocation' || String(part.type || '').startsWith('tool-') || part.type === 'dynamic-tool') {
-      const toolName = part.toolName ?? String(part.type || '').split('-').slice(1).join('-');
-      const isCadenceTool =
-        toolName === 'run_cadence' ||
-        toolName === 'cadence_check' ||
-        toolName === 'cadence_hover' ||
-        toolName === 'cadence_definition' ||
-        toolName === 'cadence_symbols' ||
-        toolName === 'cadence_security_scan';
-      if (!isCadenceTool) continue;
-
-      const script: string | undefined =
-        part.input?.script ?? part.args?.script ?? part.input?.code ?? part.args?.code;
-      if (!script || !script.trim()) continue;
-
-      const explicitPath = normalizePathCandidate(part.input?.path ?? part.args?.path);
-      const inferredPath = resolveTargetPath(undefined, 'cadence', script);
-      const path = explicitPath || normalizePathCandidate(inferredPath);
-      raw.push(path ? { path, code: script } : { code: script });
     }
   }
 
@@ -1466,6 +1433,22 @@ function editsSignature(edits: FenceEdit[]): string {
   return edits
     .map((edit) => `${edit.path || '__active__'}\n${edit.patches ? JSON.stringify(edit.patches) : edit.code}`)
     .join('\n---\n');
+}
+
+const EDITOR_WRITE_TOOL_NAMES = new Set(['create_file', 'update_file', 'edit_file']);
+
+function getToolPartName(part: { toolName?: string; type?: string }): string {
+  return part.toolName ?? String(part.type || '').split('-').slice(1).join('-');
+}
+
+function hasEditorWriteToolCall(message: UIMessage): boolean {
+  return message.parts.some((part) => {
+    if (part.type !== 'tool-invocation' && part.type !== 'dynamic-tool' && !String(part.type || '').startsWith('tool-')) {
+      return false;
+    }
+
+    return EDITOR_WRITE_TOOL_NAMES.has(getToolPartName(part as { toolName?: string; type?: string }));
+  });
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -1564,7 +1547,6 @@ export default function AIPanel({
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
-  const [autoApply, setAutoApply] = useState<boolean>(getStoredAutoApply);
   const [hideTools, setHideTools] = useState(false);
 
   // Auto-approve toggle for transaction signing
@@ -1971,20 +1953,16 @@ export default function AIPanel({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Fallback: stream text code fences into pending diff when the assistant is not
+  // already using editor write tools directly.
   useEffect(() => {
-    try { localStorage.setItem(AUTO_APPLY_STORAGE_KEY, String(autoApply)); } catch { /* noop */ }
-  }, [autoApply]);
-
-  // Fallback: extract edits from code blocks in text ONLY after streaming finishes.
-  // Tool-based edits (update_file, edit_file) are handled by onToolCall above.
-  useEffect(() => {
-    if (!autoApply || !onAutoApplyEdits) return;
-    if (status !== 'ready') return;
-
+    if (!onAutoApplyEdits) return;
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return;
+    if (hasEditorWriteToolCall(last)) return;
 
-    const edits = extractEditsFromAssistantMessage(last, false);
+    const allowPartialFence = status !== 'ready';
+    const edits = extractEditsFromAssistantMessage(last, allowPartialFence);
     if (edits.length === 0) return;
 
     const signature = editsSignature(edits);
@@ -1993,8 +1971,8 @@ export default function AIPanel({
     if (prevSignature === signature) return;
     appliedAssistantSignaturesRef.current.set(last.id, signature);
 
-    onAutoApplyEdits(edits, { assistantId: last.id });
-  }, [messages, status, autoApply, onAutoApplyEdits]);
+    onAutoApplyEdits(edits, { assistantId: last.id, streaming: allowPartialFence });
+  }, [messages, status, onAutoApplyEdits]);
 
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;

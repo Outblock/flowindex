@@ -196,6 +196,30 @@ interface PendingDiffEntry {
 
 type PendingDiffMap = Record<string, PendingDiffEntry>;
 
+function upsertPendingDiff(
+  prev: PendingDiffMap,
+  path: string,
+  original: string,
+  modified: string,
+  assistantId?: string,
+): PendingDiffMap {
+  if (modified === original) {
+    if (!(path in prev)) return prev;
+    const next = { ...prev };
+    delete next[path];
+    return next;
+  }
+
+  return {
+    ...prev,
+    [path]: {
+      original,
+      modified,
+      assistantId: assistantId ?? prev[path]?.assistantId,
+    },
+  };
+}
+
 function findSubarray(lines: string[], sub: string[]): number {
   if (sub.length === 0) return -1;
   outer:
@@ -1273,12 +1297,42 @@ export default function App() {
   }, [activeCode]);
 
   const handleInsertCode = useCallback((newCode: string) => {
-    setProject((prev) => updateFileContent(prev, prev.activeFile, newCode));
-  }, []);
+    const activePath = project.activeFile;
+    const activeFile = project.files.find((f) => f.path === activePath);
+    if (!activeFile || activeFile.readOnly) return;
+
+    setPendingDiffs((prev) =>
+      upsertPendingDiff(
+        prev,
+        activePath,
+        prev[activePath]?.original ?? activeFile.content,
+        newCode,
+      )
+    );
+    setProject((prev) => openFile(prev, activePath));
+  }, [project.activeFile, project.files]);
 
   const handleApplyCodeToFile = useCallback((path: string, newCode: string) => {
+    const normalizedPath = normalizeEditablePath(path);
+    const existingFile = normalizedPath
+      ? project.files.find((f) => f.path === normalizedPath)
+      : undefined;
+
+    if (normalizedPath && existingFile && !existingFile.readOnly) {
+      setPendingDiffs((prev) =>
+        upsertPendingDiff(
+          prev,
+          normalizedPath,
+          prev[normalizedPath]?.original ?? existingFile.content,
+          newCode,
+        )
+      );
+      setProject((prev) => openFile(prev, normalizedPath));
+      return;
+    }
+
     setProject((prev) => applyCodeToPath(prev, path, newCode));
-  }, []);
+  }, [project.files]);
 
   const handleAutoApplyEdits = useCallback((
     edits: { path?: string; code: string; patches?: { search: string; replace: string }[] }[],
@@ -1292,11 +1346,28 @@ export default function App() {
     });
     if (sanitized.length === 0) return;
 
+    const lastTargetPath = sanitized.reduce<string | null>((acc, edit) => {
+      const targetPath = normalizeEditablePath(edit.path || project.activeFile);
+      if (!targetPath) return acc;
+
+      const targetFile = project.files.find((file) => file.path === targetPath);
+      if (targetFile?.readOnly) return acc;
+      if (!targetFile && edit.path) return acc;
+
+      return targetPath;
+    }, null);
+
     setPendingDiffs((prev) => {
-      const next = { ...prev };
+      let next = { ...prev };
 
       for (const edit of sanitized) {
-        const targetPath = edit.path || project.activeFile;
+        const targetPath = normalizeEditablePath(edit.path || project.activeFile);
+        if (!targetPath) continue;
+
+        const targetFile = project.files.find((file) => file.path === targetPath);
+        if (targetFile?.readOnly) continue;
+        if (!targetFile && edit.path) continue;
+
         const currentContent = getFileContent(project, targetPath) || '';
         const original = next[targetPath]?.original ?? currentContent;
 
@@ -1313,11 +1384,15 @@ export default function App() {
           modified = edit.code;
         }
 
-        next[targetPath] = { original, modified, assistantId: meta?.assistantId };
+        next = upsertPendingDiff(next, targetPath, original, modified, meta?.assistantId);
       }
 
       return next;
     });
+
+    if (lastTargetPath) {
+      setProject((prev) => openFile(prev, lastTargetPath!));
+    }
   }, [project]);
 
   const handleAcceptAllDiffs = useCallback(() => {
