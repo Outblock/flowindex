@@ -62,6 +62,7 @@ type EVMTokenTransferRow struct {
 	TokenName       string
 	TokenSymbol     string
 	TokenDecimals   int
+	TokenLogo       string
 	Timestamp       time.Time
 }
 
@@ -136,6 +137,7 @@ func (b *BlockscoutDB) ListEVMTransfersByAddress(ctx context.Context, address st
 			COALESCE(t.name, '') AS token_name,
 			COALESCE(t.symbol, '') AS token_symbol,
 			COALESCE(t.decimals, 18) AS token_decimals,
+			COALESCE(t.icon_url, '') AS token_logo,
 			COALESCE(b.timestamp, NOW()) AS block_timestamp
 		FROM token_transfers tt
 		LEFT JOIN tokens t ON t.contract_address_hash = tt.token_contract_address_hash
@@ -158,6 +160,7 @@ func (b *BlockscoutDB) ListEVMTransfersByAddress(ctx context.Context, address st
 			&r.Amount, &r.TokenID,
 			&r.TokenType, &r.ContractAddress,
 			&r.TokenName, &r.TokenSymbol, &r.TokenDecimals,
+			&r.TokenLogo,
 			&r.Timestamp,
 		); err != nil {
 			return nil, nil, 0, 0, fmt.Errorf("scan token transfer: %w", err)

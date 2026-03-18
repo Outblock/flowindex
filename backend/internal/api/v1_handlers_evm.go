@@ -253,7 +253,7 @@ func toEVMTokenTransferOutput(t repository.EVMTokenTransferRow, addrFilter strin
 			"name":     t.TokenName,
 			"symbol":   t.TokenSymbol,
 			"decimals": t.TokenDecimals,
-			"logo":     "",
+			"logo":     t.TokenLogo,
 		}
 	}
 
@@ -282,7 +282,7 @@ func toEVMNativeTransferOutput(n repository.EVMNativeTransferRow, addrFilter str
 			"name":     "FLOW",
 			"symbol":   "FLOW",
 			"decimals": 18,
-			"logo":     "",
+			"logo":     "https://raw.githubusercontent.com/onflow/FRW-Assets/refs/heads/main/ft/flow/logo.svg",
 		},
 	}
 }
