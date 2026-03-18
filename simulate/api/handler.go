@@ -552,13 +552,14 @@ transaction(amount: UFix64, to: Address) {
 	}
 
 	// Create a base snapshot AFTER warmup so all cached registers are included.
-	// Simulations revert to this snapshot instead of creating fresh ones,
-	// preserving the warm register cache across requests.
+	// This snapshot serves as a recovery point and preserves the warm register
+	// cache. Use a unique name each cycle to avoid 409 "already exists" errors
+	// (the emulator admin API does not support snapshot replacement).
 	baseCtx, baseCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer baseCancel()
 	h.mu.Lock()
-	baseName := baseSnapshotName
-	if _, err := h.client.CreateOrReplaceSnapshot(baseCtx, baseName); err != nil {
+	baseName := fmt.Sprintf("%s-%d", baseSnapshotName, time.Now().Unix())
+	if _, err := h.client.CreateSnapshot(baseCtx, baseName); err != nil {
 		log.Printf("[simulator] warmup: failed to create base snapshot: %v", err)
 	} else {
 		h.baseSnapshot.Store(baseName)
@@ -728,30 +729,29 @@ func (h *Handler) HandleSimulate(w http.ResponseWriter, r *http.Request) {
 	}
 	logSimStage(requestID, "wait_ready_pre", preReadyStart, "")
 
-	// Use the base snapshot (created after warmup) for isolation.
-	// After simulation, we revert to base — this restores the warm register
-	// cache while discarding transaction side effects.
-	// If no base snapshot exists yet (warmup still running), fall back to
-	// creating a per-request snapshot.
+	// Create a per-request snapshot for state isolation.
+	// Each simulation gets its own snapshot of the current state. After
+	// simulation completes, we revert to this snapshot — guaranteeing the
+	// emulator returns to the exact pre-simulation state.
+	//
+	// NOTE: We intentionally do NOT reuse the base snapshot for revert.
+	// The base snapshot is created once after warmup and becomes stale as
+	// subsequent warmup cycles and simulations fetch new registers from
+	// mainnet. Reverting to a stale snapshot evicts those registers from
+	// SQLite, forcing re-fetches from the ever-changing mainnet — which
+	// causes balance drift and state pollution between simulations.
 	snapshotStart := time.Now()
-	var snapName string
-	if base, ok := h.baseSnapshot.Load().(string); ok && base != "" {
-		snapName = base
-		logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s (base)", snapName)
-	} else {
-		var err error
-		snapName, err = h.createStateSnapshot(r.Context(), "sim")
-		if err != nil {
-			log.Printf("[simulate %s] snapshot create failed after %s: %v", requestID, time.Since(requestStart), err)
-			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(SimulateResponse{
-				Success: false,
-				Error:   "simulation state isolation unavailable: " + err.Error(),
-			})
-			return
-		}
-		logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s (fallback)", snapName)
+	snapName, err := h.createStateSnapshot(r.Context(), requestID)
+	if err != nil {
+		log.Printf("[simulate %s] snapshot create failed after %s: %v", requestID, time.Since(requestStart), err)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(SimulateResponse{
+			Success: false,
+			Error:   "simulation state isolation unavailable: " + err.Error(),
+		})
+		return
 	}
+	logSimStage(requestID, "snapshot_create", snapshotStart, "snapshot=%s", snapName)
 
 	// Build and send the transaction
 	txReq := &TxRequest{

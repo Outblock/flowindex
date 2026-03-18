@@ -699,11 +699,6 @@ func (c *Client) CreateSnapshot(ctx context.Context, name string) (string, error
 	return c.createSnapshot(ctx, name, false)
 }
 
-// CreateOrReplaceSnapshot creates a snapshot, replacing an existing one with the same name.
-func (c *Client) CreateOrReplaceSnapshot(ctx context.Context, name string) (string, error) {
-	return c.createSnapshot(ctx, name, true)
-}
-
 // RevertSnapshot reverts the emulator state to a named snapshot.
 func (c *Client) RevertSnapshot(ctx context.Context, name string) error {
 	req, err := http.NewRequestWithContext(ctx, "PUT", fmt.Sprintf("%s/emulator/snapshots/%s", c.adminURL, name), nil)
