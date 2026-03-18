@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.resolve(process.cwd(), "../../.."),
-  transpilePackages: ["@outblock/flowtoken", "@flowindex/flow-ui"],
+  transpilePackages: ["@flowindex/flow-ui"],
   async rewrites() {
     return [
       {

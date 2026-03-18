@@ -19,7 +19,6 @@
         "@ai-sdk/react": "^3.0.107",
         "@flowindex/auth-core": "workspace:*",
         "@flowindex/flow-ui": "workspace:*",
-        "@outblock/flowtoken": "workspace:*",
         "@radix-ui/react-use-controllable-state": "^1.2.2",
         "@rive-app/react-webgl2": "^4.26.2",
         "@streamdown/cjk": "^1.0.2",

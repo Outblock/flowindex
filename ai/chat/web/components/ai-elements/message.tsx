@@ -15,8 +15,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { AnimatedMarkdown } from "@outblock/flowtoken";
-import { Check, ChevronLeftIcon, ChevronRightIcon, Copy } from "lucide-react";
+import { cjk } from "@streamdown/cjk";
+import { code } from "@streamdown/code";
+import { math } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { Streamdown } from "streamdown";
 import {
   createContext,
   memo,
@@ -26,8 +30,6 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -375,89 +377,50 @@ function linkifyHex(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : <>{parts}</>;
 }
 
-/* ── Code Block with syntax highlighting ── */
 
-function MarkdownCodeBlock({ code: codeStr, language }: { code: string; language: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(codeStr);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  const langMap: Record<string, string> = { cadence: "swift", sh: "bash", zsh: "bash", shell: "bash", ts: "typescript", js: "javascript", py: "python", yml: "yaml", Dockerfile: "docker" };
-  const prismLang = langMap[language] || language || "text";
-
-  return (
-    <div className="relative rounded-sm border border-white/10 overflow-hidden my-2">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03] border-b border-white/10">
-        <span className="text-[11px] text-zinc-400 uppercase tracking-widest font-bold">{language || "code"}</span>
-        <button onClick={handleCopy} className="text-zinc-400 hover:text-white transition-colors">
-          {copied ? <Check size={12} className="text-[var(--flow-green)]" /> : <Copy size={12} />}
-        </button>
-      </div>
-      <SyntaxHighlighter
-        language={prismLang}
-        style={vscDarkPlus}
-        customStyle={{ margin: 0, padding: "12px", fontSize: "12px", lineHeight: "1.6", background: "#18181b", borderRadius: 0 }}
-        wrapLongLines
-      >
-        {codeStr}
-      </SyntaxHighlighter>
-    </div>
-  );
-}
+const streamdownPlugins = { cjk, code, math, mermaid };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Custom components for AnimatedMarkdown — matches frontend AIChatWidget exactly.
 const mdComponents: Record<string, any> = {
-  h1: ({ animateText, children }: any) => <h1 className="text-base font-bold text-white mt-3 mb-1">{animateText(children)}</h1>,
-  h2: ({ animateText, children }: any) => <h2 className="text-sm font-bold text-white mt-3 mb-1">{animateText(children)}</h2>,
-  h3: ({ animateText, children }: any) => <h3 className="text-[13px] font-bold text-white mt-2 mb-1">{animateText(children)}</h3>,
-  h4: ({ animateText, children }: any) => <h4 className="text-[13px] font-semibold text-zinc-100 mt-2 mb-0.5">{animateText(children)}</h4>,
-  p: ({ animateText, children }: any) => <p className="mb-2 last:mb-0"><AutoLinkText>{animateText(children)}</AutoLinkText></p>,
-  strong: ({ animateText, children }: any) => <strong className="font-bold text-white">{animateText(children)}</strong>,
-  em: ({ animateText, children }: any) => <em className="italic">{animateText(children)}</em>,
-  a: ({ animateText, children, href }: any) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--flow-green)] hover:underline">{animateText(children)}</a>
+  h1: ({ children, ...props }: any) => <h1 className="text-base font-bold text-white mt-3 mb-1" {...props}>{children}</h1>,
+  h2: ({ children, ...props }: any) => <h2 className="text-sm font-bold text-white mt-3 mb-1" {...props}>{children}</h2>,
+  h3: ({ children, ...props }: any) => <h3 className="text-[13px] font-bold text-white mt-2 mb-1" {...props}>{children}</h3>,
+  h4: ({ children, ...props }: any) => <h4 className="text-[13px] font-semibold text-zinc-100 mt-2 mb-0.5" {...props}>{children}</h4>,
+  p: ({ children, ...props }: any) => <p className="mb-2 last:mb-0" {...props}><AutoLinkText>{children}</AutoLinkText></p>,
+  strong: ({ children, ...props }: any) => <strong className="font-bold text-white" {...props}>{children}</strong>,
+  em: ({ children, ...props }: any) => <em className="italic" {...props}>{children}</em>,
+  a: ({ children, href, ...props }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-[var(--flow-green)] hover:underline" {...props}>{children}</a>
   ),
-  ul: ({ children }: any) => <ul className="ml-3 mb-2 space-y-0.5">{children}</ul>,
-  ol: ({ children }: any) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside">{children}</ol>,
-  li: ({ animateText, children }: any) => (
-    <li className="flex gap-1.5">
+  ul: ({ children, ...props }: any) => <ul className="ml-3 mb-2 space-y-0.5" {...props}>{children}</ul>,
+  ol: ({ children, ...props }: any) => <ol className="ml-3 mb-2 space-y-0.5 list-decimal list-inside" {...props}>{children}</ol>,
+  li: ({ children, ...props }: any) => (
+    <li className="flex gap-1.5" {...props}>
       <span className="text-[var(--flow-green)] shrink-0 mt-[1px]">-</span>
-      <span className="flex-1"><AutoLinkText>{animateText(children)}</AutoLinkText></span>
+      <span className="flex-1"><AutoLinkText>{children}</AutoLinkText></span>
     </li>
   ),
-  blockquote: ({ children }: any) => (
-    <blockquote className="border-l-2 border-[var(--flow-green)]/40 pl-3 my-2 text-zinc-400 italic">{children}</blockquote>
+  blockquote: ({ children, ...props }: any) => (
+    <blockquote className="border-l-2 border-[var(--flow-green)]/40 pl-3 my-2 text-zinc-400 italic" {...props}>{children}</blockquote>
   ),
   hr: () => <hr className="my-3 border-white/10" />,
-  table: ({ children }: any) => (
+  table: ({ children, ...props }: any) => (
     <div className="overflow-x-auto my-2 rounded-sm border border-white/10">
-      <table className="w-full text-left border-collapse text-[12px]">{children}</table>
+      <table className="w-full text-left border-collapse text-[12px]" {...props}>{children}</table>
     </div>
   ),
-  thead: ({ children }: any) => <thead className="bg-white/[0.03]">{children}</thead>,
-  th: ({ animateText, children }: any) => (
-    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-white/10 whitespace-nowrap">{animateText(children)}</th>
+  thead: ({ children, ...props }: any) => <thead className="bg-white/[0.03]" {...props}>{children}</thead>,
+  th: ({ children, ...props }: any) => (
+    <th className="px-3 py-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider border-b border-white/10 whitespace-nowrap" {...props}>{children}</th>
   ),
-  td: ({ animateText, children }: any) => (
-    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono"><AutoLinkText>{animateText(children)}</AutoLinkText></td>
+  td: ({ children, ...props }: any) => (
+    <td className="px-3 py-1.5 text-zinc-400 border-b border-white/5 font-mono" {...props}><AutoLinkText>{children}</AutoLinkText></td>
   ),
-  code: ({ className, children }: any) => {
-    const match = /language-(\w+)/.exec(className || "");
-    const lang = match ? match[1] : "";
-    const codeString = String(children).replace(/\n$/, "");
-    if (lang || codeString.includes("\n")) {
-      return <MarkdownCodeBlock code={codeString} language={lang || "text"} />;
-    }
-    return (
-      <code className="text-[11px] bg-white/10 px-1 py-0.5 rounded font-mono text-purple-400">
-        {children}
-      </code>
-    );
-  },
-  pre: ({ children }: any) => <>{children}</>,
+  inlineCode: ({ children, ...props }: any) => (
+    <code className="text-[11px] bg-white/10 px-1 py-0.5 rounded font-mono text-purple-400" {...props}>
+      {children}
+    </code>
+  ),
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -475,15 +438,14 @@ export const MessageResponse = memo(
       )}
       {...props}
     >
-      <AnimatedMarkdown
-        content={children}
-        animation={["colorTransition", "blurIn"]}
-        animationDuration="0.6s"
-        animationTimingFunction="ease-out"
-        sep="diff"
-        customComponents={mdComponents}
-        static={!streaming}
-      />
+      <Streamdown
+        mode={streaming ? "streaming" : "static"}
+        animated={streaming ? { animation: "blurIn", duration: 600, easing: "ease-out" } : false}
+        components={mdComponents}
+        plugins={streamdownPlugins}
+      >
+        {children}
+      </Streamdown>
     </div>
   ),
   (prevProps, nextProps) => prevProps.children === nextProps.children && prevProps.streaming === nextProps.streaming
