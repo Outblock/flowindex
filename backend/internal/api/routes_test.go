@@ -140,6 +140,10 @@ func TestAllRoutesInSpec(t *testing.T) {
 		if strings.HasPrefix(tpl, "/api/v1/wallet") || strings.HasPrefix(tpl, "/webhook") {
 			return nil
 		}
+		// /flow/address/... are aliases for /flow/account/... — skip spec check
+		if strings.HasPrefix(tpl, "/flow/address/") {
+			return nil
+		}
 		if specExcludedRoutes[tpl] {
 			return nil
 		}
