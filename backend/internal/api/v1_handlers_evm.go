@@ -282,7 +282,7 @@ func toEVMNativeTransferOutput(n repository.EVMNativeTransferRow, addrFilter str
 			"name":     "FLOW",
 			"symbol":   "FLOW",
 			"decimals": 18,
-			"logo":     "https://raw.githubusercontent.com/onflow/FRW-Assets/refs/heads/main/ft/flow/logo.svg",
+			"logo":     "https://raw.githubusercontent.com/onflow/FRW-Assets/refs/heads/main/ft/flow/logo.png",
 		},
 	}
 }
