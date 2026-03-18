@@ -2183,69 +2183,6 @@
         }
       }
     },
-    "/flow/transfer": {
-      "get": {
-        "description": "Fetches all token transfers (FT and NFT) merged in chronological order. Each item includes a 'type' field ('ft' or 'nft') to distinguish transfer types.",
-        "tags": [
-          "Flow"
-        ],
-        "summary": "Retrieve all token transfers (FT + NFT)",
-        "parameters": [
-          {
-            "description": "Account address to filter by (sender or receiver)",
-            "name": "address",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Transaction hash to filter by",
-            "name": "transaction_hash",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Block height to filter by",
-            "name": "height",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Limit for the number of records to return (Default = 20, Max = 200)",
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "The number of records to skip (for pagination) (Default = 0)",
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/flow.AllTransfersResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/flow/ft/transfer": {
       "get": {
         "description": "Fetches fungible token transfers with optional filtering by token or transaction hash",

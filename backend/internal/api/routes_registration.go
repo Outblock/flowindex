@@ -147,7 +147,6 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/account/{address}/nft", s.handleFlowAccountNFTCollections).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/nft/{nft_type}", s.handleFlowAccountNFTByCollection).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/staking/activity", s.handleAccountStakingActivity).Methods("GET", "OPTIONS")
-	r.HandleFunc("/flow/transfer", s.handleFlowAllTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/transfer", s.handleFlowFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/stats", cachedHandler(5*time.Minute, s.handleFlowFTTokenStats)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/prices", cachedHandler(5*time.Minute, s.handleFlowFTTokenPrices)).Methods("GET", "OPTIONS")

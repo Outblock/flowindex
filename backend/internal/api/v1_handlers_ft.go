@@ -46,7 +46,7 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleFlowAllTransfers returns FT and NFT transfers merged in chronological order.
-// Registered at both /flow/transfer (global) and /flow/account/{address}/transfer (per-account).
+// Registered at /flow/account/{address}/transfer (per-account).
 func (s *Server) handleFlowAllTransfers(w http.ResponseWriter, r *http.Request) {
 	// Support both path param (account endpoint) and query param (global endpoint).
 	address := normalizeAddr(mux.Vars(r)["address"])
