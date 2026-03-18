@@ -4,7 +4,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.resolve(process.cwd(), "../../.."),
-  transpilePackages: ["@flowindex/flow-ui"],
+  transpilePackages: ["@flowindex/auth-core", "@flowindex/flow-ui", "@flowindex/flow-passkey"],
   async rewrites() {
     return [
       {
