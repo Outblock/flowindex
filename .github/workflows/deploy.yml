@@ -991,6 +991,9 @@ jobs:
           - name: migrations
             dockerfile: docker/db.Dockerfile
             image: simstudio-fork-migrations
+          - name: copilot-api
+            dockerfile: apps/copilot-api/Dockerfile
+            image: simstudio-copilot-api
     permissions:
       contents: read
       id-token: write
@@ -1217,8 +1220,28 @@ jobs:
             fi
 
             # Stop existing containers
-            docker stop sim-studio sim-studio-realtime sim-studio-auth 2>/dev/null || true
-            docker rm sim-studio sim-studio-realtime sim-studio-auth 2>/dev/null || true
+            docker stop sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
+            docker rm sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
+
+            # Start Redis for Sim Studio tool approval flow
+            if ! docker ps --filter name=sim-studio-redis --format "{{.Names}}" | grep -q sim-studio-redis; then
+              docker run -d --restart=always --name sim-studio-redis \
+                --network=host \
+                redis:7-alpine --port 6399
+              echo "Redis started on port 6399"
+            fi
+
+            # Start copilot-api (our Claude-powered copilot backend)
+            # Read ANTHROPIC_API_KEY from existing ai-chat.env
+            ANTHROPIC_KEY=$(grep "^ANTHROPIC_API_KEY=" /mnt/stateful_partition/pgdata/ai-chat.env 2>/dev/null | cut -d= -f2- || echo "")
+            SIM_COPILOT_IMAGE="us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/simstudio-copilot-api:latest"
+            docker pull "$SIM_COPILOT_IMAGE" 2>/dev/null || true
+            docker run -d --restart=always --name sim-studio-copilot \
+              --network=host \
+              -e ANTHROPIC_API_KEY="${ANTHROPIC_KEY}" \
+              -e PORT=4200 \
+              "$SIM_COPILOT_IMAGE"
+            echo "Copilot API started on port 4200"
 
             # Run Sim Studio (port 3200)
             docker run -d --restart=always --name sim-studio \
@@ -1238,6 +1261,8 @@ jobs:
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               -e SOCKET_SERVER_URL="http://127.0.0.1:3202" \
               -e COPILOT_API_KEY="${COPILOT_API_KEY:-}" \
+              -e SIM_AGENT_API_URL="http://127.0.0.1:4200" \
+              -e REDIS_URL="redis://127.0.0.1:6399" \
               -e CRON_SECRET="${CRON_SECRET}" \
               -e GCS_BUCKET_NAME="${GCS_BUCKET_NAME:-}" \
               -e GCS_PROJECT_ID="${GCS_PROJECT_ID:-}" \
@@ -1257,6 +1282,7 @@ jobs:
               -e INTERNAL_API_SECRET="${INTERNAL_API_SECRET}" \
               -e FLOWINDEX_AUTH_MODE="${FLOWINDEX_AUTH_MODE}" \
               -e SUPABASE_JWT_SECRET="${SUPABASE_JWT_SECRET}" \
+              -e REDIS_URL="redis://127.0.0.1:6399" \
               -e NEXT_PUBLIC_APP_URL="https://studio.flowindex.io" \
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               "$SIM_STUDIO_REALTIME_IMAGE"
