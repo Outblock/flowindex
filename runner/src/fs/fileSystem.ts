@@ -112,7 +112,6 @@ export const TEMPLATES: Template[] = [
     files: [{
       path: 'main.cdc',
       content: `import FungibleToken from 0xf233dcee88fe0abe
-import FlowToken from 0x1654653399040a61
 
 access(all) fun main(address: Address): UFix64 {
     let account = getAccount(address)
@@ -158,8 +157,6 @@ access(all) contract MyToken: FungibleToken {
 
     access(all) var totalSupply: UFix64
 
-    access(all) entitlement Withdraw
-
     access(all) resource Vault: FungibleToken.Vault {
         access(all) var balance: UFix64
 
@@ -186,10 +183,26 @@ access(all) contract MyToken: FungibleToken {
         access(all) view fun isAvailableToWithdraw(amount: UFix64): Bool {
             return self.balance >= amount
         }
+
+        access(all) view fun getViews(): [Type] {
+            return []
+        }
+
+        access(all) fun resolveView(_ view: Type): AnyStruct? {
+            return nil
+        }
     }
 
     access(all) fun createEmptyVault(vaultType: Type): @{FungibleToken.Vault} {
         return <- create Vault(balance: 0.0)
+    }
+
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return []
+    }
+
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        return nil
     }
 
     init() {
@@ -293,6 +306,14 @@ access(all) contract MyNFT: NonFungibleToken {
 
     access(all) fun createEmptyCollection(nftType: Type): @{NonFungibleToken.Collection} {
         return <- create Collection()
+    }
+
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return [Type<MetadataViews.NFTCollectionDisplay>()]
+    }
+
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        return nil
     }
 
     init() {
@@ -450,24 +471,24 @@ contract Counter {
         content: `import EVM from 0xe467b9dd11fa00df
 
 /// Call a deployed Solidity contract on Flow EVM from Cadence.
-/// Replace the evmContractAddress with your deployed Counter address.
-access(all) fun main(): [UInt8] {
-    // The EVM address of the deployed Counter contract
-    let evmContractAddress = EVM.addressFromString("0x0000000000000000000000000000000000000000")
+/// Replace the contract address with your deployed Counter address.
+access(all) fun main(): UInt256 {
+    let contractAddress = EVM.addressFromString("0x0000000000000000000000000000000000000000")
 
     // ABI-encoded calldata for getCount() — selector: 0xa87d942c
     let calldata: [UInt8] = [0xa8, 0x7d, 0x94, 0x2c]
 
-    let result = EVM.run(
-        tx: nil,
-        coinbase: evmContractAddress,
-        callerAddress: evmContractAddress,
+    let result = EVM.dryCall(
+        from: contractAddress,
+        to: contractAddress,
         data: calldata,
         gasLimit: 300000,
         value: EVM.Balance(attoflow: 0)
     )
 
-    return result.data
+    // Decode the returned uint256
+    let decoded = EVM.decodeABI(types: [Type<UInt256>()], data: result.data)
+    return decoded[0] as! UInt256
 }
 `,
       },
