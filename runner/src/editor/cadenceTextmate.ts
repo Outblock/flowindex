@@ -14,10 +14,13 @@ import { CADENCE_LANGUAGE_ID } from './cadenceLanguage';
 // Monaco themes use simple token names; TextMate uses hierarchical scopes.
 // Map TM scopes to Monaco token names so our cadenceTheme colours apply.
 const SCOPE_TO_TOKEN: [RegExp, string][] = [
+  [/^punctuation\.definition\.comment/, 'comment'],
   [/^comment/, 'comment'],
   [/^string/, 'string'],
   [/^constant\.numeric/, 'number'],
   [/^constant\.language/, 'keyword'],
+  [/^keyword\.operator\.move/, 'operator.move'],
+  [/^keyword\.operator/, 'operator'],
   [/^keyword\.control\.import/, 'keyword'],
   [/^keyword/, 'keyword'],
   [/^storage\.type/, 'keyword'],
@@ -30,6 +33,7 @@ const SCOPE_TO_TOKEN: [RegExp, string][] = [
   [/^variable\.parameter/, 'parameter'],
   [/^variable\.other/, 'variable.property'],
   [/^variable/, 'identifier'],
+  [/^punctuation\.separator\.mapping/, 'operator'],
   [/^punctuation/, 'delimiter'],
   [/^meta\.function-call/, 'function'],
 ];

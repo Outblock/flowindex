@@ -3,6 +3,7 @@ import { DiffEditor, type BeforeMount, type DiffOnMount } from '@monaco-editor/r
 import type { editor } from 'monaco-editor';
 import { registerCadenceLanguage, CADENCE_LANGUAGE_ID } from './cadenceLanguage';
 import { registerCadenceThemes, CADENCE_DARK_THEME, CADENCE_LIGHT_THEME } from './cadenceTheme';
+import { activateCadenceTextmate } from './cadenceTextmate';
 import { Check, X } from 'lucide-react';
 
 interface CadenceDiffEditorProps {
@@ -186,6 +187,7 @@ export default function CadenceDiffEditor({
   const handleBeforeMount: BeforeMount = useCallback((monaco) => {
     registerCadenceLanguage(monaco);
     registerCadenceThemes(monaco);
+    activateCadenceTextmate(monaco).catch(console.error);
     monacoRef.current = monaco;
   }, []);
 

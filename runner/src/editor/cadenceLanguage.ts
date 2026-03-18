@@ -82,7 +82,7 @@ export const cadenceTokenProvider: languages.IMonarchLanguage = {
       { include: '@whitespace' },
 
       // Move operator — must come before generic symbol matching
-      [/<-!?/, 'operator.move'],
+      [/<-!|<-/, 'operator.move'],
 
       // Path literals: /storage/xxx, /public/xxx, /private/xxx
       [/\/(?:storage|public|private)\/\w+/, 'string.path'],
@@ -130,10 +130,9 @@ export const cadenceTokenProvider: languages.IMonarchLanguage = {
 
       // Delimiters
       [/[{}()\[\]]/, '@brackets'],
-      [/[<>]/, 'delimiter.angle'],
 
       // Operators (multi-char first, then single-char)
-      [/[=!<>]=|&&|\|\||[?]{2}|\+=|-=|\*=|\/=|%=/, 'operator'],
+      [/<->|<-!|<-|->|==|!=|>=|<=|&&|\|\||[?]{2}|<<|>>|\+=|-=|\*=|\/=|%=/, 'operator'],
       [/[+\-*/%&|^~!=<>?:]/, 'operator'],
 
       // Semicolons, commas, dots
