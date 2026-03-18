@@ -10,14 +10,15 @@ RUN git clone https://github.com/Outblock/flow-emulator.git /src \
   && git checkout "$EMULATOR_REF"
 WORKDIR /src
 
-# NOTE: We previously patched LoadSnapshot to call globalCache.Purge() here.
-# This is no longer needed because the simulator API now creates per-request
-# snapshots (one before each simulation, reverted after). The SQLite delta
-# store correctly reverts transaction writes via snapshot restore. The
-# globalCache only holds read-only registers fetched from mainnet — these
-# are never modified by transactions, so they remain valid after revert.
-# Removing the purge avoids expensive re-fetches from mainnet after each
-# simulation (~9s per request with purge vs ~1s without).
+# Disable batch register prefetch in fork mode. After ~2-5 minutes, the
+# mainnet access node prunes execution data for the fork-height block.
+# The prefetchRegistersForOwner function makes a gRPC batch call per unique
+# account owner (~10+ per tx). When pruned, each call fails with NotFound
+# but still takes ~1s of gRPC overhead → 10+ seconds of wasted latency.
+# resolveRegister() already handles individual register resolution via
+# SQLite (fast, registers are warm from the warmup phase) with gRPC fallback.
+RUN sed -i '/^func (s \*Store) prefetchRegistersForOwner/,/^}/c\func (s *Store) prefetchRegistersForOwner(_ context.Context, _ string, _ uint64) {}' \
+    storage/remote/store.go
 
 ENV GOTOOLCHAIN=auto
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o /emulator ./cmd/emulator
