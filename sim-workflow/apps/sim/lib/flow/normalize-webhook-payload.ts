@@ -120,5 +120,20 @@ export function formatFlowWebhookInput(
     }
   }
 
+  if (triggerId === 'flow_balance_change') {
+    return {
+      eventType: normalized.eventType,
+      address: normalized.address,
+      token: normalized.token,
+      balance: typeof data.balance === 'string' ? data.balance : '',
+      previousBalance: typeof data.previous_balance === 'string' ? data.previous_balance : '',
+      change: typeof data.change === 'string' ? data.change : '',
+      blockHeight: normalized.blockHeight,
+      timestamp: normalized.timestamp,
+      data: normalized.data,
+      raw: normalized.raw,
+    }
+  }
+
   return normalized
 }

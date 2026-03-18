@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
 	flowsdk "github.com/onflow/flow-go-sdk"
 
+	"flowscan-clone/internal/config"
 	"flowscan-clone/internal/eventbus"
 	flowclient "flowscan-clone/internal/flow"
+	"flowscan-clone/internal/repository"
 )
 
 // BalanceMonitor periodically checks FLOW token balances for subscribed
@@ -20,17 +23,33 @@ type BalanceMonitor struct {
 	bus      *eventbus.Bus
 	cache    *SubscriptionCache
 	client   *flowclient.Client
+	repo     *repository.Repository
 	interval time.Duration
+	lastSeen map[string]string
+
+	queryFlowBalance  func(ctx context.Context, hexAddr string) (string, error)
+	queryTokenBalance func(ctx context.Context, address, contractAddress, contractName string) (string, error)
 }
 
 // NewBalanceMonitor creates a BalanceMonitor that checks balances every interval.
-func NewBalanceMonitor(bus *eventbus.Bus, cache *SubscriptionCache, client *flowclient.Client, interval time.Duration) *BalanceMonitor {
-	return &BalanceMonitor{
+func NewBalanceMonitor(
+	bus *eventbus.Bus,
+	cache *SubscriptionCache,
+	client *flowclient.Client,
+	repo *repository.Repository,
+	interval time.Duration,
+) *BalanceMonitor {
+	bm := &BalanceMonitor{
 		bus:      bus,
 		cache:    cache,
 		client:   client,
+		repo:     repo,
 		interval: interval,
+		lastSeen: make(map[string]string),
 	}
+	bm.queryFlowBalance = bm.queryOnChainFlowBalance
+	bm.queryTokenBalance = bm.queryIndexedTokenBalance
+	return bm
 }
 
 // Run starts the periodic balance check loop until context is cancelled.
@@ -61,37 +80,38 @@ func (bm *BalanceMonitor) check(ctx context.Context) {
 		return
 	}
 
-	// Collect unique addresses across all balance.check subscriptions.
-	addrSet := make(map[string]bool)
-	for _, sub := range subs {
-		addrs := extractAddresses(sub.Conditions)
-		for _, a := range addrs {
-			addrSet[strings.ToLower(strings.TrimPrefix(a, "0x"))] = true
-		}
-	}
-
-	if len(addrSet) == 0 {
+	targets := extractBalanceTargets(subs)
+	if len(targets) == 0 {
 		return
 	}
 
 	now := time.Now()
 	published := 0
 
-	for addr := range addrSet {
-		balance, err := bm.queryBalance(ctx, addr)
+	for _, target := range targets {
+		balance, err := bm.queryTargetBalance(ctx, target)
 		if err != nil {
-			log.Printf("[balance_monitor] failed to query balance for %s: %v", addr, err)
+			log.Printf("[balance_monitor] failed to query balance for %s (%s): %v", target.Address, target.TokenContract, err)
 			continue
 		}
 
-		// Balance is in UFix64 (1 FLOW = 100_000_000 units).
-		balanceFlow := float64(balance) / 100_000_000.0
+		key := target.key()
+		previousBalance, seen := bm.lastSeen[key]
+		bm.lastSeen[key] = balance
+
+		if !seen || previousBalance == balance {
+			continue
+		}
 
 		data := map[string]interface{}{
-			"address":     addr,
-			"balance":     fmt.Sprintf("%.8f", balanceFlow),
-			"balance_raw": balance,
-			"token":       "FLOW",
+			"address":          target.Address,
+			"balance":          balance,
+			"previous_balance": previousBalance,
+			"change":           formatBalanceDelta(previousBalance, balance),
+			"token":            target.Symbol,
+			"token_contract":   target.TokenContract,
+			"contract_address": target.ContractAddress,
+			"contract_name":    target.ContractName,
 		}
 
 		bm.bus.Publish(eventbus.Event{
@@ -108,45 +128,175 @@ func (bm *BalanceMonitor) check(ctx context.Context) {
 	}
 }
 
-// queryBalance queries the Flow blockchain for the account's FLOW balance.
-func (bm *BalanceMonitor) queryBalance(ctx context.Context, hexAddr string) (uint64, error) {
+type balanceTarget struct {
+	Address         string
+	Symbol          string
+	TokenContract   string
+	ContractAddress string
+	ContractName    string
+}
+
+func (t balanceTarget) key() string {
+	return t.Address + "|" + strings.ToLower(t.TokenContract)
+}
+
+func normalizeHexAddress(value string) string {
+	return strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "0x")
+}
+
+type balanceConditionSet struct {
+	Addresses     json.RawMessage `json:"addresses"`
+	TokenContract string          `json:"token_contract"`
+}
+
+func extractBalanceTargets(subs []Subscription) []balanceTarget {
+	targets := make(map[string]balanceTarget)
+
+	for _, sub := range subs {
+		var cond balanceConditionSet
+		if err := json.Unmarshal(sub.Conditions, &cond); err != nil {
+			continue
+		}
+
+		token := parseTokenContract(cond.TokenContract)
+		for _, addr := range parseBalanceAddresses(cond.Addresses) {
+			target := balanceTarget{
+				Address:         normalizeHexAddress(addr),
+				Symbol:          token.symbol,
+				TokenContract:   token.identifier,
+				ContractAddress: token.address,
+				ContractName:    token.name,
+			}
+			targets[target.key()] = target
+		}
+	}
+
+	out := make([]balanceTarget, 0, len(targets))
+	for _, target := range targets {
+		out = append(out, target)
+	}
+	return out
+}
+
+func parseBalanceAddresses(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var arr []string
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return arr
+	}
+
+	var single string
+	if err := json.Unmarshal(raw, &single); err == nil && single != "" {
+		parts := strings.Split(single, ",")
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+		return out
+	}
+
+	return nil
+}
+
+type parsedTokenContract struct {
+	identifier string
+	address    string
+	name       string
+	symbol     string
+}
+
+func parseTokenContract(value string) parsedTokenContract {
+	raw := strings.TrimSpace(value)
+	if raw == "" {
+		flowAddress := config.Addr().FlowToken
+		return parsedTokenContract{
+			identifier: "A." + flowAddress + ".FlowToken",
+			address:    flowAddress,
+			name:       "FlowToken",
+			symbol:     "FLOW",
+		}
+	}
+
+	raw = strings.Replace(raw, "A.0x", "A.", 1)
+	parts := strings.Split(raw, ".")
+	if len(parts) >= 3 && strings.EqualFold(parts[0], "A") {
+		name := parts[2]
+		return parsedTokenContract{
+			identifier: "A." + normalizeHexAddress(parts[1]) + "." + name,
+			address:    normalizeHexAddress(parts[1]),
+			name:       name,
+			symbol:     deriveTokenSymbol(name),
+		}
+	}
+
+	return parsedTokenContract{
+		identifier: raw,
+		address:    normalizeHexAddress(raw),
+		symbol:     strings.ToUpper(raw),
+	}
+}
+
+func deriveTokenSymbol(contractName string) string {
+	switch strings.ToLower(contractName) {
+	case "flowtoken":
+		return "FLOW"
+	case "fiattoken":
+		return "USDC"
+	case "stflowtoken":
+		return "stFLOW"
+	default:
+		return contractName
+	}
+}
+
+func formatBalanceDelta(previous, current string) string {
+	prev, errPrev := strconv.ParseFloat(previous, 64)
+	curr, errCurr := strconv.ParseFloat(current, 64)
+	if errPrev != nil || errCurr != nil {
+		return ""
+	}
+	return strconv.FormatFloat(curr-prev, 'f', -1, 64)
+}
+
+func (bm *BalanceMonitor) queryTargetBalance(ctx context.Context, target balanceTarget) (string, error) {
+	if strings.EqualFold(target.ContractName, "FlowToken") && target.ContractAddress == config.Addr().FlowToken {
+		return bm.queryFlowBalance(ctx, target.Address)
+	}
+	return bm.queryTokenBalance(ctx, target.Address, target.ContractAddress, target.ContractName)
+}
+
+// queryOnChainFlowBalance queries the Flow blockchain for the account's FLOW balance.
+func (bm *BalanceMonitor) queryOnChainFlowBalance(ctx context.Context, hexAddr string) (string, error) {
 	addr := flowsdk.HexToAddress(hexAddr)
 	account, err := bm.client.GetAccount(ctx, addr)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	return account.Balance, nil
+	return fmt.Sprintf("%.8f", float64(account.Balance)/100_000_000.0), nil
 }
 
-// extractAddresses parses the addresses field from subscription conditions JSON.
-func extractAddresses(conditions json.RawMessage) []string {
-	if len(conditions) == 0 {
-		return nil
-	}
-	var cond struct {
-		Addresses json.RawMessage `json:"addresses"`
-	}
-	if err := json.Unmarshal(conditions, &cond); err != nil || len(cond.Addresses) == 0 {
-		return nil
+func (bm *BalanceMonitor) queryIndexedTokenBalance(
+	ctx context.Context,
+	address string,
+	contractAddress string,
+	contractName string,
+) (string, error) {
+	if bm.repo == nil {
+		return "", fmt.Errorf("repository unavailable for token balance checks")
 	}
 
-	// Try array of strings
-	var arr []string
-	if err := json.Unmarshal(cond.Addresses, &arr); err == nil {
-		return arr
+	holding, err := bm.repo.GetFTHolding(ctx, address, contractAddress, contractName)
+	if err != nil {
+		return "", err
 	}
-	// Try single comma-separated string
-	var s string
-	if err := json.Unmarshal(cond.Addresses, &s); err == nil && s != "" {
-		parts := strings.Split(s, ",")
-		result := make([]string, 0, len(parts))
-		for _, p := range parts {
-			p = strings.TrimSpace(p)
-			if p != "" {
-				result = append(result, p)
-			}
-		}
-		return result
+	if holding == nil {
+		return "0", nil
 	}
-	return nil
+	return holding.Balance, nil
 }

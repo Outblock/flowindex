@@ -630,14 +630,14 @@ func main() {
 				log.Println("[webhooks] webhook_processor added to live_deriver")
 			}
 
-			// Balance monitor: periodically checks FLOW balances for subscribed addresses.
+			// Balance monitor: periodically checks configured token balances for subscribed addresses.
 			balanceCheckInterval := 60 * time.Second
 			if v := os.Getenv("BALANCE_CHECK_INTERVAL_SEC"); v != "" {
 				if n, err := strconv.Atoi(v); err == nil && n > 0 {
 					balanceCheckInterval = time.Duration(n) * time.Second
 				}
 			}
-			balanceMonitor = webhooks.NewBalanceMonitor(bus, subCache, flowClient, balanceCheckInterval)
+			balanceMonitor = webhooks.NewBalanceMonitor(bus, subCache, flowClient, repo, balanceCheckInterval)
 
 			log.Println("[webhooks] notification system initialized")
 		}

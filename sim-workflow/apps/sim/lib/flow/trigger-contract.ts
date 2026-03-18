@@ -4,7 +4,7 @@ export const FLOW_TRIGGER_EVENT_TYPES = {
   flow_tx_sealed: 'address.activity',
   flow_contract_event: 'contract.event',
   flow_account_event: 'account.event',
-  flow_balance_change: 'ft.transfer',
+  flow_balance_change: 'balance.check',
   flow_staking_event: 'staking.event',
   flow_evm_tx: 'evm.transaction',
   flow_defi_event: 'defi.event',

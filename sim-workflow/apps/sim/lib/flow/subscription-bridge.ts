@@ -472,7 +472,7 @@ export function extractFlowConditions(
       break
 
     case 'flow_balance_change':
-      // Go matcher (ft.transfer): addresses (flex array), token_contract, min_amount, direction
+      // Go matcher (balance.check): addresses, token_contract, min_amount, direction
       if (subBlockValues.addressFilter) {
         conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }

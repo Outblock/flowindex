@@ -48,10 +48,16 @@ func TestBuildMockEventData_AllTypes(t *testing.T) {
 		"ft.transfer", "ft.large_transfer", "nft.transfer",
 		"contract.event", "address.activity", "staking.event",
 		"evm.transaction", "account.event", "account.created", "account.key_change",
-		"defi.event", "defi.swap", "defi.liquidity",
+		"defi.event", "defi.swap", "defi.liquidity", "balance.check",
 	}
 	for _, et := range types {
 		data := BuildMockEventData(et, nil)
+		if et == "balance.check" {
+			if data["address"] != "1654653399040a61" {
+				t.Errorf("[%s] expected address to be set, got %v", et, data["address"])
+			}
+			continue
+		}
 		if data["tx_id"] != mockTxID {
 			t.Errorf("[%s] expected tx_id to be set, got %v", et, data["tx_id"])
 		}
@@ -75,6 +81,7 @@ func TestRunWorkflowTest_AllSupportedFlowEventTypes(t *testing.T) {
 		"defi.event",
 		"defi.swap",
 		"defi.liquidity",
+		"balance.check",
 	}
 
 	for _, eventType := range types {

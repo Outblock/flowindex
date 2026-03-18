@@ -167,6 +167,18 @@ func BuildMockEventData(eventType string, overrides map[string]interface{}) map[
 			"block_height": uint64(100000000),
 		}
 
+	case "balance.check":
+		defaults = map[string]interface{}{
+			"address":          "1654653399040a61",
+			"balance":          "125.0",
+			"previous_balance": "100.0",
+			"change":           "25.0",
+			"token":            "FLOW",
+			"token_contract":   "A.1654653399040a61.FlowToken",
+			"contract_address": "1654653399040a61",
+			"contract_name":    "FlowToken",
+		}
+
 	default:
 		defaults = map[string]interface{}{
 			"tx_id":        mockTxID,
@@ -373,6 +385,18 @@ func buildMockModelData(eventType string, data map[string]interface{}) interface
 			PriceNative:   getString(data, "price_native"),
 			TransactionID: getString(data, "tx_id"),
 			BlockHeight:   getUint64(data, "block_height"),
+		}
+
+	case "balance.check":
+		return map[string]interface{}{
+			"address":          getString(data, "address"),
+			"balance":          getString(data, "balance"),
+			"previous_balance": getString(data, "previous_balance"),
+			"change":           getString(data, "change"),
+			"token":            getString(data, "token"),
+			"token_contract":   getString(data, "token_contract"),
+			"contract_address": getString(data, "contract_address"),
+			"contract_name":    getString(data, "contract_name"),
 		}
 
 	default:

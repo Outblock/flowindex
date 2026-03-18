@@ -63,4 +63,30 @@ describe('formatFlowWebhookInput', () => {
       token: 'FLOW',
     })
   })
+
+  it('extracts balance-check fields for flow_balance_change payloads', () => {
+    const input = formatFlowWebhookInput(
+      {
+        event_type: 'balance.check',
+        timestamp: '2026-03-18T06:20:23Z',
+        data: {
+          address: '1654653399040a61',
+          token: 'FLOW',
+          balance: '90.0',
+          previous_balance: '120.0',
+          change: '-30.0',
+        },
+      },
+      'flow_balance_change'
+    )
+
+    expect(input).toMatchObject({
+      eventType: 'balance.check',
+      address: '0x1654653399040a61',
+      token: 'FLOW',
+      balance: '90.0',
+      previousBalance: '120.0',
+      change: '-30.0',
+    })
+  })
 })

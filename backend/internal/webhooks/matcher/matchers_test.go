@@ -299,6 +299,29 @@ func TestAccountEventMatcher_Basic(t *testing.T) {
 	}
 }
 
+func TestBalanceCheckMatcher_Basic(t *testing.T) {
+	m := &BalanceCheckMatcher{}
+	data := map[string]interface{}{
+		"address":          "1654653399040a61",
+		"balance":          "90.0",
+		"previous_balance": "120.0",
+		"change":           "-30.0",
+		"token_contract":   "A.1654653399040a61.FlowToken",
+	}
+
+	if !m.Match(data, json.RawMessage(`{"addresses":["0x1654653399040a61"],"token_contract":"A.1654653399040a61.FlowToken","min_amount":100,"direction":"below"}`)).Matched {
+		t.Error("should match when balance crosses below threshold")
+	}
+
+	if m.Match(data, json.RawMessage(`{"min_amount":80,"direction":"below"}`)).Matched {
+		t.Error("should not match when balance did not cross below threshold")
+	}
+
+	if !m.Match(data, json.RawMessage(`{"direction":"below"}`)).Matched {
+		t.Error("should match downward movement without threshold")
+	}
+}
+
 func TestEVMTransactionMatcher_Basic(t *testing.T) {
 	m := &EVMTransactionMatcher{}
 	etx := &models.EVMTransaction{
