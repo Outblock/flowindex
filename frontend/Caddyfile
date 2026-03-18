@@ -62,17 +62,11 @@ studio.flowindex.io {
 		reverse_proxy 10.128.0.4:3200
 	}
 
-	# Landing page — static files served by Caddy (fallback to Sim Studio if not deployed yet)
+	# Landing page — static files served by Caddy
 	handle {
 		root * /srv/studio-landing
-		@landing file /index.html
-		handle @landing {
-			try_files {path} /index.html
-			file_server
-		}
-		handle {
-			reverse_proxy 10.128.0.4:3200
-		}
+		try_files {path} /index.html
+		file_server
 	}
 }
 
