@@ -137,6 +137,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/account/{address}/storage/links", s.handleGetAccountStorageLinks).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/storage/item", s.handleGetAccountStorageItem).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/transaction", s.handleFlowAccountTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/account/{address}/transfer", s.handleFlowAllTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/ft/transfer", s.handleFlowAccountFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/nft/transfer", s.handleFlowAccountNFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/ft/holding", s.handleFlowAccountFTHoldings).Methods("GET", "OPTIONS")
@@ -146,6 +147,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/account/{address}/nft", s.handleFlowAccountNFTCollections).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/nft/{nft_type}", s.handleFlowAccountNFTByCollection).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/account/{address}/staking/activity", s.handleAccountStakingActivity).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/transfer", s.handleFlowAllTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/transfer", s.handleFlowFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/stats", cachedHandler(5*time.Minute, s.handleFlowFTTokenStats)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/ft/prices", cachedHandler(5*time.Minute, s.handleFlowFTTokenPrices)).Methods("GET", "OPTIONS")
@@ -209,6 +211,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 func registerAccountingRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/accounting/account/{address}", s.handleFlowGetAccount).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounting/account/{address}/transaction", s.handleFlowAccountTransactions).Methods("GET", "OPTIONS")
+	r.HandleFunc("/accounting/account/{address}/transfer", s.handleFlowAllTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounting/account/{address}/ft/transfer", s.handleFlowAccountFTTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounting/account/{address}/nft", s.handleFlowAccountNFTCollections).Methods("GET", "OPTIONS")
 	r.HandleFunc("/accounting/account/{address}/ft", s.handleFlowAccountFTVaults).Methods("GET", "OPTIONS")

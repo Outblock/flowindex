@@ -45,6 +45,73 @@ func (s *Server) handleFlowFTTransfers(w http.ResponseWriter, r *http.Request) {
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": hasMore}, nil)
 }
 
+// handleFlowAllTransfers returns FT and NFT transfers merged in chronological order.
+// Registered at both /flow/transfer (global) and /flow/account/{address}/transfer (per-account).
+func (s *Server) handleFlowAllTransfers(w http.ResponseWriter, r *http.Request) {
+	// Support both path param (account endpoint) and query param (global endpoint).
+	address := normalizeAddr(mux.Vars(r)["address"])
+	if address == "" {
+		address = normalizeAddr(r.URL.Query().Get("address"))
+	}
+	limit, offset := parseLimitOffset(r)
+	height, err := parseHeightParam(r.URL.Query().Get("height"))
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid height")
+		return
+	}
+	txHash := r.URL.Query().Get("transaction_hash")
+
+	transfers, total, err := s.repo.ListAllTransfersFiltered(r.Context(), address, txHash, height, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Split into FT/NFT for separate metadata lookups.
+	var ftSlice, nftSlice []repository.TokenTransferWithContract
+	for _, t := range transfers {
+		if t.IsNFT {
+			nftSlice = append(nftSlice, t)
+		} else {
+			ftSlice = append(ftSlice, t)
+		}
+	}
+	ftIDs := collectTransferTokenIDs(ftSlice, false)
+	nftIDs := collectTransferTokenIDs(nftSlice, true)
+	ftMeta, _ := s.repo.GetFTTokenMetadataByIdentifiers(r.Context(), ftIDs)
+	nftMeta, _ := s.repo.GetNFTCollectionMetadataByIdentifiers(r.Context(), nftIDs)
+
+	out := make([]map[string]interface{}, 0, len(transfers))
+	for _, t := range transfers {
+		if t.IsNFT {
+			id := formatTokenIdentifier(t.TokenContractAddress, t.ContractName)
+			var m *repository.TokenMetadataInfo
+			if meta, ok := nftMeta[id]; ok {
+				m = &meta
+			}
+			item := toNFTTransferOutput(t.TokenTransfer, t.ContractName, address, m)
+			item["type"] = "nft"
+			out = append(out, item)
+		} else {
+			id := formatTokenVaultIdentifier(t.TokenContractAddress, t.ContractName)
+			var m *repository.TokenMetadataInfo
+			if meta, ok := ftMeta[id]; ok {
+				m = &meta
+			}
+			var usdPrice float64
+			if m != nil && m.MarketSymbol != "" {
+				usdPrice, _ = s.priceCache.GetPriceAt(m.MarketSymbol, t.TokenTransfer.Timestamp)
+			} else if t.ContractName == "FlowToken" {
+				usdPrice, _ = s.priceCache.GetPriceAt("FLOW", t.TokenTransfer.Timestamp)
+			}
+			item := toFTTransferOutput(t.TokenTransfer, t.ContractName, address, m, usdPrice)
+			item["type"] = "ft"
+			out = append(out, item)
+		}
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "has_more": total}, nil)
+}
+
 func (s *Server) handleFlowFTTokenStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.repo.GetFTTokenStats(r.Context())
 	if err != nil {

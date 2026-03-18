@@ -99,6 +99,70 @@
         }
       }
     },
+    "/accounting/account/{address}/transfer": {
+      "get": {
+        "description": "Fetches all token transfers (FT and NFT) for a specific account address, merged in chronological order.",
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Retrieve all token transfers (FT + NFT) for an account",
+        "parameters": [
+          {
+            "description": "The account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Transaction hash to filter by",
+            "name": "transaction_hash",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Block height to filter by",
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 20, Max = 200)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.AllTransfersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/accounting/account/{address}/ft/transfer": {
       "get": {
         "description": "Fetches all fungible token transfers for a specific account address",
@@ -958,6 +1022,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/flow.FTHoldingResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/account/{address}/transfer": {
+      "get": {
+        "description": "Fetches all token transfers (FT and NFT) for a specific account address, merged in chronological order. Each item includes a 'type' field ('ft' or 'nft') to distinguish transfer types.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Retrieve all token transfers (FT + NFT) for an account",
+        "parameters": [
+          {
+            "description": "The account address",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Transaction hash to filter by",
+            "name": "transaction_hash",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Block height to filter by",
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 20, Max = 200)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.AllTransfersResponse"
                 }
               }
             }
@@ -2053,6 +2181,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/flow.FTListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/flow/transfer": {
+      "get": {
+        "description": "Fetches all token transfers (FT and NFT) merged in chronological order. Each item includes a 'type' field ('ft' or 'nft') to distinguish transfer types.",
+        "tags": [
+          "Flow"
+        ],
+        "summary": "Retrieve all token transfers (FT + NFT)",
+        "parameters": [
+          {
+            "description": "Account address to filter by (sender or receiver)",
+            "name": "address",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Transaction hash to filter by",
+            "name": "transaction_hash",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Block height to filter by",
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 20, Max = 200)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.AllTransfersResponse"
                 }
               }
             }
@@ -8878,6 +9069,128 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/flow.AccountsOutput"
+            }
+          },
+          "error": {
+            "description": "Error contains details about any error that occurred"
+          }
+        }
+      },
+      "flow.AllTransferOutput": {
+        "description": "A single token transfer that can be either FT or NFT. Use the 'type' field to distinguish.",
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "Transfer type: 'ft' for fungible token or 'nft' for non-fungible token.",
+            "type": "string",
+            "enum": ["ft", "nft"]
+          },
+          "transaction_hash": {
+            "description": "The unique identifier of the transaction.",
+            "type": "string"
+          },
+          "block_height": {
+            "description": "The height of the blockchain block containing the transaction.",
+            "type": "integer"
+          },
+          "timestamp": {
+            "description": "The time when the transaction occurred.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "sender": {
+            "description": "The sender address.",
+            "type": "string"
+          },
+          "receiver": {
+            "description": "The receiver address.",
+            "type": "string"
+          },
+          "direction": {
+            "description": "Direction of the transfer: 'withdraw' or 'deposit'.",
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "amount": {
+            "description": "FT only: the amount transferred.",
+            "type": "number"
+          },
+          "token": {
+            "description": "FT only: token details (identifier, name, symbol, logo).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/flow.TokenOutput"
+              }
+            ]
+          },
+          "classifier": {
+            "description": "FT only: transfer classifier.",
+            "type": "string"
+          },
+          "approx_usd_price": {
+            "description": "FT only: approximate USD price at time of transfer.",
+            "type": "number"
+          },
+          "usd_value": {
+            "description": "FT only: USD value of the transfer (amount * price).",
+            "type": "number"
+          },
+          "nft_type": {
+            "description": "NFT only: the NFT collection type identifier.",
+            "type": "string"
+          },
+          "nft_id": {
+            "description": "NFT only: the unique NFT item ID.",
+            "type": "string"
+          },
+          "current_owner": {
+            "description": "NFT only: current owner of the NFT.",
+            "type": "string"
+          },
+          "collection": {
+            "description": "NFT only: collection metadata.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "symbol": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "flow.AllTransfersResponse": {
+        "type": "object",
+        "properties": {
+          "_links": {
+            "description": "Links provides URLs for navigating between pages of results",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "_meta": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "data": {
+            "description": "Data contains the list of combined FT and NFT transfers, sorted by block_height DESC",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/flow.AllTransferOutput"
             }
           },
           "error": {
