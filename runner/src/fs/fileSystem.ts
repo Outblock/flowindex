@@ -152,10 +152,18 @@ access(all) fun main(address: Address, storagePath: String): [UInt64] {
     files: [{
       path: 'MyToken.cdc',
       content: `import FungibleToken from 0xf233dcee88fe0abe
+import ViewResolver from 0x1d7e57aa55817448
+import MetadataViews from 0x1d7e57aa55817448
+import FungibleTokenMetadataViews from 0xf233dcee88fe0abe
+import Burner from 0xf233dcee88fe0abe
 
+/// TODO: Rename "MyToken" to your token name throughout this file
 access(all) contract MyToken: FungibleToken {
 
+    /// TODO: Set your initial total supply
     access(all) var totalSupply: UFix64
+
+    access(all) entitlement Withdraw
 
     access(all) resource Vault: FungibleToken.Vault {
         access(all) var balance: UFix64
@@ -184,28 +192,81 @@ access(all) contract MyToken: FungibleToken {
             return self.balance >= amount
         }
 
+        access(contract) fun burnCallback() {
+            if self.balance > 0.0 {
+                MyToken.totalSupply = MyToken.totalSupply - self.balance
+            }
+            self.balance = 0.0
+        }
+
         access(all) view fun getViews(): [Type] {
-            return []
+            return [
+                Type<FungibleTokenMetadataViews.FTView>(),
+                Type<FungibleTokenMetadataViews.FTDisplay>(),
+                Type<FungibleTokenMetadataViews.FTVaultData>(),
+                Type<FungibleTokenMetadataViews.TotalSupply>()
+            ]
         }
 
         access(all) fun resolveView(_ view: Type): AnyStruct? {
-            return nil
+            return MyToken.resolveContractView(resourceType: self.getType(), viewType: view)
         }
+    }
+
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return [
+            Type<FungibleTokenMetadataViews.FTView>(),
+            Type<FungibleTokenMetadataViews.FTDisplay>(),
+            Type<FungibleTokenMetadataViews.FTVaultData>(),
+            Type<FungibleTokenMetadataViews.TotalSupply>()
+        ]
+    }
+
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        switch viewType {
+            case Type<FungibleTokenMetadataViews.FTView>():
+                return FungibleTokenMetadataViews.FTView(
+                    ftDisplay: self.resolveContractView(resourceType: nil, viewType: Type<FungibleTokenMetadataViews.FTDisplay>())
+                        as! FungibleTokenMetadataViews.FTDisplay?,
+                    ftVaultData: self.resolveContractView(resourceType: nil, viewType: Type<FungibleTokenMetadataViews.FTVaultData>())
+                        as! FungibleTokenMetadataViews.FTVaultData?
+                )
+            case Type<FungibleTokenMetadataViews.FTDisplay>():
+                /// TODO: Update name, symbol, description, and externalURL for your token
+                return FungibleTokenMetadataViews.FTDisplay(
+                    name: "MyToken",
+                    symbol: "MTK",
+                    description: "My custom fungible token on Flow.",
+                    externalURL: MetadataViews.ExternalURL("https://example.com"),
+                    logos: MetadataViews.Medias([]),
+                    socials: {}
+                )
+            case Type<FungibleTokenMetadataViews.FTVaultData>():
+                /// TODO: Update storage paths to match your token name
+                return FungibleTokenMetadataViews.FTVaultData(
+                    storagePath: /storage/myTokenVault,
+                    receiverPath: /public/myTokenReceiver,
+                    metadataPath: /public/myTokenVault,
+                    receiverLinkedType: Type<&MyToken.Vault>(),
+                    metadataLinkedType: Type<&MyToken.Vault>(),
+                    createEmptyVaultFunction: (fun(): @{FungibleToken.Vault} {
+                        return <- MyToken.createEmptyVault(vaultType: Type<@MyToken.Vault>())
+                    })
+                )
+            case Type<FungibleTokenMetadataViews.TotalSupply>():
+                return FungibleTokenMetadataViews.TotalSupply(
+                    totalSupply: MyToken.totalSupply
+                )
+        }
+        return nil
     }
 
     access(all) fun createEmptyVault(vaultType: Type): @{FungibleToken.Vault} {
         return <- create Vault(balance: 0.0)
     }
 
-    access(all) view fun getContractViews(resourceType: Type?): [Type] {
-        return []
-    }
-
-    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
-        return nil
-    }
-
     init() {
+        /// TODO: Set initial supply
         self.totalSupply = 1000000.0
     }
 }
@@ -221,7 +282,9 @@ access(all) contract MyToken: FungibleToken {
       path: 'MyNFT.cdc',
       content: `import NonFungibleToken from 0x1d7e57aa55817448
 import MetadataViews from 0x1d7e57aa55817448
+import ViewResolver from 0x1d7e57aa55817448
 
+/// TODO: Rename "MyNFT" to your collection name throughout this file
 access(all) contract MyNFT: NonFungibleToken {
 
     access(all) var totalSupply: UInt64
@@ -309,10 +372,42 @@ access(all) contract MyNFT: NonFungibleToken {
     }
 
     access(all) view fun getContractViews(resourceType: Type?): [Type] {
-        return [Type<MetadataViews.NFTCollectionDisplay>()]
+        return [
+            Type<MetadataViews.NFTCollectionData>(),
+            Type<MetadataViews.NFTCollectionDisplay>()
+        ]
     }
 
     access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        switch viewType {
+            case Type<MetadataViews.NFTCollectionData>():
+                /// TODO: Update storage paths to match your collection name
+                return MetadataViews.NFTCollectionData(
+                    storagePath: /storage/myNFTCollection,
+                    publicPath: /public/myNFTCollection,
+                    publicCollection: Type<&MyNFT.Collection>(),
+                    publicLinkedType: Type<&MyNFT.Collection>(),
+                    createEmptyCollectionFunction: (fun(): @{NonFungibleToken.Collection} {
+                        return <- MyNFT.createEmptyCollection(nftType: Type<@MyNFT.NFT>())
+                    })
+                )
+            case Type<MetadataViews.NFTCollectionDisplay>():
+                /// TODO: Update collection display metadata
+                return MetadataViews.NFTCollectionDisplay(
+                    name: "MyNFT Collection",
+                    description: "My custom NFT collection on Flow.",
+                    externalURL: MetadataViews.ExternalURL("https://example.com"),
+                    squareImage: MetadataViews.Media(
+                        file: MetadataViews.HTTPFile(url: "https://example.com/logo.png"),
+                        mediaType: "image/png"
+                    ),
+                    bannerImage: MetadataViews.Media(
+                        file: MetadataViews.HTTPFile(url: "https://example.com/banner.png"),
+                        mediaType: "image/png"
+                    ),
+                    socials: {}
+                )
+        }
         return nil
     }
 
