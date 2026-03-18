@@ -14,7 +14,10 @@ export default defineConfig({
       '@flowindex/auth-ui': path.join(packagesRoot, 'auth-ui/src/index.ts'),
       '@flowindex/auth-core': path.join(packagesRoot, 'auth-core/src/index.ts'),
       '@flowindex/flow-passkey': path.join(packagesRoot, 'flow-passkey/src/index.ts'),
-      // Force optional peer deps to resolve from our node_modules (not stubs)
+      // Ensure all deps resolve from our node_modules (needed in Docker where
+      // workspace packages are at /packages/ but node_modules is at /app/)
+      'react': path.join(nm, 'react'),
+      'react-dom': path.join(nm, 'react-dom'),
       'framer-motion': path.join(nm, 'framer-motion'),
       'lucide-react': path.join(nm, 'lucide-react'),
       'input-otp': path.join(nm, 'input-otp'),
