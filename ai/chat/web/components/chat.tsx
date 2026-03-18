@@ -929,7 +929,7 @@ function ChatMessage({ message, isStreaming: isMessageStreaming = false, hideToo
 
             // group.type === "text"
             return group.parts.map((part, pIdx) => {
-              if (!part.text.trim()) return null;
+              if (part.type !== "text" || !part.text?.trim()) return null;
               const isCompaction = (part.providerMetadata?.anthropic as { type?: string } | undefined)?.type === "compaction";
               if (isCompaction) {
                 return (
