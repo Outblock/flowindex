@@ -115,9 +115,9 @@ jobs:
           changed docs ':(glob)devportal/**' ':(glob)docs/**'
           changed ai-chat ':(glob)ai/chat/**' ':(glob)packages/**' '.github/workflows/deploy.yml'
           changed supabase ':(glob)supabase/**' '.github/workflows/deploy.yml'
-          changed studio 'studio/Dockerfile' 'studio/entrypoint.sh' 'studio/login.html' 'studio/nginx.conf'
+          changed studio 'studio/Dockerfile' 'studio/Dockerfile.landing' 'studio/entrypoint.sh' 'studio/login.html' 'studio/nginx.conf' ':(glob)studio/landing/**' ':(glob)packages/auth-ui/**' ':(glob)packages/auth-core/**'
           changed sim-studio 'studio/seed/simstudio_seed.sql' ':(glob)sim-workflow/**'
-          changed sim-studio-images ':(glob)sim-workflow/**'
+          changed sim-studio-images ':(glob)sim-workflow/**' ':(glob)studio/landing/**' 'studio/Dockerfile.landing' ':(glob)packages/auth-ui/**' ':(glob)packages/auth-core/**'
           changed sim-studio-seed 'studio/seed/simstudio_seed.sql'
           changed wallet ':(glob)wallet/src/**' ':(glob)wallet/Dockerfile' ':(glob)wallet/package.json' ':(glob)packages/**' '.github/workflows/deploy.yml'
           changed simulator ':(glob)simulate/emulator/**' ':(glob)simulate/api/**' '.github/workflows/deploy.yml'
@@ -998,6 +998,10 @@ jobs:
             context: sim-workflow/apps/copilot-api
             dockerfile: Dockerfile
             image: simstudio-copilot-api
+          - name: landing
+            context: .
+            dockerfile: studio/Dockerfile.landing
+            image: studio-landing
     permissions:
       contents: read
       id-token: write
@@ -1224,8 +1228,8 @@ jobs:
             fi
 
             # Stop existing containers
-            docker stop sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
-            docker rm sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis 2>/dev/null || true
+            docker stop sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis sim-studio-landing 2>/dev/null || true
+            docker rm sim-studio sim-studio-realtime sim-studio-auth sim-studio-copilot sim-studio-redis sim-studio-landing 2>/dev/null || true
 
             # Start Redis for Sim Studio tool approval flow
             if ! docker ps --filter name=sim-studio-redis --format "{{.Names}}" | grep -q sim-studio-redis; then
@@ -1291,7 +1295,20 @@ jobs:
               -e NEXT_PUBLIC_SOCKET_URL="https://studio.flowindex.io" \
               "$SIM_STUDIO_REALTIME_IMAGE"
 
-            echo "Sim Studio deployed (web: 3200, realtime: 3202)"
+            # Run Landing Page (port 3201)
+            LANDING_IMAGE="us-central1-docker.pkg.dev/flowindex-mainnet/flowindex/studio-landing:latest"
+            docker pull "$LANDING_IMAGE" 2>/dev/null || true
+            if docker image inspect "$LANDING_IMAGE" >/dev/null 2>&1; then
+              docker run -d --restart=always --name sim-studio-landing \
+                --network=host \
+                -e PORT=3201 \
+                "$LANDING_IMAGE"
+              echo "Landing page started on port 3201"
+            else
+              echo "WARNING: Landing page image not found, skipping"
+            fi
+
+            echo "Sim Studio deployed (web: 3200, landing: 3201, realtime: 3202)"
             docker ps --filter name=sim-studio --format "table {{.Names}}\t{{.Status}}"
 
             # Set up systemd timer to poll schedule execution endpoint every minute

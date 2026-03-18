@@ -41,8 +41,30 @@ studio.flowindex.io {
 	handle /socket.io/* {
 		reverse_proxy 10.128.0.4:3202
 	}
-	handle {
+
+	# Sim Studio app routes — proxy to Next.js
+	handle /workspace* {
 		reverse_proxy 10.128.0.4:3200
+	}
+	handle /w* {
+		reverse_proxy 10.128.0.4:3200
+	}
+	handle /api/* {
+		reverse_proxy 10.128.0.4:3200
+	}
+	handle /login* {
+		reverse_proxy 10.128.0.4:3200
+	}
+	handle /_next/* {
+		reverse_proxy 10.128.0.4:3200
+	}
+	handle /trpc/* {
+		reverse_proxy 10.128.0.4:3200
+	}
+
+	# Landing page (unauthenticated entry point)
+	handle {
+		reverse_proxy 10.128.0.4:3201
 	}
 }
 

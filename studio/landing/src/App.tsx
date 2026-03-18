@@ -30,7 +30,7 @@ const authConfig = {
 }
 
 // Workshop URL — Sim Studio on the same domain
-const WORKSHOP_URL = import.meta.env.VITE_WORKSHOP_URL || '/w'
+const WORKSHOP_URL = import.meta.env.VITE_WORKSHOP_URL || '/workspace'
 
 function AuthRedirect() {
   const { user, accessToken, loading, handleCallback } = useAuth()

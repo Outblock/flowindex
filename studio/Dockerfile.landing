@@ -1,0 +1,36 @@
+# Build landing page
+FROM oven/bun:1 AS builder
+WORKDIR /app
+
+# Copy workspace packages (needed for auth-ui source imports)
+COPY packages/auth-ui/ /packages/auth-ui/
+COPY packages/auth-core/ /packages/auth-core/
+COPY packages/flow-passkey/ /packages/flow-passkey/
+
+# Install and build landing page
+COPY studio/landing/package.json studio/landing/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY studio/landing/ .
+RUN bun run build
+
+# Serve with nginx
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# SPA fallback — serve index.html for all routes, listen on PORT (default 80)
+COPY <<'EOF' /docker-entrypoint.d/99-spa-config.sh
+#!/bin/sh
+PORT="${PORT:-80}"
+cat > /etc/nginx/conf.d/default.conf <<CONF
+server {
+  listen ${PORT};
+  root /usr/share/nginx/html;
+  location / {
+    try_files \$uri \$uri/ /index.html;
+  }
+}
+CONF
+EOF
+RUN chmod +x /docker-entrypoint.d/99-spa-config.sh
+
+EXPOSE 80
