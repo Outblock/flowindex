@@ -46,6 +46,12 @@ interface FlowIndexApiResponse {
   [key: string]: unknown
 }
 
+interface FlowIndexEndpoint {
+  id: string
+  url: string
+  signing_secret?: string
+}
+
 interface FlowIndexApiKeyResult {
   apiKey: string
   endpointId?: string
@@ -195,11 +201,26 @@ async function ensureEndpoint(
   storedEndpointId?: string,
   storedSigningSecret?: string
 ): Promise<{ endpointId: string; signingSecret?: string }> {
-  // If we already have a stored endpoint, verify it still exists
+  // Only reuse the cached endpoint if it still points at the same callback URL.
+  // Workflow redeploys can change the trigger path, and reusing a stale endpoint
+  // would keep Flow deliveries pointed at the old v1 webhook URL.
   if (storedEndpointId) {
     try {
-      await flowIndexFetch(`/api/v1/endpoints/${storedEndpointId}`, apiKey)
-      return { endpointId: storedEndpointId, signingSecret: storedSigningSecret }
+      const existingEndpoint = await flowIndexFetch<FlowIndexEndpoint>(
+        `/api/v1/endpoints/${storedEndpointId}`,
+        apiKey
+      )
+      if (existingEndpoint.url === callbackUrl) {
+        return { endpointId: storedEndpointId, signingSecret: storedSigningSecret }
+      }
+
+      logger.info('Stored FlowIndex endpoint URL changed, resolving endpoint for current callback', {
+        userId,
+        workflowId,
+        storedEndpointId,
+        storedUrl: existingEndpoint.url,
+        callbackUrl,
+      })
     } catch {
       // Endpoint was deleted, create a new one
       logger.warn('Stored endpoint no longer exists, creating new one', {
@@ -210,10 +231,7 @@ async function ensureEndpoint(
   }
 
   // Try to find existing endpoint for this callback URL
-  const endpoints = await flowIndexFetch<{ data: Array<{ id: string; url: string; signing_secret?: string }> }>(
-    '/api/v1/endpoints',
-    apiKey
-  )
+  const endpoints = await flowIndexFetch<{ data: FlowIndexEndpoint[] }>('/api/v1/endpoints', apiKey)
 
   const existing = endpoints.data?.find((ep) => ep.url === callbackUrl)
   if (existing) {
@@ -293,12 +311,13 @@ export async function registerFlowSubscriptions(params: {
 
     return { subscriptionId: sub.id, signingSecret }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     logger.error('Failed to register Flow subscription', {
       workflowId: params.workflowId,
       triggerId: params.triggerId,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     })
-    return null
+    throw new Error(`Failed to register Flow subscription: ${message}`)
   }
 }
 
