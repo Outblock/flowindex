@@ -4,7 +4,12 @@ const MODEL_MAP: Record<string, string> = {
   'claude-opus-4-6': 'claude-opus-4-6',
   'claude-haiku-4-5-20251001': 'claude-haiku-4-5-20251001',
 
-  // Legacy model IDs that sim-workflow might send
+  // Legacy / alternate model IDs that sim-workflow might send
+  'claude-opus-4.5': 'claude-opus-4-6',
+  'claude-sonnet-4.5': 'claude-sonnet-4-6',
+  'claude-sonnet-4.6': 'claude-sonnet-4-6',
+  'claude-opus-4.6': 'claude-opus-4-6',
+  'claude-haiku-4.5': 'claude-haiku-4-5-20251001',
   'claude-3-5-sonnet-20241022': 'claude-sonnet-4-6',
   'claude-3-5-haiku-20241022': 'claude-haiku-4-5-20251001',
   'claude-3-opus-20240229': 'claude-opus-4-6',
@@ -37,8 +42,15 @@ export function resolveModel(requested?: string): string {
   // Check direct match
   if (MODEL_MAP[requested]) return MODEL_MAP[requested]
 
-  // If it looks like a valid Claude model ID, pass through
-  if (requested.startsWith('claude-')) return requested
+  // If it starts with claude-, try normalizing dots to dashes
+  if (requested.startsWith('claude-')) {
+    const normalized = requested.replace(/\./g, '-')
+    if (MODEL_MAP[normalized]) return MODEL_MAP[normalized]
+    // Pass through as-is — Anthropic API will validate
+    console.warn(`[model-map] Unknown claude model "${requested}", passing through`)
+    return requested
+  }
 
+  console.warn(`[model-map] Unknown model "${requested}", using default ${DEFAULT_MODEL}`)
   return DEFAULT_MODEL
 }
