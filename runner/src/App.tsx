@@ -1423,30 +1423,42 @@ export default function App() {
   }, []);
 
   const handleLoadTemplate = useCallback(async (template: Template) => {
-    const templateState = {
-      files: template.files,
-      activeFile: template.activeFile,
-      openFiles: [template.activeFile],
-      folders: template.folders || [],
-    };
-    setProject(templateState);
-    // Immediately create a named project to avoid duplicate "Untitled" entries
-    if (user) {
-      try {
-        autoCreatingRef.current = true;
-        const result = await cloudSave(templateState, { name: template.label, network });
-        setCloudMeta({ id: result.id, name: template.label, slug: result.slug });
-        await fetchProjects();
-      } catch { /* ignore */ } finally {
-        autoCreatingRef.current = false;
+    // Add template files into the current project instead of creating a new one.
+    // If a file with the same name already exists, generate a unique name.
+    setProject(prev => {
+      let state = { ...prev };
+      const existingPaths = new Set(state.files.map(f => f.path));
+
+      for (const file of template.files) {
+        let targetPath = file.path;
+        if (existingPaths.has(targetPath)) {
+          // Generate unique name: e.g. MyToken.cdc → MyToken_1.cdc
+          const dot = targetPath.lastIndexOf('.');
+          const base = dot > 0 ? targetPath.slice(0, dot) : targetPath;
+          const ext = dot > 0 ? targetPath.slice(dot) : '';
+          let n = 1;
+          while (existingPaths.has(`${base}_${n}${ext}`)) n++;
+          targetPath = `${base}_${n}${ext}`;
+        }
+        state = createFile(state, targetPath, file.content);
+        existingPaths.add(targetPath);
       }
-    } else {
-      const id = generateLocalId();
-      setLocalMeta({ id, name: template.label });
-      saveLocalProject(id, templateState, template.label);
-      setLocalProjects(listLocalProjects());
-    }
-  }, [user, cloudSave, network, fetchProjects]);
+
+      // Set the template's active file (possibly renamed) as active
+      const firstAdded = state.files[state.files.length - template.files.length]?.path;
+      if (firstAdded) {
+        state = { ...state, activeFile: firstAdded };
+      }
+
+      // Merge template folders
+      if (template.folders?.length) {
+        const folderSet = new Set([...(state.folders || []), ...template.folders]);
+        state = { ...state, folders: Array.from(folderSet).sort() };
+      }
+
+      return state;
+    });
+  }, []);
 
   const handleImportFromAddress = useCallback(async (
     files: { path: string; content: string }[],
