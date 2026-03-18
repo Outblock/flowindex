@@ -213,6 +213,12 @@ func (o *Orchestrator) PublishFromBlock(
 
 	for _, item := range defiSwaps {
 		o.bus.Publish(eventbus.Event{
+			Type:      "defi.event",
+			Height:    height,
+			Timestamp: timestamp,
+			Data:      item,
+		})
+		o.bus.Publish(eventbus.Event{
 			Type:      "defi.swap",
 			Height:    height,
 			Timestamp: timestamp,
@@ -221,6 +227,12 @@ func (o *Orchestrator) PublishFromBlock(
 	}
 
 	for _, item := range defiLiquidity {
+		o.bus.Publish(eventbus.Event{
+			Type:      "defi.event",
+			Height:    height,
+			Timestamp: timestamp,
+			Data:      item,
+		})
 		o.bus.Publish(eventbus.Event{
 			Type:      "defi.liquidity",
 			Height:    height,

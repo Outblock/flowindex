@@ -47,13 +47,51 @@ func TestBuildMockEventData_AllTypes(t *testing.T) {
 	types := []string{
 		"ft.transfer", "ft.large_transfer", "nft.transfer",
 		"contract.event", "address.activity", "staking.event",
-		"evm.transaction", "account.created", "account.key_change", "defi.swap", "defi.liquidity",
+		"evm.transaction", "account.event", "account.created", "account.key_change",
+		"defi.event", "defi.swap", "defi.liquidity",
 	}
 	for _, et := range types {
 		data := BuildMockEventData(et, nil)
 		if data["tx_id"] != mockTxID {
 			t.Errorf("[%s] expected tx_id to be set, got %v", et, data["tx_id"])
 		}
+	}
+}
+
+func TestRunWorkflowTest_AllSupportedFlowEventTypes(t *testing.T) {
+	reg := newTestRegistry()
+
+	types := []string{
+		"ft.transfer",
+		"ft.large_transfer",
+		"nft.transfer",
+		"contract.event",
+		"address.activity",
+		"staking.event",
+		"evm.transaction",
+		"account.event",
+		"account.created",
+		"account.key_change",
+		"defi.event",
+		"defi.swap",
+		"defi.liquidity",
+	}
+
+	for _, eventType := range types {
+		t.Run(eventType, func(t *testing.T) {
+			cond := json.RawMessage(`{}`)
+			if eventType == "ft.large_transfer" {
+				cond = json.RawMessage(`{"min_amount": 1}`)
+			}
+
+			result := RunPathTest(reg, eventType, cond, nil)
+			if result.TriggerStatus != "pass" {
+				t.Fatalf("expected %s to pass, got %s (error: %s)", eventType, result.TriggerStatus, result.TriggerError)
+			}
+			if result.EventData == nil {
+				t.Fatalf("expected %s to produce event data", eventType)
+			}
+		})
 	}
 }
 

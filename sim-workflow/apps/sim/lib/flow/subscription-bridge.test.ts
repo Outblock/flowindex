@@ -33,7 +33,7 @@ vi.mock('@sim/db/schema', () => ({
 }))
 
 import { db } from '@sim/db'
-import { registerFlowSubscriptions } from '@/lib/flow/subscription-bridge'
+import { extractFlowConditions, registerFlowSubscriptions } from '@/lib/flow/subscription-bridge'
 
 const mockDb = db as any
 
@@ -164,5 +164,54 @@ describe('registerFlowSubscriptions', () => {
     } finally {
       global.fetch = originalFetch
     }
+  })
+})
+
+describe('extractFlowConditions', () => {
+  it('normalizes token aliases into contract identifiers for FT-style triggers', () => {
+    expect(
+      extractFlowConditions('flow_ft_transfer', {
+        token: 'flow',
+        minAmount: '10',
+        addressFilter: '0x1654653399040a61',
+      })
+    ).toEqual({
+      token_contract: 'A.1654653399040a61.FlowToken',
+      min_amount: 10,
+      addresses: ['1654653399040a61'],
+    })
+  })
+
+  it('derives contract filters from a full Cadence event type identifier', () => {
+    expect(
+      extractFlowConditions('flow_contract_event', {
+        eventType: 'A.0x1654653399040a61.FlowToken.TokensDeposited',
+      })
+    ).toEqual({
+      contract_address: '1654653399040a61',
+      event_names: ['TokensDeposited'],
+    })
+  })
+
+  it('preserves account and defi category filters for unified event subscriptions', () => {
+    expect(
+      extractFlowConditions('flow_account_event', {
+        addressFilter: '0x01',
+        eventCategory: 'account.contract.added',
+      })
+    ).toEqual({
+      addresses: ['01'],
+      event_types: ['account.contract.added'],
+    })
+
+    expect(
+      extractFlowConditions('flow_defi_event', {
+        pool: 'pair-1',
+        defiDirection: 'add_liquidity',
+      })
+    ).toEqual({
+      pair_id: 'pair-1',
+      event_type: 'add_liquidity',
+    })
   })
 })

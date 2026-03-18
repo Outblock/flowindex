@@ -106,6 +106,16 @@ func BuildMockEventData(eventType string, overrides map[string]interface{}) map[
 			"block_height": uint64(100000000),
 		}
 
+	case "account.event":
+		defaults = map[string]interface{}{
+			"address":        "1654653399040a61",
+			"event_type":     "account.created",
+			"raw_event_type": "flow.AccountCreated",
+			"event_name":     "AccountCreated",
+			"tx_id":          mockTxID,
+			"block_height":   uint64(100000000),
+		}
+
 	case "account.created":
 		defaults = map[string]interface{}{
 			"address":      "1654653399040a61",
@@ -126,6 +136,21 @@ func BuildMockEventData(eventType string, overrides map[string]interface{}) map[
 			"price_native": "0.5",
 			"tx_id":        mockTxID,
 			"block_height": uint64(100000000),
+		}
+
+	case "defi.event":
+		defaults = map[string]interface{}{
+			"pair_id":        "pair-001",
+			"event_type":     "swap",
+			"raw_event_type": "Swap",
+			"maker":          "1654653399040a61",
+			"asset0_in":      "100.0",
+			"asset0_out":     "0.0",
+			"asset1_in":      "0.0",
+			"asset1_out":     "50.0",
+			"price_native":   "0.5",
+			"tx_id":          mockTxID,
+			"block_height":   uint64(100000000),
 		}
 
 	case "defi.liquidity":
@@ -236,6 +261,69 @@ func buildMockModelData(eventType string, data map[string]interface{}) interface
 			BlockHeight:     getUint64(data, "block_height"),
 		}
 
+	case "account.event":
+		normalizedType := strings.ToLower(getString(data, "event_type"))
+		if normalizedType == "" {
+			normalizedType = "account.created"
+		}
+
+		switch normalizedType {
+		case "account.created":
+			payload, _ := json.Marshal(map[string]interface{}{
+				"address": getString(data, "address"),
+			})
+			return &models.Event{
+				Type:          "flow.AccountCreated",
+				EventName:     "AccountCreated",
+				TransactionID: getString(data, "tx_id"),
+				BlockHeight:   getUint64(data, "block_height"),
+				Payload:       payload,
+			}
+		case "account.key.added":
+			return &models.Event{
+				ContractAddress: getString(data, "address"),
+				EventName:       "KeyAdded",
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		case "account.key.removed":
+			return &models.Event{
+				ContractAddress: getString(data, "address"),
+				EventName:       "KeyRevoked",
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		case "account.contract.added":
+			return &models.Event{
+				ContractAddress: getString(data, "address"),
+				EventName:       "AccountContractAdded",
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		case "account.contract.updated":
+			return &models.Event{
+				ContractAddress: getString(data, "address"),
+				EventName:       "AccountContractUpdated",
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		case "account.contract.removed":
+			return &models.Event{
+				ContractAddress: getString(data, "address"),
+				EventName:       "AccountContractRemoved",
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		default:
+			return &models.Event{
+				Type:            getString(data, "raw_event_type"),
+				ContractAddress: getString(data, "address"),
+				EventName:       getString(data, "event_name"),
+				TransactionID:   getString(data, "tx_id"),
+				BlockHeight:     getUint64(data, "block_height"),
+			}
+		}
+
 	case "account.created":
 		payload, _ := json.Marshal(map[string]interface{}{
 			"address": getString(data, "address"),
@@ -252,6 +340,31 @@ func buildMockModelData(eventType string, data map[string]interface{}) interface
 		return &models.DefiEvent{
 			PairID:        getString(data, "pair_id"),
 			EventType:     getString(data, "event_type"),
+			Maker:         getString(data, "maker"),
+			Asset0In:      getString(data, "asset0_in"),
+			Asset0Out:     getString(data, "asset0_out"),
+			Asset1In:      getString(data, "asset1_in"),
+			Asset1Out:     getString(data, "asset1_out"),
+			PriceNative:   getString(data, "price_native"),
+			TransactionID: getString(data, "tx_id"),
+			BlockHeight:   getUint64(data, "block_height"),
+		}
+
+	case "defi.event":
+		rawEventType := getString(data, "raw_event_type")
+		if rawEventType == "" {
+			switch strings.ToLower(getString(data, "event_type")) {
+			case "add_liquidity":
+				rawEventType = "Add"
+			case "remove_liquidity":
+				rawEventType = "Remove"
+			default:
+				rawEventType = "Swap"
+			}
+		}
+		return &models.DefiEvent{
+			PairID:        getString(data, "pair_id"),
+			EventType:     rawEventType,
 			Maker:         getString(data, "maker"),
 			Asset0In:      getString(data, "asset0_in"),
 			Asset0Out:     getString(data, "asset0_out"),

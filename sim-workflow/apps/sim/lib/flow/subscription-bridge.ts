@@ -15,6 +15,7 @@ import { eq } from 'drizzle-orm'
 import { encryptApiKeyForStorage, decryptApiKeyFromStorage } from '@/lib/api-key/auth'
 import { createLogger } from '@sim/logger'
 import { env } from '@/lib/core/config/env'
+import { FLOW_TRIGGER_EVENT_TYPES } from '@/lib/flow/trigger-contract'
 
 const logger = createLogger('FlowSubscriptionBridge')
 
@@ -24,23 +25,6 @@ const FLOW_SERVICE_KEY = env.FLOWINDEX_SERVICE_KEY || ''
 /**
  * Map from Sim Studio trigger IDs to FlowIndex event types.
  */
-const TRIGGER_TO_EVENT_TYPE: Record<string, string> = {
-  flow_ft_transfer: 'ft.transfer',
-  flow_nft_transfer: 'nft.transfer',
-  flow_tx_sealed: 'address.activity',
-  flow_contract_event: 'contract.event',
-  flow_account_event: 'account.key_change',
-  flow_balance_change: 'ft.transfer',
-  flow_staking_event: 'staking.event',
-  flow_evm_tx: 'evm.transaction',
-  flow_defi_event: 'defi.swap',
-  flow_large_transfer: 'ft.large_transfer',
-  flow_whale_activity: 'address.activity',
-  flow_contract_deploy: 'contract.event', // contract deployments emit contract events
-  flow_new_account: 'account.created',
-  // flow_schedule is handled by cron, not webhook subscriptions
-}
-
 interface FlowIndexApiResponse {
   id: string
   [key: string]: unknown
@@ -280,7 +264,8 @@ export async function registerFlowSubscriptions(params: {
   userId: string
   supabaseJwt?: string
 }): Promise<{ subscriptionId: string; signingSecret?: string } | null> {
-  const eventType = TRIGGER_TO_EVENT_TYPE[params.triggerId]
+  const eventType =
+    FLOW_TRIGGER_EVENT_TYPES[params.triggerId as keyof typeof FLOW_TRIGGER_EVENT_TYPES]
   if (!eventType) {
     // Trigger doesn't need a webhook subscription (e.g., flow_schedule)
     return null
@@ -402,13 +387,25 @@ export function extractFlowConditions(
 
   // Helper: normalize address to lowercase hex without 0x prefix
   const normalizeAddr = (v: unknown): string => String(v).trim().replace(/^0x/, '').toLowerCase()
+  const normalizeTokenFilter = (value: unknown): string => {
+    switch (String(value).trim().toLowerCase()) {
+      case 'flow':
+        return 'A.1654653399040a61.FlowToken'
+      case 'usdc':
+        return 'A.b19436aae4d94622.FiatToken'
+      case 'stflow':
+        return 'A.d6f80565193ad727.stFlowToken'
+      default:
+        return String(value)
+    }
+  }
 
   switch (triggerId) {
     case 'flow_ft_transfer':
     case 'flow_large_transfer':
       // Go matcher: token_contract (string), min_amount (float), addresses (flex array), direction
       if (subBlockValues.token && subBlockValues.token !== 'any') {
-        conditions.token_contract = subBlockValues.token
+        conditions.token_contract = normalizeTokenFilter(subBlockValues.token)
       }
       if (subBlockValues.minAmount) {
         conditions.min_amount = Number(subBlockValues.minAmount)
@@ -451,7 +448,13 @@ export function extractFlowConditions(
     case 'flow_contract_event':
       // Go matcher: contract_address (string), event_names (array)
       if (subBlockValues.eventType) {
-        conditions.event_names = [subBlockValues.eventType]
+        const rawEventType = String(subBlockValues.eventType).trim()
+        const eventTypeParts = rawEventType.replace(/^A\.0x/i, 'A.').split('.')
+        conditions.event_names = [eventTypeParts[eventTypeParts.length - 1] || rawEventType]
+
+        if (!subBlockValues.contractAddress && eventTypeParts.length >= 4 && eventTypeParts[1]) {
+          conditions.contract_address = normalizeAddr(eventTypeParts[1])
+        }
       }
       if (subBlockValues.contractAddress) {
         conditions.contract_address = normalizeAddr(subBlockValues.contractAddress)
@@ -459,9 +462,12 @@ export function extractFlowConditions(
       break
 
     case 'flow_account_event':
-      // Go matcher: addresses (array) — matches KeyAdded/KeyRevoked events
+      // Go matcher: addresses (array), event_types (array)
       if (subBlockValues.addressFilter) {
         conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
+      }
+      if (subBlockValues.eventCategory && subBlockValues.eventCategory !== 'any') {
+        conditions.event_types = [subBlockValues.eventCategory]
       }
       break
 
@@ -471,7 +477,7 @@ export function extractFlowConditions(
         conditions.addresses = [normalizeAddr(subBlockValues.addressFilter)]
       }
       if (subBlockValues.token && subBlockValues.token !== 'any') {
-        conditions.token_contract = subBlockValues.token
+        conditions.token_contract = normalizeTokenFilter(subBlockValues.token)
       }
       if (subBlockValues.threshold) {
         conditions.min_amount = Number(subBlockValues.threshold)
@@ -483,8 +489,8 @@ export function extractFlowConditions(
 
     case 'flow_staking_event':
       // Go matcher: event_types (array), node_id, min_amount
-      if (subBlockValues.delegatorAddress) {
-        conditions.node_id = normalizeAddr(subBlockValues.delegatorAddress)
+      if (subBlockValues.nodeId || subBlockValues.delegatorAddress) {
+        conditions.node_id = String(subBlockValues.nodeId || subBlockValues.delegatorAddress).trim()
       }
       if (subBlockValues.stakingEventType && subBlockValues.stakingEventType !== 'any') {
         conditions.event_types = [subBlockValues.stakingEventType]
@@ -502,7 +508,7 @@ export function extractFlowConditions(
       break
 
     case 'flow_defi_event':
-      // Go matcher (defi.swap): pair_id, min_amount, addresses
+      // Go matcher (defi.event): pair_id, event_type, min_amount, addresses
       if (subBlockValues.pool) {
         conditions.pair_id = subBlockValues.pool
       }

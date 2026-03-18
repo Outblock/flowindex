@@ -19,10 +19,10 @@ export const flowStakingEventTrigger: TriggerConfig = {
     extraFields: [
       {
         id: 'delegatorAddress',
-        title: 'Delegator Address',
+        title: 'Node ID',
         type: 'short-input',
-        placeholder: '0x... (optional)',
-        description: 'Filter by delegator address',
+        placeholder: 'node-001 (optional)',
+        description: 'Filter by staking node ID',
         mode: 'trigger',
         condition: { field: 'selectedTriggerId', value: 'flow_staking_event' },
       },

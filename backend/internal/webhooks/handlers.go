@@ -21,6 +21,7 @@ var SupportedEventTypes = []string{
 	"transaction.sealed",
 	"block.sealed",
 	// Account lifecycle
+	"account.event",
 	"account.created",
 	"account.key.added",
 	"account.key.removed",
@@ -34,6 +35,7 @@ var SupportedEventTypes = []string{
 	// Staking
 	"staking.event",
 	// DeFi
+	"defi.event",
 	"defi.swap",
 	"defi.liquidity",
 	// EVM
@@ -350,7 +352,7 @@ func (h *Handlers) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) 
 		*Endpoint
 		SigningSecret string `json:"signing_secret"`
 	}{
-		Endpoint:     ep,
+		Endpoint:      ep,
 		SigningSecret: ep.SigningSecret,
 	}
 	writeJSON(w, http.StatusCreated, resp)

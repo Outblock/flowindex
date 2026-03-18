@@ -183,6 +183,37 @@ func TestDefiLiquidityMatcher_Basic(t *testing.T) {
 	}
 }
 
+func TestDefiEventMatcher_Basic(t *testing.T) {
+	m := &DefiEventMatcher{}
+	swap := &models.DefiEvent{
+		EventType: "Swap",
+		PairID:    "pair-1",
+		Maker:     "0xmaker",
+		Asset0In:  "100.0",
+		Asset1Out: "50.0",
+	}
+
+	if !m.Match(swap, json.RawMessage(`{"pair_id":"pair-1","event_type":"swap"}`)).Matched {
+		t.Error("should match swap events")
+	}
+
+	liquidity := &models.DefiEvent{
+		EventType: "Add",
+		PairID:    "pair-2",
+		Maker:     "0xmaker",
+		Asset0In:  "10.0",
+		Asset1In:  "10.0",
+	}
+
+	if !m.Match(liquidity, json.RawMessage(`{"pair_id":"pair-2","event_type":"add_liquidity"}`)).Matched {
+		t.Error("should match add liquidity events")
+	}
+
+	if m.Match(liquidity, json.RawMessage(`{"event_type":"remove_liquidity"}`)).Matched {
+		t.Error("should not match remove liquidity when event is add liquidity")
+	}
+}
+
 func TestAccountKeyChangeMatcher_Basic(t *testing.T) {
 	m := &AccountKeyChangeMatcher{}
 
@@ -235,6 +266,36 @@ func TestAccountCreatedMatcher_Basic(t *testing.T) {
 	}
 	if m.Match(other, json.RawMessage(`{}`)).Matched {
 		t.Error("should not match non-account-created events")
+	}
+}
+
+func TestAccountEventMatcher_Basic(t *testing.T) {
+	m := &AccountEventMatcher{}
+
+	created := &models.Event{
+		Type:          "flow.AccountCreated",
+		TransactionID: "tx-1",
+		BlockHeight:   123,
+		Payload:       json.RawMessage(`{"address":"0xaccount1"}`),
+	}
+	if !m.Match(created, json.RawMessage(`{"event_types":["account.created"]}`)).Matched {
+		t.Error("should match account.created events")
+	}
+
+	keyAdded := &models.Event{
+		EventName:       "KeyAdded",
+		ContractAddress: "0xaccount2",
+	}
+	if !m.Match(keyAdded, json.RawMessage(`{"event_types":["account.key.added"],"addresses":["0xaccount2"]}`)).Matched {
+		t.Error("should match key added events with address filter")
+	}
+
+	contractRemoved := &models.Event{
+		EventName:       "AccountContractRemoved",
+		ContractAddress: "0xaccount3",
+	}
+	if !m.Match(contractRemoved, json.RawMessage(`{"event_types":["account.contract.removed"]}`)).Matched {
+		t.Error("should match contract removed events")
 	}
 }
 
