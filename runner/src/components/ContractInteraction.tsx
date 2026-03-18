@@ -100,6 +100,7 @@ export function FunctionCard({
   const [loading, setLoading] = useState(false);
   const { data: walletClient } = useWalletClient();
   const explorerBaseUrl = getExplorerBaseUrl(contract.chainId);
+  const autoCalledRef = useRef(false);
 
   const handleCall = useCallback(async () => {
     setLoading(true);
@@ -131,7 +132,15 @@ export function FunctionCard({
     }
   }, [fn, paramValues, ethValue, contract, chain, isWrite, walletClient]);
 
+  // Auto-call zero-input read functions on mount
   const hasInputs = fn.inputs.length > 0;
+  useEffect(() => {
+    if (!hasInputs && !isWrite && !autoCalledRef.current) {
+      autoCalledRef.current = true;
+      handleCall();
+    }
+  }, [hasInputs, isWrite, handleCall]);
+
   const accentBorder = isWrite ? 'border-l-violet-500/60' : 'border-l-blue-500/60';
 
   return (
