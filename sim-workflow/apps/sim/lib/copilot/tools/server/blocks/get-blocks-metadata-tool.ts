@@ -10,7 +10,7 @@ import { getUserPermissionConfig } from '@/ee/access-control/utils/permission-ch
 import { PROVIDER_DEFINITIONS } from '@/providers/models'
 import { tools as toolsRegistry } from '@/tools/registry'
 import { getTrigger, isTriggerValid } from '@/triggers'
-import { SYSTEM_SUBBLOCK_IDS } from '@/triggers/constants'
+import { isSystemSubBlockId } from '@/triggers/constants'
 
 export interface CopilotSubblockMetadata {
   id: string
@@ -180,7 +180,7 @@ export const getBlocksMetadataServerTool: BaseServerTool<
 
           const configFields: Record<string, any> = {}
           for (const subBlock of trig.subBlocks) {
-            if (subBlock.mode === 'trigger' && !SYSTEM_SUBBLOCK_IDS.includes(subBlock.id)) {
+            if (subBlock.mode === 'trigger' && !isSystemSubBlockId(subBlock.id)) {
               const fieldDef: any = {
                 type: subBlock.type,
                 required: subBlock.required || false,

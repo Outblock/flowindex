@@ -408,6 +408,35 @@ export function extractTriggerMockPayload<
       return {}
     }
 
+    const customPayloadKeys = [`testPayload_${triggerId}`, 'testPayload']
+    for (const key of customPayloadKeys) {
+      const rawPayload = subBlocks?.[key]?.value
+      if (typeof rawPayload !== 'string' || rawPayload.trim().length === 0) {
+        continue
+      }
+
+      try {
+        const parsedPayload = JSON.parse(rawPayload)
+        logger.info('Using custom test payload for trigger execution', {
+          triggerId,
+          blockId: trigger.blockId,
+          payloadKey: key,
+          topLevelKeys:
+            parsedPayload && typeof parsedPayload === 'object'
+              ? Object.keys(parsedPayload as Record<string, unknown>)
+              : [],
+        })
+        return parsedPayload
+      } catch (parseError) {
+        logger.warn('Failed to parse custom test payload, falling back to generated mock payload', {
+          triggerId,
+          blockId: trigger.blockId,
+          payloadKey: key,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        })
+      }
+    }
+
     const payload = generateMockPayloadFromOutputsDefinition(triggerConfig.outputs)
 
     logger.info('Generated mock payload from trigger outputs', {

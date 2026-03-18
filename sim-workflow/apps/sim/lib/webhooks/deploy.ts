@@ -19,7 +19,7 @@ import { getBlock } from '@/blocks'
 import type { SubBlockConfig } from '@/blocks/types'
 import type { BlockState } from '@/stores/workflows/workflow/types'
 import { getTrigger, isTriggerValid } from '@/triggers'
-import { SYSTEM_SUBBLOCK_IDS } from '@/triggers/constants'
+import { isSystemSubBlockId } from '@/triggers/constants'
 
 const logger = createLogger('DeployWebhookSync')
 const CREDENTIAL_SET_PREFIX = 'credentialSet:'
@@ -185,7 +185,7 @@ function buildProviderConfig(
   )
 
   triggerDef.subBlocks
-    .filter((subBlock) => subBlock.mode === 'trigger' && !SYSTEM_SUBBLOCK_IDS.includes(subBlock.id))
+    .filter((subBlock) => subBlock.mode === 'trigger' && !isSystemSubBlockId(subBlock.id))
     .forEach((subBlock) => {
       const valueToUse = getConfigValue(block, subBlock)
       if (valueToUse !== null && valueToUse !== undefined && valueToUse !== '') {

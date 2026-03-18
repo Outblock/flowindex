@@ -1,7 +1,7 @@
 import { createLogger } from '@sim/logger'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { getTrigger, isTriggerValid } from '@/triggers'
-import { SYSTEM_SUBBLOCK_IDS } from '@/triggers/constants'
+import { isSystemSubBlockId } from '@/triggers/constants'
 
 const logger = createLogger('useTriggerConfigAggregation')
 
@@ -55,7 +55,7 @@ export function useTriggerConfigAggregation(
   let hasAnyValue = false
 
   triggerDef.subBlocks
-    .filter((sb) => sb.mode === 'trigger' && !SYSTEM_SUBBLOCK_IDS.includes(sb.id))
+    .filter((sb) => sb.mode === 'trigger' && !isSystemSubBlockId(sb.id))
     .forEach((subBlock) => {
       const fieldValue = subBlockStore.getValue(blockId, subBlock.id)
 
@@ -117,7 +117,7 @@ export function populateTriggerFieldsFromConfig(
   const subBlockStore = useSubBlockStore.getState()
 
   triggerDef.subBlocks
-    .filter((sb) => sb.mode === 'trigger' && !SYSTEM_SUBBLOCK_IDS.includes(sb.id))
+    .filter((sb) => sb.mode === 'trigger' && !isSystemSubBlockId(sb.id))
     .forEach((subBlock) => {
       let configValue: any
 

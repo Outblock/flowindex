@@ -108,6 +108,27 @@ export function getTrigger(triggerId: string): TriggerConfig {
       }
 
       clonedTrigger.subBlocks.push(samplePayloadSubBlock)
+
+      const testPayloadSubBlock: SubBlockConfig = {
+        id: `testPayload_${triggerId}`,
+        title: 'Test Payload',
+        type: 'code',
+        language: 'json',
+        defaultValue: generatedPayload,
+        placeholder: 'Paste a real webhook payload for editor Run / Dry Run',
+        description:
+          'Used only for editor Run / Dry Run. Does not affect deployed webhook deliveries.',
+        collapsible: true,
+        defaultCollapsed: false,
+        hideFromPreview: true,
+        mode: 'trigger',
+        condition: {
+          field: 'selectedTriggerId',
+          value: trigger.id,
+        },
+      }
+
+      clonedTrigger.subBlocks.push(testPayloadSubBlock)
     }
   }
 

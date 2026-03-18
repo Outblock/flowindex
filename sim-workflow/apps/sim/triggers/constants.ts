@@ -9,9 +9,14 @@ export const SYSTEM_SUBBLOCK_IDS: string[] = [
   'triggerInstructions', // Setup instructions text
   'webhookUrlDisplay', // Webhook URL display
   'samplePayload', // Example payload display
+  'testPayload', // Editor-only payload for manual/dry-run trigger testing
   'setupScript', // Setup script code (e.g., Apps Script)
   'scheduleInfo', // Schedule status display (next run, last run)
 ]
+
+export function isSystemSubBlockId(id: string): boolean {
+  return SYSTEM_SUBBLOCK_IDS.some((sysId) => id === sysId || id.startsWith(`${sysId}_`))
+}
 
 /**
  * Trigger-related subblock IDs that represent runtime metadata. They should remain

@@ -41,7 +41,7 @@ import { filterOutputForLog } from '@/executor/utils/output-filter'
 import type { VariableResolver } from '@/executor/variables/resolver'
 import type { SerializedBlock } from '@/serializer/types'
 import type { SubflowType } from '@/stores/workflows/workflow/types'
-import { SYSTEM_SUBBLOCK_IDS } from '@/triggers/constants'
+import { isSystemSubBlockId } from '@/triggers/constants'
 
 const logger = createLogger('BlockExecutor')
 
@@ -406,7 +406,7 @@ export class BlockExecutor {
     const result: Record<string, any> = {}
 
     for (const [key, value] of Object.entries(inputs)) {
-      if (SYSTEM_SUBBLOCK_IDS.includes(key) || key === 'triggerMode') {
+      if (isSystemSubBlockId(key) || key === 'triggerMode') {
         continue
       }
 

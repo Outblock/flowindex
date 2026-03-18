@@ -1,11 +1,5 @@
 import { create } from 'zustand'
-import {
-  CORE_TRIGGER_TYPES,
-  type FilterState,
-  type LogLevel,
-  type TimeRange,
-  type TriggerType,
-} from '@/stores/logs/filters/types'
+import { type FilterState, type LogLevel, type TimeRange, type TriggerType } from '@/stores/logs/filters/types'
 
 const getSearchParams = () => {
   if (typeof window === 'undefined') return new URLSearchParams()
@@ -63,9 +57,7 @@ const parseLogLevelFromURL = (value: string | null): LogLevel => {
 
 const parseTriggerArrayFromURL = (value: string | null): TriggerType[] => {
   if (!value) return []
-  return value
-    .split(',')
-    .filter((t): t is TriggerType => (CORE_TRIGGER_TYPES as readonly string[]).includes(t))
+  return value.split(',').filter(Boolean) as TriggerType[]
 }
 
 const parseStringArrayFromURL = (value: string | null): string[] => {
