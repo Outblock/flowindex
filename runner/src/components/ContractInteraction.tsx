@@ -10,6 +10,45 @@ import { callContractRead, callContractWrite, categorizeAbiFunctions } from '../
 import SolidityParamInput, { parseParamValue } from './SolidityParamInput';
 import type { Chain } from 'viem/chains';
 
+// ── Resizable panel hook + drag handle ─────────────────────────
+
+function useHorizontalResize(initialWidth: number, minWidth: number, maxWidth: number, side: 'left' | 'right') {
+  const [width, setWidth] = useState(initialWidth);
+  const dragging = useRef(false);
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      const w = side === 'left' ? ev.clientX : window.innerWidth - ev.clientX;
+      setWidth(Math.min(maxWidth, Math.max(minWidth, w)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [minWidth, maxWidth, side]);
+  return { width, onMouseDown };
+}
+
+function DragHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="group relative flex items-center justify-center shrink-0 w-1 cursor-col-resize hover:bg-zinc-600/40 active:bg-zinc-500/40 transition-colors"
+    >
+      <div className="w-px h-8 bg-zinc-700 group-hover:bg-zinc-500 group-active:bg-zinc-400 transition-colors rounded-full" />
+    </div>
+  );
+}
+
 // ── Shared helpers ─────────────────────────────────────────────
 
 export function formatResult(data: any): string {
@@ -514,6 +553,10 @@ interface ContractInteractionProps {
 export default function ContractInteraction({ contract, chain }: ContractInteractionProps) {
   const { read, write } = useMemo(() => categorizeAbiFunctions(contract.abi), [contract.abi]);
 
+  // Resizable sidebars
+  const leftPanel = useHorizontalResize(220, 140, 360, 'left');
+  const rightPanel = useHorizontalResize(300, 200, 450, 'right');
+
   // Pinned state — none pinned by default (user clicks to add)
   const allNames = useMemo(() => [...read, ...write].map((fn) => fn.name), [read, write]);
   const [pinnedSet, setPinnedSet] = useState<Set<string>>(() => new Set());
@@ -540,8 +583,8 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
 
   return (
     <div className="flex flex-1 min-h-0">
-      {/* Left sidebar — function nav */}
-      <div className="w-[220px] shrink-0 border-r border-zinc-700/50 bg-zinc-900/50 hidden lg:flex flex-col">
+      {/* Left sidebar — function nav (resizable) */}
+      <div className="shrink-0 border-r border-zinc-700/50 bg-zinc-900/50 hidden lg:flex flex-col" style={{ width: leftPanel.width }}>
         <FunctionNav
           readFns={read}
           writeFns={write}
@@ -551,6 +594,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
           onClearAll={clearAll}
         />
       </div>
+      <DragHandle onMouseDown={leftPanel.onMouseDown} />
 
       {/* Center panel — function cards */}
       <div className="flex-1 overflow-y-auto min-w-0">
@@ -646,8 +690,9 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
         </div>
       </div>
 
-      {/* Right sidebar — contract overview */}
-      <div className="w-[300px] shrink-0 border-l border-zinc-700/50 bg-zinc-900/50 hidden xl:flex flex-col">
+      {/* Right sidebar — contract overview (resizable) */}
+      <DragHandle onMouseDown={rightPanel.onMouseDown} />
+      <div className="shrink-0 border-l border-zinc-700/50 bg-zinc-900/50 hidden xl:flex flex-col" style={{ width: rightPanel.width }}>
         <ContractOverview contract={contract} chain={chain} readFns={read} />
       </div>
     </div>
