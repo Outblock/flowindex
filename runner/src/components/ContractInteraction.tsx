@@ -544,7 +544,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
 
       {/* Center panel — function cards */}
       <div className="flex-1 overflow-y-auto min-w-0">
-        <div className="px-5 py-5 space-y-6 max-w-3xl">
+        <div className="px-8 py-5 space-y-6 max-w-2xl mx-auto">
           {/* Mobile toggle controls (shown on < lg) */}
           <div className="flex items-center justify-between lg:hidden">
             <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
