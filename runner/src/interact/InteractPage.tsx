@@ -79,32 +79,36 @@ export default function InteractPage() {
         <h1 className="text-sm font-medium">Contract Test</h1>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-          {/* Contract Loader */}
+      {/* Contract Loader — always full-width at top */}
+      <div className="px-4 py-3 border-b border-zinc-700/50 bg-zinc-900/80 shrink-0">
+        <div className={contract ? '' : 'max-w-2xl mx-auto'}>
           <ContractLoader
             initialAddress={initialAddress}
             network={network}
             onNetworkChange={setNetwork}
             onContractLoaded={handleContractLoaded}
           />
-
-          {/* Recent Contracts (only shown when no contract loaded) */}
-          {!contract && recentContracts.length > 0 && (
-            <RecentContracts
-              contracts={recentContracts}
-              onSelect={handleSelectRecent}
-              onRemove={handleRemoveRecent}
-            />
-          )}
-
-          {/* Contract Interaction */}
-          {contract && (
-            <ContractInteraction contract={contract} chain={chain} />
-          )}
         </div>
       </div>
+
+      {/* Main content area */}
+      {!contract ? (
+        /* No contract loaded: centered single-column with recent contracts */
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-4 py-6">
+            {recentContracts.length > 0 && (
+              <RecentContracts
+                contracts={recentContracts}
+                onSelect={handleSelectRecent}
+                onRemove={handleRemoveRecent}
+              />
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Contract loaded: three-column layout */
+        <ContractInteraction contract={contract} chain={chain} />
+      )}
     </div>
   );
 }
