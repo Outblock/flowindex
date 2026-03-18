@@ -983,16 +983,20 @@ jobs:
       matrix:
         include:
           - name: app
+            context: sim-workflow
             dockerfile: docker/app.Dockerfile
             image: simstudio-fork
           - name: realtime
+            context: sim-workflow
             dockerfile: docker/realtime.Dockerfile
             image: simstudio-fork-realtime
           - name: migrations
+            context: sim-workflow
             dockerfile: docker/db.Dockerfile
             image: simstudio-fork-migrations
           - name: copilot-api
-            dockerfile: apps/copilot-api/Dockerfile
+            context: sim-workflow/apps/copilot-api
+            dockerfile: Dockerfile
             image: simstudio-copilot-api
     permissions:
       contents: read
@@ -1016,8 +1020,8 @@ jobs:
       - name: Build & push ${{ matrix.name }} image (cached)
         uses: docker/build-push-action@v7
         with:
-          context: sim-workflow
-          file: sim-workflow/${{ matrix.dockerfile }}
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           push: true
           provenance: false
           tags: |
