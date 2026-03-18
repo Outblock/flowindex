@@ -370,17 +370,27 @@ func (h *Handler) warmupLoop() {
 // has a 45-second timeout — if the emulator is stuck on a heavy contract import,
 // we skip it and move on.
 func (h *Handler) warmup() {
-	// Wait for emulator to be ready
-	time.Sleep(3 * time.Second)
-
 	ctx := context.Background()
 
-	// Check emulator health first
-	healthCtx, healthCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer healthCancel()
-	if ok, err := h.client.HealthCheck(healthCtx); !ok || err != nil {
-		log.Printf("[simulator] warmup: emulator not ready, skipping: %v", err)
-		return
+	// Wait for emulator to be ready (retry for up to 2 minutes).
+	// The emulator in fork mode can take 30-60s to boot while it fetches
+	// initial state from mainnet. Registers fetched during warmup are stored
+	// in SQLite and captured by the base snapshot — without them, every
+	// simulation re-fetches from mainnet which becomes slow once the access
+	// node prunes fork-height execution data (~5 min after startup).
+	for attempt := 0; attempt < 24; attempt++ {
+		time.Sleep(5 * time.Second)
+		healthCtx, healthCancel := context.WithTimeout(ctx, 10*time.Second)
+		ok, err := h.client.HealthCheck(healthCtx)
+		healthCancel()
+		if ok && err == nil {
+			break
+		}
+		if attempt == 23 {
+			log.Printf("[simulator] warmup: emulator not ready after 2 minutes, skipping: %v", err)
+			return
+		}
+		log.Printf("[simulator] warmup: waiting for emulator (attempt %d/24): %v", attempt+1, err)
 	}
 
 	log.Println("[simulator] warmup: pre-caching common mainnet contract state...")
