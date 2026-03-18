@@ -37,7 +37,7 @@ const TRIGGER_TO_EVENT_TYPE: Record<string, string> = {
   flow_large_transfer: 'ft.large_transfer',
   flow_whale_activity: 'address.activity',
   flow_contract_deploy: 'contract.event', // contract deployments emit contract events
-  flow_new_account: 'account.key_change', // new accounts always get a key added
+  flow_new_account: 'account.created',
   // flow_schedule is handled by cron, not webhook subscriptions
 }
 
@@ -132,7 +132,11 @@ export async function getOrCreateFlowIndexApiKey(
     throw new Error(`Failed to provision FlowIndex API key: ${res.status} ${text}`)
   }
 
-  const data = (await res.json()) as { key: string; prefix: string; id: string }
+  const data = (await res.json()) as {
+    key: string
+    prefix: string
+    id: string
+  }
 
   const encrypted = await encryptApiKeyForStorage(data.key)
 
@@ -211,16 +215,22 @@ async function ensureEndpoint(
         apiKey
       )
       if (existingEndpoint.url === callbackUrl) {
-        return { endpointId: storedEndpointId, signingSecret: storedSigningSecret }
+        return {
+          endpointId: storedEndpointId,
+          signingSecret: storedSigningSecret,
+        }
       }
 
-      logger.info('Stored FlowIndex endpoint URL changed, resolving endpoint for current callback', {
-        userId,
-        workflowId,
-        storedEndpointId,
-        storedUrl: existingEndpoint.url,
-        callbackUrl,
-      })
+      logger.info(
+        'Stored FlowIndex endpoint URL changed, resolving endpoint for current callback',
+        {
+          userId,
+          workflowId,
+          storedEndpointId,
+          storedUrl: existingEndpoint.url,
+          callbackUrl,
+        }
+      )
     } catch {
       // Endpoint was deleted, create a new one
       logger.warn('Stored endpoint no longer exists, creating new one', {
@@ -353,10 +363,9 @@ export async function deleteFlowSubscriptionsForWorkflow(
   try {
     const keyResult = await getOrCreateFlowIndexApiKey(userId)
 
-    const subs = await flowIndexFetch<{ data: Array<{ id: string; workflow_id: string }> }>(
-      '/api/v1/subscriptions',
-      keyResult.apiKey
-    )
+    const subs = await flowIndexFetch<{
+      data: Array<{ id: string; workflow_id: string }>
+    }>('/api/v1/subscriptions', keyResult.apiKey)
 
     const workflowSubs = subs.data?.filter((s) => s.workflow_id === workflowId) || []
 
@@ -392,8 +401,7 @@ export function extractFlowConditions(
   const conditions: Record<string, unknown> = {}
 
   // Helper: normalize address to lowercase hex without 0x prefix
-  const normalizeAddr = (v: unknown): string =>
-    String(v).trim().replace(/^0x/, '').toLowerCase()
+  const normalizeAddr = (v: unknown): string => String(v).trim().replace(/^0x/, '').toLowerCase()
 
   switch (triggerId) {
     case 'flow_ft_transfer':
@@ -512,8 +520,7 @@ export function extractFlowConditions(
       break
 
     case 'flow_new_account':
-      // Go matcher (account.key_change): addresses (array)
-      // New accounts always get a key added, so account.key_change catches them
+      // Go matcher (account.created) currently has no extra conditions.
       break
   }
 

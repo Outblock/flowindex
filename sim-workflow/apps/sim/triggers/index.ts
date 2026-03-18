@@ -87,8 +87,9 @@ export function getTrigger(triggerId: string): TriggerConfig {
     )
 
     if (!samplePayloadExists && trigger.outputs) {
-      const mockPayload = generateMockPayloadFromOutputsDefinition(trigger.outputs)
-      const generatedPayload = JSON.stringify(mockPayload, null, 2)
+      const defaultPayload =
+        trigger.samplePayload ?? generateMockPayloadFromOutputsDefinition(trigger.outputs)
+      const generatedPayload = JSON.stringify(defaultPayload, null, 2)
 
       const samplePayloadSubBlock: SubBlockConfig = {
         id: `samplePayload_${triggerId}`,

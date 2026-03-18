@@ -20,6 +20,9 @@ export interface TriggerConfig {
   // Define the structure of data this trigger outputs to workflows
   outputs: Record<string, TriggerOutput>
 
+  // Optional provider-shaped sample payload used for editor examples and dry runs.
+  samplePayload?: unknown
+
   // Webhook configuration (for most triggers)
   webhook?: {
     method?: 'POST' | 'GET' | 'PUT' | 'DELETE'

@@ -56,6 +56,7 @@ func TestAllMatchersRegistered(t *testing.T) {
 		"staking.event",
 		"defi.swap",
 		"defi.liquidity",
+		"account.created",
 		"account.key_change",
 		"evm.transaction",
 	}

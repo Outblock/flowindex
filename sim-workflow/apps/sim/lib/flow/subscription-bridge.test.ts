@@ -116,12 +116,12 @@ describe('registerFlowSubscriptions', () => {
 
       const [, subscriptionRequest] = fetchMock.mock.calls[2] as [
         string,
-        { body: string; method: string }
+        { body: string; method: string },
       ]
       expect(subscriptionRequest.method).toBe('POST')
       expect(JSON.parse(subscriptionRequest.body)).toMatchObject({
         endpoint_id: 'endpoint-new',
-        event_type: 'account.key_change',
+        event_type: 'account.created',
         workflow_id: 'workflow-1',
       })
     } finally {

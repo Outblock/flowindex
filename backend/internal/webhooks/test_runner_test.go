@@ -47,7 +47,7 @@ func TestBuildMockEventData_AllTypes(t *testing.T) {
 	types := []string{
 		"ft.transfer", "ft.large_transfer", "nft.transfer",
 		"contract.event", "address.activity", "staking.event",
-		"evm.transaction", "account.key_change", "defi.swap", "defi.liquidity",
+		"evm.transaction", "account.created", "account.key_change", "defi.swap", "defi.liquidity",
 	}
 	for _, et := range types {
 		data := BuildMockEventData(et, nil)

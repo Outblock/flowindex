@@ -12,10 +12,10 @@ import (
 
 // PathTestResult holds the outcome of testing a single subscription path.
 type PathTestResult struct {
-	TriggerStatus string                `json:"trigger_status"` // "pass" or "fail"
-	TriggerError  string                `json:"trigger_error,omitempty"`
+	TriggerStatus string                 `json:"trigger_status"` // "pass" or "fail"
+	TriggerError  string                 `json:"trigger_error,omitempty"`
 	EventData     map[string]interface{} `json:"event_data,omitempty"`
-	Conditions    []ConditionTestResult `json:"conditions,omitempty"`
+	Conditions    []ConditionTestResult  `json:"conditions,omitempty"`
 }
 
 // ConditionTestResult holds the detailed outcome of a single condition evaluation.
@@ -49,13 +49,13 @@ func BuildMockEventData(eventType string, overrides map[string]interface{}) map[
 
 	case "nft.transfer":
 		defaults = map[string]interface{}{
-			"from_address":      "1654653399040a61",
-			"to_address":        "18eb4ee6b3c026d2",
-			"nft_id":            "1",
+			"from_address":       "1654653399040a61",
+			"to_address":         "18eb4ee6b3c026d2",
+			"nft_id":             "1",
 			"collection_address": "0b2a3299cc857e29",
-			"collection_name":   "TopShot",
-			"tx_id":             mockTxID,
-			"block_height":      uint64(100000000),
+			"collection_name":    "TopShot",
+			"tx_id":              mockTxID,
+			"block_height":       uint64(100000000),
 		}
 
 	case "contract.event":
@@ -102,6 +102,14 @@ func BuildMockEventData(eventType string, overrides map[string]interface{}) map[
 		defaults = map[string]interface{}{
 			"address":      "1654653399040a61",
 			"event_name":   "KeyAdded",
+			"tx_id":        mockTxID,
+			"block_height": uint64(100000000),
+		}
+
+	case "account.created":
+		defaults = map[string]interface{}{
+			"address":      "1654653399040a61",
+			"event_name":   "AccountCreated",
 			"tx_id":        mockTxID,
 			"block_height": uint64(100000000),
 		}
@@ -226,6 +234,18 @@ func buildMockModelData(eventType string, data map[string]interface{}) interface
 			EventName:       getString(data, "event_name"),
 			TransactionID:   getString(data, "tx_id"),
 			BlockHeight:     getUint64(data, "block_height"),
+		}
+
+	case "account.created":
+		payload, _ := json.Marshal(map[string]interface{}{
+			"address": getString(data, "address"),
+		})
+		return &models.Event{
+			Type:          "flow.AccountCreated",
+			EventName:     getString(data, "event_name"),
+			TransactionID: getString(data, "tx_id"),
+			BlockHeight:   getUint64(data, "block_height"),
+			Payload:       payload,
 		}
 
 	case "defi.swap", "defi.liquidity":

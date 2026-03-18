@@ -19,6 +19,7 @@ import {
   refreshAccessTokenIfNeeded,
   resolveOAuthAccountId,
 } from '@/app/api/auth/oauth/utils'
+import { formatFlowWebhookInput } from '@/lib/flow/normalize-webhook-payload'
 
 const logger = createLogger('WebhookUtils')
 
@@ -214,8 +215,12 @@ async function formatTeamsGraphNotification(
   const includeAttachments = providerConfig.includeAttachments !== false
 
   let message: any = null
-  const rawAttachments: Array<{ name: string; data: Buffer; contentType: string; size: number }> =
-    []
+  const rawAttachments: Array<{
+    name: string
+    data: Buffer
+    contentType: string
+    size: number
+  }> = []
   let accessToken: string | null = null
 
   if (!credentialId) {
@@ -230,7 +235,9 @@ async function formatTeamsGraphNotification(
     try {
       const resolved = await resolveOAuthAccountId(credentialId)
       if (!resolved) {
-        logger.error('Teams credential could not be resolved', { credentialId })
+        logger.error('Teams credential could not be resolved', {
+          credentialId,
+        })
       } else {
         const rows = await db
           .select()
@@ -238,7 +245,10 @@ async function formatTeamsGraphNotification(
           .where(eq(account.id, resolved.accountId))
           .limit(1)
         if (rows.length === 0) {
-          logger.error('Teams credential not found', { credentialId, chatId: resolvedChatId })
+          logger.error('Teams credential not found', {
+            credentialId,
+            chatId: resolvedChatId,
+          })
         } else {
           const effectiveUserId = rows[0].userId
           accessToken = await refreshAccessTokenIfNeeded(
@@ -251,7 +261,9 @@ async function formatTeamsGraphNotification(
 
       if (accessToken) {
         const msgUrl = `https://graph.microsoft.com/v1.0/chats/${encodeURIComponent(resolvedChatId)}/messages/${encodeURIComponent(resolvedMessageId)}`
-        const res = await fetch(msgUrl, { headers: { Authorization: `Bearer ${accessToken}` } })
+        const res = await fetch(msgUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
         if (res.ok) {
           message = await res.json()
 
@@ -547,7 +559,12 @@ const SLACK_MAX_FILES = 15
 async function resolveSlackFileInfo(
   fileId: string,
   botToken: string
-): Promise<{ url_private?: string; name?: string; mimetype?: string; size?: number } | null> {
+): Promise<{
+  url_private?: string
+  name?: string
+  mimetype?: string
+  size?: number
+} | null> {
   try {
     const response = await fetch(
       `https://slack.com/api/files.info?file=${encodeURIComponent(fileId)}`,
@@ -599,7 +616,12 @@ async function downloadSlackFiles(
   botToken: string
 ): Promise<Array<{ name: string; data: string; mimeType: string; size: number }>> {
   const filesToProcess = rawFiles.slice(0, SLACK_MAX_FILES)
-  const downloaded: Array<{ name: string; data: string; mimeType: string; size: number }> = []
+  const downloaded: Array<{
+    name: string
+    data: string
+    mimeType: string
+    size: number
+  }> = []
 
   for (const file of filesToProcess) {
     let urlPrivate = file.url_private as string | undefined
@@ -1335,41 +1357,11 @@ export async function formatWebhookInput(
   }
 
   if (foundWebhook.provider === 'flow') {
-    const eventType = body.event_type || ''
-    const data = body.data || body
+    const providerConfig = (foundWebhook.providerConfig as Record<string, unknown>) || {}
+    const triggerId =
+      typeof providerConfig.triggerId === 'string' ? providerConfig.triggerId : undefined
 
-    // Normalize addresses to 0x-prefixed format
-    const addr = (v: unknown): string => {
-      if (!v || typeof v !== 'string') return ''
-      return v.startsWith('0x') ? v : `0x${v}`
-    }
-
-    return {
-      eventType,
-      blockHeight: data.block_height ?? body.block_height ?? 0,
-      timestamp: data.timestamp ?? body.timestamp ?? '',
-      transactionId: data.transaction_id || data.tx_hash || '',
-      from: addr(data.from_address || data.sender),
-      to: addr(data.to_address || data.receiver),
-      amount: String(data.amount ?? ''),
-      token: data.token_symbol || data.token || '',
-      nftId: data.nft_id || '',
-      collection: data.collection || data.nft_type || '',
-      proposer: addr(data.proposer),
-      payer: addr(data.payer),
-      authorizers: Array.isArray(data.authorizers) ? data.authorizers.map(addr) : [],
-      status: data.status || '',
-      isEvm: Boolean(data.is_evm),
-      nodeId: data.node_id || '',
-      delegatorId: data.delegator_id || '',
-      stakingAmount: String(data.staking_amount ?? ''),
-      pool: data.pool || data.pair_address || '',
-      swapAmountIn: String(data.amount_in ?? ''),
-      swapAmountOut: String(data.amount_out ?? ''),
-      evmHash: data.evm_hash || '',
-      gasUsed: data.gas_used || 0,
-      raw: JSON.stringify(body),
-    }
+    return formatFlowWebhookInput(body, triggerId)
   }
 
   return body
@@ -2454,7 +2446,11 @@ export async function syncAllWebhooksForCredentialSet(
   credentialSetId: string,
   requestId: string,
   tx?: DbOrTx
-): Promise<{ workflowsUpdated: number; totalCreated: number; totalDeleted: number }> {
+): Promise<{
+  workflowsUpdated: number
+  totalCreated: number
+  totalDeleted: number
+}> {
   const dbCtx = tx ?? db
   const syncLogger = createLogger('CredentialSetMembershipSync')
   syncLogger.info(`[${requestId}] Syncing all webhooks for credential set ${credentialSetId}`)

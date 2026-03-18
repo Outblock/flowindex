@@ -212,6 +212,32 @@ func TestAccountKeyChangeMatcher_Basic(t *testing.T) {
 	}
 }
 
+func TestAccountCreatedMatcher_Basic(t *testing.T) {
+	m := &AccountCreatedMatcher{}
+
+	created := &models.Event{
+		Type:          "flow.AccountCreated",
+		TransactionID: "tx-1",
+		BlockHeight:   123,
+		Payload:       json.RawMessage(`{"address":"0xaccount1"}`),
+	}
+	if !m.Match(created, json.RawMessage(`{"addresses":["0xaccount1"]}`)).Matched {
+		t.Error("should match AccountCreated for address")
+	}
+
+	if !m.Match(created, json.RawMessage(`{}`)).Matched {
+		t.Error("should match AccountCreated with no address filter")
+	}
+
+	other := &models.Event{
+		Type:    "flow.AccountKeyAdded",
+		Payload: json.RawMessage(`{"address":"0xaccount1"}`),
+	}
+	if m.Match(other, json.RawMessage(`{}`)).Matched {
+		t.Error("should not match non-account-created events")
+	}
+}
+
 func TestEVMTransactionMatcher_Basic(t *testing.T) {
 	m := &EVMTransactionMatcher{}
 	etx := &models.EVMTransaction{

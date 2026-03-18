@@ -93,7 +93,7 @@ func (p *WebhookProcessor) ProcessRange(ctx context.Context, fromHeight, toHeigh
 		}
 	}
 
-	// --- Raw events → account.key_change + contract.event ---
+	// --- Raw events → account.created + account.key_change + contract.event ---
 	events, err := p.repo.GetRawEventsInRange(ctx, fromHeight, toHeight)
 	if err != nil {
 		log.Printf("[webhook_processor] failed to read events: %v", err)
@@ -101,6 +101,16 @@ func (p *WebhookProcessor) ProcessRange(ctx context.Context, fromHeight, toHeigh
 		for i := range events {
 			if ts.IsZero() {
 				ts = events[i].Timestamp
+			}
+			// Account creation events
+			if events[i].Type == "flow.AccountCreated" {
+				p.bus.Publish(eventbus.Event{
+					Type:      "account.created",
+					Height:    events[i].BlockHeight,
+					Timestamp: events[i].Timestamp,
+					Data:      &events[i],
+				})
+				published++
 			}
 			// Account key events
 			if strings.Contains(events[i].EventName, "KeyAdded") ||

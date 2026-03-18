@@ -115,6 +115,10 @@ export function generateMockPayloadFromOutputsDefinition(
   return generateMockPayloadFromOutputs(outputs)
 }
 
+function cloneJsonSafeValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 export interface TriggerInfo {
   id: string
   name: string
@@ -435,6 +439,19 @@ export function extractTriggerMockPayload<
           error: parseError instanceof Error ? parseError.message : String(parseError),
         })
       }
+    }
+
+    if (triggerConfig.samplePayload !== undefined) {
+      const payload = cloneJsonSafeValue(triggerConfig.samplePayload)
+      logger.info('Using trigger sample payload for trigger execution', {
+        triggerId,
+        blockId: trigger.blockId,
+        topLevelKeys:
+          payload && typeof payload === 'object'
+            ? Object.keys(payload as Record<string, unknown>)
+            : [],
+      })
+      return payload
     }
 
     const payload = generateMockPayloadFromOutputsDefinition(triggerConfig.outputs)
