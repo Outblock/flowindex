@@ -1071,8 +1071,8 @@ function ChatMessage({ message, hideTools, isStreamingMsg, onInsertCode, onApply
       <div className="flex justify-end mb-3">
         <div className="max-w-[90%] bg-emerald-700/30 border border-emerald-600/20 rounded-lg px-3 py-2 overflow-hidden break-words">
           {textContent && (
-            <div className="text-[12px] text-zinc-100 leading-relaxed whitespace-pre-wrap">
-              {textContent}
+            <div className="text-[12px] text-zinc-100 leading-relaxed user-message-markdown">
+              <MarkdownContent text={textContent} />
             </div>
           )}
         </div>

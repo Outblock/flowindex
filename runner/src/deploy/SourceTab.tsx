@@ -2,8 +2,8 @@
 // SourceTab — contract source code viewer with version sidebar + diff mode
 // ---------------------------------------------------------------------------
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ExternalLink,
   Code2,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { diffLines, type Change } from 'diff';
 import { useShikiHighlighter, highlightCode } from '../hooks/useShiki';
+import { extractShikiLines } from './shikiLines';
 import { fetchVersionCode } from './api';
 import type { ContractInfo, ContractVersion } from './api';
 
@@ -183,6 +184,160 @@ function DiffView({ codeA, codeB }: { codeA: string; codeB: string }) {
                 </span>
               </div>
             ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Line selection helpers — parse/serialize "lines" URL param (e.g. "5,10-15")
+// ---------------------------------------------------------------------------
+
+function parseLineParam(param: string | null): Set<number> {
+  const set = new Set<number>();
+  if (!param) return set;
+  for (const part of param.split(',')) {
+    const range = part.split('-').map(Number);
+    if (range.length === 2 && !isNaN(range[0]) && !isNaN(range[1])) {
+      const [a, b] = range[0] <= range[1] ? [range[0], range[1]] : [range[1], range[0]];
+      for (let i = a; i <= b; i++) set.add(i);
+    } else if (range.length === 1 && !isNaN(range[0]) && range[0] > 0) {
+      set.add(range[0]);
+    }
+  }
+  return set;
+}
+
+function serializeLines(selected: Set<number>): string {
+  if (selected.size === 0) return '';
+  const sorted = [...selected].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start = sorted[0], end = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i] === end + 1) {
+      end = sorted[i];
+    } else {
+      ranges.push(start === end ? String(start) : `${start}-${end}`);
+      start = end = sorted[i];
+    }
+  }
+  ranges.push(start === end ? String(start) : `${start}-${end}`);
+  return ranges.join(',');
+}
+
+// ---------------------------------------------------------------------------
+// SourceCodeView — line-numbered, selectable code viewer
+// ---------------------------------------------------------------------------
+
+function SourceCodeView({
+  code,
+  highlightedHtml,
+}: {
+  code: string;
+  highlightedHtml: string;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selected, setSelected] = useState<Set<number>>(() => parseLineParam(searchParams.get('lines')));
+  const lastClickedRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Sync URL → state when param changes externally
+  useEffect(() => {
+    const fromUrl = parseLineParam(searchParams.get('lines'));
+    setSelected(fromUrl);
+  }, [searchParams.get('lines')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Parse shiki HTML into per-line HTML strings
+  const lines = useMemo(() => {
+    if (highlightedHtml) {
+      const parsed = extractShikiLines(highlightedHtml);
+      if (parsed) return parsed;
+    }
+    return code.split('\n');
+  }, [highlightedHtml, code]);
+
+  const isHighlighted = !!highlightedHtml && !!extractShikiLines(highlightedHtml);
+
+  // Scroll to first selected line on mount
+  useEffect(() => {
+    if (selected.size === 0 || !containerRef.current) return;
+    const first = Math.min(...selected);
+    const el = containerRef.current.querySelector(`[data-line="${first}"]`);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLineClick = useCallback((lineNum: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    setSelected(prev => {
+      let next: Set<number>;
+
+      if (e.shiftKey && lastClickedRef.current != null) {
+        // Range select
+        const from = Math.min(lastClickedRef.current, lineNum);
+        const to = Math.max(lastClickedRef.current, lineNum);
+        next = new Set(prev);
+        for (let i = from; i <= to; i++) next.add(i);
+      } else if (e.metaKey || e.ctrlKey) {
+        // Toggle single line
+        next = new Set(prev);
+        if (next.has(lineNum)) next.delete(lineNum);
+        else next.add(lineNum);
+      } else {
+        // Single select (or deselect if clicking same single line)
+        if (prev.size === 1 && prev.has(lineNum)) {
+          next = new Set();
+        } else {
+          next = new Set([lineNum]);
+        }
+      }
+
+      lastClickedRef.current = lineNum;
+
+      // Update URL
+      const serialized = serializeLines(next);
+      setSearchParams(sp => {
+        const p = new URLSearchParams(sp);
+        if (serialized) p.set('lines', serialized);
+        else p.delete('lines');
+        return p;
+      }, { replace: true });
+
+      return next;
+    });
+  }, [setSearchParams]);
+
+  const gutterWidth = String(lines.length).length;
+
+  return (
+    <div ref={containerRef} className="font-mono text-xs leading-relaxed overflow-auto">
+      {lines.map((lineHtml, i) => {
+        const lineNum = i + 1;
+        const isSelected = selected.has(lineNum);
+        return (
+          <div
+            key={i}
+            data-line={lineNum}
+            className={`flex ${isSelected ? 'bg-blue-500/15' : 'hover:bg-zinc-800/40'} transition-colors`}
+          >
+            <button
+              onClick={(e) => handleLineClick(lineNum, e)}
+              className={`shrink-0 text-right select-none px-3 py-0 border-r border-zinc-800/50 cursor-pointer hover:text-zinc-300 transition-colors ${
+                isSelected ? 'text-blue-400' : 'text-zinc-600'
+              }`}
+              style={{ minWidth: `${Math.max(gutterWidth, 2) * 0.6 + 1.5}rem` }}
+            >
+              {lineNum}
+            </button>
+            {isHighlighted ? (
+              <span
+                className="flex-1 whitespace-pre pl-4 pr-4"
+                dangerouslySetInnerHTML={{ __html: lineHtml }}
+              />
+            ) : (
+              <span className="flex-1 whitespace-pre pl-4 pr-4 text-zinc-300">{lineHtml}</span>
+            )}
           </div>
         );
       })}
@@ -444,26 +599,7 @@ export default function SourceTab({ contract, contractName, contractId, versions
           ) : diffMode && diffVersionA != null && diffVersionB != null ? (
             <DiffView codeA={diffCodeA} codeB={diffCodeB} />
           ) : displayCode ? (
-            highlightedHtml ? (
-              <div
-                className="shiki-source-view [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-4 [&_code]:!text-xs [&_code]:leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-              />
-            ) : (
-              // Fallback plain text while shiki loads
-              <pre className="p-4 text-xs leading-relaxed">
-                <code className="text-zinc-300 font-mono">
-                  {displayCode.split('\n').map((line, i) => (
-                    <div key={i} className="flex">
-                      <span className="inline-block w-10 text-right pr-4 text-zinc-600 select-none shrink-0">
-                        {i + 1}
-                      </span>
-                      <span className="flex-1 whitespace-pre">{line}</span>
-                    </div>
-                  ))}
-                </code>
-              </pre>
-            )
+            <SourceCodeView code={displayCode} highlightedHtml={highlightedHtml} />
           ) : (
             <div className="flex items-center justify-center py-16">
               <div className="text-center">
