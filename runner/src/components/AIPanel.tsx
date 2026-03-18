@@ -1734,13 +1734,13 @@ export default function AIPanel({
           return;
         }
         case 'update_file': {
-          // Don't auto-apply — let users use Replace/Copy buttons in chat code blocks
-          emit({ success: true, message: 'Code shown in chat. User can click Replace to apply.' });
+          onAutoApplyEditsRef.current?.([{ path: args.path, code: args.content }]);
+          emit({ success: true, message: 'Diff pending user review' });
           return;
         }
         case 'edit_file': {
-          // Don't auto-apply — let users use Replace/Copy buttons in chat code blocks
-          emit({ success: true, message: 'Code shown in chat. User can click Replace to apply.' });
+          onAutoApplyEditsRef.current?.([{ path: args.path, code: '', patches: args.patches }]);
+          emit({ success: true, message: 'Diff pending user review' });
           return;
         }
         case 'delete_file': {
