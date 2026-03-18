@@ -276,16 +276,14 @@ export function FunctionNav({
                 <button
                   key={fn.name}
                   onClick={() => onToggle(fn.name)}
-                  className={`group w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                    pinned
-                      ? 'text-zinc-200 hover:bg-zinc-700/40'
-                      : 'text-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-400'
+                  className={`group w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors text-zinc-300 hover:bg-zinc-700/40 ${
+                    pinned ? 'bg-blue-500/10' : ''
                   }`}
                 >
-                  <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-blue-400' : 'bg-zinc-700'}`} />
+                  <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-blue-400' : 'bg-zinc-500'}`} />
                   <span className="text-[11px] font-mono truncate flex-1">{fn.name}</span>
                   {pinned && (
-                    <X className="w-2.5 h-2.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <X className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   )}
                 </button>
               );
@@ -306,16 +304,14 @@ export function FunctionNav({
                 <button
                   key={fn.name}
                   onClick={() => onToggle(fn.name)}
-                  className={`group w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors ${
-                    pinned
-                      ? 'text-zinc-200 hover:bg-zinc-700/40'
-                      : 'text-zinc-600 hover:bg-zinc-800/60 hover:text-zinc-400'
+                  className={`group w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors text-zinc-300 hover:bg-zinc-700/40 ${
+                    pinned ? 'bg-violet-500/10' : ''
                   }`}
                 >
-                  <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-violet-400' : 'bg-zinc-700'}`} />
+                  <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-violet-400' : 'bg-zinc-500'}`} />
                   <span className="text-[11px] font-mono truncate flex-1">{fn.name}</span>
                   {pinned && (
-                    <X className="w-2.5 h-2.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <X className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   )}
                 </button>
               );
