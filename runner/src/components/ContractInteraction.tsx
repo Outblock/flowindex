@@ -238,6 +238,11 @@ export function FunctionCard({
 
 // ── FunctionNav (left sidebar) ─────────────────────────────────
 
+function fnSignature(fn: AbiFunction): string {
+  if (fn.inputs.length === 0) return '';
+  return `(${fn.inputs.map(i => i.type).join(', ')})`;
+}
+
 export function FunctionNav({
   readFns,
   writeFns,
@@ -290,7 +295,7 @@ export function FunctionNav({
                   }`}
                 >
                   <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-blue-400' : 'bg-zinc-500'}`} />
-                  <span className="text-[11px] font-mono truncate flex-1">{fn.name}</span>
+                  <span className="text-[11px] font-mono truncate flex-1">{fn.name}<span className="text-zinc-600">{fnSignature(fn)}</span></span>
                   {pinned && (
                     <X className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   )}
@@ -318,7 +323,7 @@ export function FunctionNav({
                   }`}
                 >
                   <span className={`w-1 h-1 rounded-full shrink-0 ${pinned ? 'bg-violet-400' : 'bg-zinc-500'}`} />
-                  <span className="text-[11px] font-mono truncate flex-1">{fn.name}</span>
+                  <span className="text-[11px] font-mono truncate flex-1">{fn.name}<span className="text-zinc-600">{fnSignature(fn)}</span></span>
                   {pinned && (
                     <X className="w-2.5 h-2.5 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   )}
