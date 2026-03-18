@@ -93,7 +93,7 @@ export function FunctionCard({
   isWrite: boolean;
   onUnpin?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(fn.inputs.length === 0);
+  const [expanded, setExpanded] = useState(true);
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [ethValue, setEthValue] = useState('');
   const [result, setResult] = useState<ContractCallResult | null>(null);
@@ -174,8 +174,8 @@ export function FunctionCard({
 
       {/* Expanded inputs */}
       {expanded && hasInputs && (
-        <div className="px-3 pb-3 space-y-2 border-t border-zinc-700/50">
-          <div className="pt-2 space-y-2">
+        <div className="px-3 pb-3 space-y-3 border-t border-zinc-700/50">
+          <div className="pt-3 space-y-2.5">
             {fn.inputs.map((input, i) => {
               const key = input.name || `arg${i}`;
               return (
@@ -504,13 +504,13 @@ interface ContractInteractionProps {
 export default function ContractInteraction({ contract, chain }: ContractInteractionProps) {
   const { read, write } = useMemo(() => categorizeAbiFunctions(contract.abi), [contract.abi]);
 
-  // Pinned state — all pinned by default
+  // Pinned state — none pinned by default (user clicks to add)
   const allNames = useMemo(() => [...read, ...write].map((fn) => fn.name), [read, write]);
-  const [pinnedSet, setPinnedSet] = useState<Set<string>>(() => new Set(allNames));
+  const [pinnedSet, setPinnedSet] = useState<Set<string>>(() => new Set());
 
   // Reset pins when contract changes
   useEffect(() => {
-    setPinnedSet(new Set(allNames));
+    setPinnedSet(new Set());
   }, [allNames]);
 
   const togglePin = useCallback((name: string) => {
@@ -544,7 +544,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
 
       {/* Center panel — function cards */}
       <div className="flex-1 overflow-y-auto min-w-0">
-        <div className="px-4 py-4 space-y-4 max-w-3xl">
+        <div className="px-5 py-5 space-y-6 max-w-3xl">
           {/* Mobile toggle controls (shown on < lg) */}
           <div className="flex items-center justify-between lg:hidden">
             <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">
@@ -575,7 +575,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
                 </div>
                 <span className="text-[10px] text-zinc-600">{pinnedRead.length} functions</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {pinnedRead.map((fn) => (
                   <FunctionCard
                     key={fn.name}
@@ -602,7 +602,7 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
                 </div>
                 <span className="text-[10px] text-zinc-600">{pinnedWrite.length} functions</span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {pinnedWrite.map((fn) => (
                   <FunctionCard
                     key={fn.name}
@@ -619,15 +619,18 @@ export default function ContractInteraction({ contract, chain }: ContractInterac
 
           {/* Empty state */}
           {pinnedRead.length === 0 && pinnedWrite.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-zinc-600">
-              <EyeOff className="w-8 h-8 mb-3" />
-              <p className="text-sm mb-1">No functions selected</p>
-              <p className="text-xs">
-                Use the sidebar to pin functions, or{' '}
-                <button onClick={selectAll} className="text-blue-400 hover:underline">
-                  show all
-                </button>
+            <div className="flex flex-col items-center justify-center py-20 text-zinc-600">
+              <BookOpen className="w-10 h-10 mb-4 text-zinc-700" />
+              <p className="text-sm font-medium text-zinc-400 mb-1">Select functions to interact</p>
+              <p className="text-xs text-zinc-600 mb-4">
+                Click functions in the sidebar to add them here
               </p>
+              <button
+                onClick={selectAll}
+                className="px-3 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg border border-zinc-700 transition-colors"
+              >
+                Show all {allNames.length} functions
+              </button>
             </div>
           )}
         </div>
