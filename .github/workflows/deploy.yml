@@ -216,6 +216,7 @@ jobs:
               -e SIMULATOR_URL=${{ secrets.SIMULATOR_URL }} \
               -e SIMULATOR_ADMIN_URL=${{ secrets.SIMULATOR_ADMIN_URL }} \
               -e BLOCKSCOUT_API_KEY=${{ secrets.BLOCKSCOUT_API_KEY }} \
+              -e BLOCKSCOUT_DB_URL="${{ secrets.BLOCKSCOUT_DB_URL }}" \
               $IMAGE
           '
 
