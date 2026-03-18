@@ -17,18 +17,22 @@ interface CadenceEditorProps {
   readOnly?: boolean;
   externalEditorRef?: React.RefObject<editor.IStandaloneCodeEditor | null>;
   onMonacoReady?: (monaco: typeof import('monaco-editor')) => void;
+  /** Called when user triggers "Ask AI" from context menu or quick fix */
+  onAskAI?: (prefill: string) => void;
 }
 
 export default function CadenceEditor({
   code, onChange, onRun, onGoToDefinition, darkMode = true, path, readOnly,
-  externalEditorRef, onMonacoReady,
+  externalEditorRef, onMonacoReady, onAskAI,
 }: CadenceEditorProps) {
   const internalRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const editorRef = externalEditorRef || internalRef;
 
-  // Keep a stable ref to onRun so the Monaco action always calls the latest version
+  // Keep stable refs so Monaco actions always call the latest version
   const onRunRef = useRef(onRun);
   useEffect(() => { onRunRef.current = onRun; }, [onRun]);
+  const onAskAIRef = useRef(onAskAI);
+  useEffect(() => { onAskAIRef.current = onAskAI; }, [onAskAI]);
 
   const [tmReady, setTmReady] = useState(false);
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
@@ -99,6 +103,65 @@ export default function CadenceEditor({
         e.event.stopPropagation();
         void goToDefinitionAt(e.target.position);
       });
+
+      // "Ask AI" context menu action — sends selected code to AI chat
+      editor.addAction({
+        id: 'ask-ai',
+        label: 'Ask AI',
+        contextMenuGroupId: '1_ai',
+        contextMenuOrder: 0,
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyA],
+        run: (ed) => {
+          const sel = ed.getSelection();
+          const model = ed.getModel();
+          if (!sel || !model || !onAskAIRef.current) return;
+          const selectedText = model.getValueInRange(sel).trim();
+          const lang = model.getLanguageId() === 'sol' ? 'solidity' : 'cadence';
+          if (selectedText) {
+            onAskAIRef.current(`\`\`\`${lang}\n${selectedText}\n\`\`\`\n`);
+          } else {
+            onAskAIRef.current('');
+          }
+        },
+      });
+
+      // Register command for "Ask AI to Fix" quick fix — capture the generated command ID
+      const askAiFixCmdId = editor.addCommand(0, (_accessor, ...args: any[]) => {
+        if (!onAskAIRef.current) return;
+        const [code, lang, messages] = args as [string, string, string];
+        let prefill = '';
+        if (code) prefill += `\`\`\`${lang}\n${code}\n\`\`\`\n`;
+        prefill += `Fix this error:\n${messages}\n`;
+        onAskAIRef.current(prefill);
+      });
+
+      // Code action provider — "Ask AI to Fix" for diagnostics
+      if (askAiFixCmdId) {
+        monaco.languages.registerCodeActionProvider(CADENCE_LANGUAGE_ID, {
+          provideCodeActions: (_model, range, context) => {
+            const diagnostics = context.markers.filter(m => m.severity >= monaco.MarkerSeverity.Warning);
+            if (diagnostics.length === 0) return { actions: [], dispose: () => {} };
+
+            const messages = diagnostics.map(d => d.message).join('\n');
+            const code = _model.getValueInRange(range).trim();
+            const lang = _model.getLanguageId() === 'sol' ? 'solidity' : 'cadence';
+
+            return {
+              actions: [{
+                title: 'Ask AI to Fix',
+                kind: 'quickfix',
+                isPreferred: true,
+                command: {
+                  id: askAiFixCmdId,
+                  title: 'Ask AI to Fix',
+                  arguments: [code, lang, messages],
+                },
+              }],
+              dispose: () => {},
+            };
+          },
+        });
+      }
 
       editor.focus();
     },

@@ -344,6 +344,7 @@ export default function App() {
   });
   const [showMobileAI, setShowMobileAI] = useState(false);
   const [aiPendingMessage, setAiPendingMessage] = useState<string | undefined>();
+  const [aiPrefillInput, setAiPrefillInput] = useState<string | undefined>();
   const [pendingDiffs, setPendingDiffs] = useState<PendingDiffMap>({});
   const { user, loading: authLoading, signOut } = useAuth();
   const openLogin = useCallback(() => setShowLoginModal(true), []);
@@ -2343,6 +2344,7 @@ export default function App() {
                   externalEditorRef={editorRef}
                   onMonacoReady={handleMonacoReady}
                   onGoToDefinition={handleGoToDefinition}
+                  onAskAI={(prefill) => { setAiPrefillInput(prefill); setShowAI(true); }}
                 />
               )}
             </div>
@@ -2407,6 +2409,8 @@ export default function App() {
                     onViewAccount={handleViewAccount}
                     pendingMessage={aiPendingMessage}
                     onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
+                    prefillInput={aiPrefillInput}
+                    onPrefillConsumed={() => setAiPrefillInput(undefined)}
                   />
                 </Suspense>
               </div>
@@ -2505,6 +2509,8 @@ export default function App() {
                 onViewAccount={handleViewAccount}
                 pendingMessage={aiPendingMessage}
                 onPendingMessageConsumed={() => setAiPendingMessage(undefined)}
+                prefillInput={aiPrefillInput}
+                onPrefillConsumed={() => setAiPrefillInput(undefined)}
               />
             </Suspense>
           </div>

@@ -138,6 +138,9 @@ interface AIPanelProps {
   /** External message to auto-send (e.g. "Fix with AI" from codegen errors) */
   pendingMessage?: string;
   onPendingMessageConsumed?: () => void;
+  /** Prefill input text without sending (e.g. "Ask AI" from editor context menu) */
+  prefillInput?: string;
+  onPrefillConsumed?: () => void;
 }
 
 /* ── SQL Result Table ── */
@@ -1556,6 +1559,8 @@ export default function AIPanel({
   onViewAccount,
   pendingMessage,
   onPendingMessageConsumed,
+  prefillInput,
+  onPrefillConsumed,
 }: AIPanelProps) {
   const [input, setInput] = useState('');
   const [chatMode, setChatMode] = useState<ChatMode>(getStoredMode);
@@ -2006,6 +2011,21 @@ export default function AIPanel({
     onPendingMessageConsumed?.();
   }, [pendingMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Prefill input text without sending (e.g. "Ask AI" from editor context menu)
+  useEffect(() => {
+    if (prefillInput == null) return;
+    setInput(prefillInput);
+    onPrefillConsumed?.();
+    // Focus and move cursor to end
+    requestAnimationFrame(() => {
+      const ta = inputRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(prefillInput.length, prefillInput.length);
+      }
+    });
+  }, [prefillInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -2210,13 +2230,6 @@ export default function AIPanel({
               className="flex-1 min-w-0 resize-none text-[12px] bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/40 transition-colors"
               style={{ maxHeight: '100px' }}
             />
-            {lastUsage && (
-              <ContextUsageIndicator
-                usage={lastUsage}
-                maxTokens={CONTEXT_WINDOW}
-                modelLabel={CHAT_MODES.find((m) => m.key === chatMode)?.model || 'Claude'}
-              />
-            )}
             {isStreaming ? (
               <button
                 type="button"
@@ -2303,6 +2316,15 @@ export default function AIPanel({
               </div>
             </div>
           </div>
+          {lastUsage && (
+            <div className="ml-auto">
+              <ContextUsageIndicator
+                usage={lastUsage}
+                maxTokens={CONTEXT_WINDOW}
+                modelLabel={CHAT_MODES.find((m) => m.key === chatMode)?.model || 'Claude'}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
