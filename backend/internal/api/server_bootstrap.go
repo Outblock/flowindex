@@ -127,6 +127,7 @@ type Server struct {
 	startBlock         uint64
 	blockscoutURL      string // e.g. "https://evm.flowindex.dev"
 	blockscoutAPIKey   string // optional API key for Blockscout rate limit bypass
+	blockscoutDB       *repository.BlockscoutDB
 	backfillProgress   *BackfillProgress
 	priceCache         *market.PriceCache
 	webhookHandlers      WebhookRouteRegistrar
@@ -159,12 +160,25 @@ func NewServer(repo *repository.Repository, client FlowClient, port string, star
 		bsURL = "https://evm.flowindex.dev"
 	}
 
+	// Optional read-only connection to Blockscout (Flow EVM) database.
+	var bsDB *repository.BlockscoutDB
+	if bsDBURL := os.Getenv("BLOCKSCOUT_DB_URL"); bsDBURL != "" {
+		var err error
+		bsDB, err = repository.NewBlockscoutDB(bsDBURL)
+		if err != nil {
+			log.Printf("Warning: blockscout DB not available: %v", err)
+		} else {
+			log.Println("Connected to Blockscout DB (read-only)")
+		}
+	}
+
 	s := &Server{
 		repo:          repo,
 		client:        client,
 		startBlock:    startBlock,
 		blockscoutURL:    bsURL,
 		blockscoutAPIKey: os.Getenv("BLOCKSCOUT_API_KEY"),
+		blockscoutDB:    bsDB,
 		priceCache:    market.NewPriceCache(),
 	}
 	for _, opt := range opts {
@@ -419,6 +433,9 @@ func (s *Server) resumeReprocessJob(job repository.ReprocessJob) {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.blockscoutDB != nil {
+		s.blockscoutDB.Close()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 

@@ -5077,6 +5077,54 @@
         }
       }
     },
+    "/flow/evm/address/{address}/transfer": {
+      "get": {
+        "description": "Fetches all EVM token transfers (ERC-20, ERC-721, and native FLOW value transfers) for an EVM address, in a unified format matching the Cadence /flow/account/{address}/transfer endpoint.",
+        "tags": [
+          "Flow EVM"
+        ],
+        "summary": "Retrieve all EVM transfers (FT + NFT + native) for an address",
+        "parameters": [
+          {
+            "description": "EVM address (with or without 0x prefix)",
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Limit for the number of records to return (Default = 20, Max = 200)",
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The number of records to skip (for pagination) (Default = 0)",
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/flow.AllTransfersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/flow/evm/address/{address}/token": {
       "get": {
         "description": "Retrieves EVM tokens held by a specific EVM address (proxied from Blockscout).",

@@ -190,6 +190,7 @@ func registerFlowRoutes(r *mux.Router, s *Server) {
 	r.HandleFunc("/flow/evm/address/{address}/transactions", s.handleFlowGetEVMAddressTransactions).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/internal-transactions", s.handleFlowGetEVMAddressInternalTxs).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}/token-transfers", s.handleFlowGetEVMAddressTokenTransfers).Methods("GET", "OPTIONS")
+	r.HandleFunc("/flow/evm/address/{address}/transfer", s.handleFlowEVMAddressAllTransfers).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/address/{address}", s.handleFlowGetEVMAddress).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/evm/search", cachedHandler(30*time.Second, s.handleFlowEVMSearch)).Methods("GET", "OPTIONS")
 	r.HandleFunc("/flow/node", s.handleListNodes).Methods("GET", "OPTIONS")
