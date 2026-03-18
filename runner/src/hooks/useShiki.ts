@@ -20,7 +20,7 @@ const cadenceEditorTheme = {
     { scope: ['constant.numeric'], settings: { foreground: '#B5CEA8' } },
     { scope: ['string', 'string.quoted'], settings: { foreground: '#CE9178' } },
     { scope: ['constant.character.escape'], settings: { foreground: '#D7BA7D' } },
-    { scope: ['comment'], settings: { foreground: '#6A9955', fontStyle: 'italic' } },
+    { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: '#6A9955', fontStyle: 'italic' } },
     { scope: ['keyword.operator'], settings: { foreground: '#D4D4D4' } },
     { scope: ['punctuation', 'meta.brace', 'meta.delimiter'], settings: { foreground: '#D4D4D4' } },
     { scope: ['punctuation.definition.typeparameters', 'punctuation.bracket'], settings: { foreground: '#FFD700' } },
