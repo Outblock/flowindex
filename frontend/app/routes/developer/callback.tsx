@@ -52,6 +52,13 @@ function DeveloperCallbackPage() {
     const hash = window.location.hash
     if (hash) {
       handleCallback(hash)
+
+      // Set fi_auth cookie on .flowindex.io so Sim Studio (studio.flowindex.io) can read it
+      const params = new URLSearchParams(hash.replace(/^#/, ''))
+      const accessToken = params.get('access_token')
+      if (accessToken) {
+        document.cookie = `fi_auth=${accessToken}; path=/; domain=.flowindex.io; max-age=3600; SameSite=Lax; Secure`
+      }
     }
 
     // Navigate after processing.
