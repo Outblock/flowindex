@@ -10,21 +10,14 @@ RUN git clone https://github.com/Outblock/flow-emulator.git /src \
   && git checkout "$EMULATOR_REF"
 WORKDIR /src
 
-# Fix: clear the in-memory globalCache on snapshot revert so fork-mode
-# registers fetched during a simulation don't leak into subsequent requests.
-# Without this, the 3-tier cache (globalCache → SQLite → gRPC) returns stale
-# post-transaction values from the LRU after snapshot revert restores SQLite.
-RUN printf '\n// LoadSnapshot overrides sqlite.Store.LoadSnapshot to also purge\n\
-// the in-memory globalCache. Without this, registers fetched from mainnet\n\
-// during a simulation persist through snapshot revert.\n\
-func (s *Store) LoadSnapshot(name string) error {\n\
-\terr := s.Store.LoadSnapshot(name)\n\
-\tif err != nil {\n\
-\t\treturn err\n\
-\t}\n\
-\ts.globalCache.Purge()\n\
-\treturn nil\n\
-}\n' >> storage/remote/store.go
+# NOTE: We previously patched LoadSnapshot to call globalCache.Purge() here.
+# This is no longer needed because the simulator API now creates per-request
+# snapshots (one before each simulation, reverted after). The SQLite delta
+# store correctly reverts transaction writes via snapshot restore. The
+# globalCache only holds read-only registers fetched from mainnet — these
+# are never modified by transactions, so they remain valid after revert.
+# Removing the purge avoids expensive re-fetches from mainnet after each
+# simulation (~9s per request with purge vs ~1s without).
 
 ENV GOTOOLCHAIN=auto
 RUN CGO_CFLAGS="-std=gnu99" CGO_ENABLED=1 go build -o /emulator ./cmd/emulator
