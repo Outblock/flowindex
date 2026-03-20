@@ -103,9 +103,12 @@ export interface FlowGetTransactionParams {
 /** Parameters for get_events tool */
 export interface FlowGetEventsParams {
   eventType: string
-  startHeight?: string
-  endHeight?: string
   limit?: string
+}
+
+/** Parameters for get_token_price tool */
+export interface FlowGetTokenPriceParams {
+  symbol?: string
 }
 
 /** Parameters for execute_script tool */
