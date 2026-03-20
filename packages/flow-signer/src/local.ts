@@ -4,7 +4,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { sha3_256 } from '@noble/hashes/sha3.js';
 import { HDKey } from '@scure/bip32';
 import { mnemonicToSeedSync } from '@scure/bip39';
-import { mnemonicToAccount } from 'viem/accounts';
+import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import type { FlowSigner, SignResult, SignerInfo, SignerConfig } from './interface.js';
 
 // ---------------------------------------------------------------------------
@@ -88,46 +88,72 @@ function signMessage(
 // Account discovery
 // ---------------------------------------------------------------------------
 
-interface DiscoveredAccount {
+export interface DiscoveredAccount {
   address: string;
   keyIndex: number;
+  sigAlgo?: 'ECDSA_P256' | 'ECDSA_secp256k1';
+  hashAlgo?: 'SHA2_256' | 'SHA3_256';
+}
+
+/** FlowIndex key-indexer response shape: GET /api/flow/key/{publicKey} */
+interface KeyIndexerEntry {
+  address: string;
+  key_index: number;
+  weight: number;
+  revoked: boolean;
+  signing_algorithm?: string;
+  hashing_algorithm?: string;
+}
+
+/** Map FlowIndex numeric algorithm IDs to named constants. */
+function normalizeSigAlgo(val: unknown): 'ECDSA_P256' | 'ECDSA_secp256k1' {
+  const s = String(val).toUpperCase();
+  if (s.includes('SECP256K1') || s === '3') return 'ECDSA_secp256k1';
+  return 'ECDSA_P256';
+}
+
+function normalizeHashAlgo(val: unknown): 'SHA2_256' | 'SHA3_256' {
+  const s = String(val).toUpperCase();
+  if (s.includes('SHA3') || s === '3') return 'SHA3_256';
+  return 'SHA2_256';
+}
+
+/**
+ * Parse the FlowIndex key-indexer response into DiscoveredAccount[].
+ * Exported for testing.
+ */
+export function parseKeyIndexerResponse(
+  body: unknown,
+): DiscoveredAccount[] {
+  // FlowIndex format: { _meta: {...}, data: KeyIndexerEntry[] }
+  if (!body || typeof body !== 'object') return [];
+  const obj = body as { data?: KeyIndexerEntry[] };
+  if (!obj.data || !Array.isArray(obj.data)) return [];
+
+  return obj.data
+    .filter((a) => a.weight >= 1000 && !a.revoked)
+    .map((a) => ({
+      address: a.address,
+      keyIndex: a.key_index,
+      sigAlgo: a.signing_algorithm ? normalizeSigAlgo(a.signing_algorithm) : undefined,
+      hashAlgo: a.hashing_algorithm ? normalizeHashAlgo(a.hashing_algorithm) : undefined,
+    }));
 }
 
 async function discoverAccounts(
   publicKey: string,
-  network: string,
+  _network: string,
   flowindexUrl: string,
 ): Promise<DiscoveredAccount[]> {
-  // Try FlowIndex first
-  try {
-    const resp = await fetch(`${flowindexUrl}/api/flow/key/${publicKey}`);
-    if (resp.ok) {
-      const data = (await resp.json()) as {
-        accounts?: { address: string; keyIndex: number; weight: number }[];
-      };
-      if (data.accounts && data.accounts.length > 0) {
-        return data.accounts
-          .filter((a) => a.weight >= 1000)
-          .map((a) => ({ address: a.address, keyIndex: a.keyIndex }));
-      }
-    }
-  } catch {
-    // ignore — fall through to backup
-  }
+  // Strip 0x prefix if present
+  const cleanKey = publicKey.startsWith('0x') ? publicKey.slice(2) : publicKey;
 
-  // Fallback: Flow key-indexer
-  const env = network === 'mainnet' ? 'mainnet' : 'testnet';
   try {
-    const resp = await fetch(`https://${env}.key-indexer.flow.com/key/${publicKey}`);
+    const resp = await fetch(`${flowindexUrl}/flow/key/${cleanKey}`);
     if (resp.ok) {
-      const data = (await resp.json()) as {
-        accounts?: { address: string; keyIndex: number; weight: number }[];
-      };
-      if (data.accounts && data.accounts.length > 0) {
-        return data.accounts
-          .filter((a) => a.weight >= 1000)
-          .map((a) => ({ address: a.address, keyIndex: a.keyIndex }));
-      }
+      const body = await resp.json();
+      const accounts = parseKeyIndexerResponse(body);
+      if (accounts.length > 0) return accounts;
     }
   } catch {
     // ignore
@@ -212,6 +238,13 @@ export class LocalSigner implements FlowSigner {
 
       // Use the same key for EVM if no dedicated EVM key was provided
       this.evmPrivateKey = this.options.evmPrivateKey ?? privateKey;
+
+      // Compute the EVM EOA address from the EVM private key
+      const evmKeyHex = this.evmPrivateKey.startsWith('0x')
+        ? this.evmPrivateKey
+        : `0x${this.evmPrivateKey}`;
+      const evmAccount = privateKeyToAccount(evmKeyHex as `0x${string}`);
+      this.evmAddress = evmAccount.address;
     } else {
       throw new Error('LocalSigner requires either a mnemonic or privateKey');
     }
