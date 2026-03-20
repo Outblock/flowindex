@@ -175,12 +175,16 @@ npx @modelcontextprotocol/inspector node node_modules/@flowindex/agent-wallet/di
 
 ## 8. Cadence Templates
 
-The server ships with built-in Cadence templates across several categories:
+The server ships with 70+ built-in Cadence templates across seven categories:
 
-- `token`: fungible token transfers and vault setup
-- `collection`: NFT transfers, setup, and collection reads
-- `evm`: COA creation, EVM calls, and cross-VM operations
-- `bridge`: FlowEVMBridge token bridging
-- `base`, `hybrid-custody`, and `lost-and-found` utilities
+| Category | Count | Description |
+|----------|-------|-------------|
+| `base` | 9 | Account info, storage, keys, child accounts, surge factor |
+| `token` | 3 | Fungible token transfers and vault setup |
+| `collection` | 5 | NFT transfers (single, batch, NBA Top Shot) |
+| `evm` | 9 | COA creation, EVM calls, cross-VM flow operations |
+| `bridge` | 14 | FlowEVMBridge token and NFT bridging (both directions) |
+| `hybrid-custody` | 22 | Child account FT/NFT operations, bridging, and queries |
+| `lost-and-found` | 7 | Unclaimed token/NFT queries, claims, and safe sends |
 
 Use `list_templates` to browse available templates and `get_template` to inspect a specific template's source code and argument schema.

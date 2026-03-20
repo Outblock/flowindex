@@ -65,6 +65,39 @@ Checks the status of an interactive login session. If authenticated, activates t
 }
 ```
 
+### `diagnose_signing`
+
+Runs a comprehensive diagnostic on the signing setup: verifies the configured private key matches the on-chain account key, checks sigAlgo/hashAlgo, weight, revocation status, and performs a local sign+verify test. Use this to debug "invalid signature" errors.
+
+**Parameters:** None
+
+**Returns:**
+```json
+{
+  "summary": "All checks passed — signing setup looks correct.",
+  "checks": [
+    { "check": "signer_type", "status": "pass", "detail": "Type: local-key, Address: 0x..., KeyIndex: 0, ..." },
+    { "check": "local_public_key", "status": "pass", "detail": "04abc...def (128 hex chars)" },
+    { "check": "key_weight", "status": "pass", "detail": "Weight: 1000 (need >= 1000 for full signing authority)" },
+    { "check": "sig_algo_match", "status": "pass", "detail": "Both: ECDSA_secp256k1" },
+    { "check": "hash_algo_match", "status": "pass", "detail": "Both: SHA2_256" },
+    { "check": "public_key_match", "status": "pass", "detail": "Keys match (04abc...)" },
+    { "check": "local_sign_verify", "status": "pass", "detail": "Signature produced: ... (128 hex chars, correct format)" }
+  ]
+}
+```
+
+Checks performed:
+- **signer_type**: Basic signer info (type, address, key index, algorithms)
+- **local_public_key**: Public key derivation from the private key (local signers only)
+- **onchain_key_fetch**: Fetches account keys from the Flow Access API
+- **key_revoked**: Whether the key index is revoked on-chain
+- **key_weight**: Key weight must be >= 1000 for full signing authority
+- **sig_algo_match**: Configured signing algorithm matches on-chain key
+- **hash_algo_match**: Configured hashing algorithm matches on-chain key
+- **public_key_match**: Local public key matches on-chain public key
+- **local_sign_verify**: Local sign+verify round-trip test
+
 ## Template Tools
 
 ### `list_templates`

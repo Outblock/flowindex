@@ -45,7 +45,7 @@ Once the server is running, Claude or any other MCP-compatible client can call t
 
 | Tool Group | Tools | Description |
 |---|---|---|
-| Wallet | `wallet_status`, `wallet_login`, `wallet_login_status` | Wallet configuration, status, and interactive login |
+| Wallet | `wallet_status`, `wallet_login`, `wallet_login_status`, `diagnose_signing` | Wallet configuration, status, interactive login, and signing diagnostics |
 | Templates | `list_templates`, `get_template`, `execute_script`, `execute_cadence_script`, `simulate_cadence_transaction`, `simulate_template`, `execute_cadence_transaction`, `execute_template` | Cadence template browsing, freeform script execution, transaction simulation, and submission |
 | Approval | `confirm_transaction`, `cancel_transaction`, `list_pending` | Pending transaction review and execution |
 | Flow Query | `get_account`, `get_flow_balance`, `get_ft_balance`, `get_nft_collection`, `get_transaction` | Read-only Flow data access |
@@ -90,12 +90,14 @@ For freeform read-only work, `execute_cadence_script` lets the agent run raw Cad
 
 Simulation uses a public mainnet fork, so it is mainnet-only.
 
-## npm Package, But As Runtime
+## Installation
 
-If you want to install it directly, you still can:
+`npx @flowindex/agent-wallet` is the recommended way to run the server. MCP hosts like Claude Desktop handle the download automatically — no manual install needed.
+
+If you need a local copy (for example, to pin a version or run offline):
 
 ```bash
-bun add @flowindex/agent-wallet
+npm install -g @flowindex/agent-wallet
 ```
 
-That install step is just how your MCP host gets the executable. The recommended usage model remains: configure it as an MCP server and let your AI client call the tools.
+This is a runtime tool, not a library dependency. Do not add it to your project's `package.json`.
