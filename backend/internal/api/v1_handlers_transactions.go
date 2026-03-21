@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -168,6 +167,7 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 		out["nft_transfers"] = []interface{}{}
 		out["defi_events"] = []interface{}{}
 		out["evm_executions"] = []interface{}{}
+		s.enrichWithScheduledTx(r.Context(), out, tx.ID)
 		out["lite"] = true
 		writeAPIResponse(w, []interface{}{out}, nil, nil)
 		return
@@ -296,12 +296,6 @@ func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map
 		scheduled["handler_stats"] = stats
 	}
 
-	// Build FT transfers from events (system txs don't have app.ft_transfers records)
-	ftTransfers := s.buildFTTransfersFromEvents(events, synth.Timestamp)
-	if len(ftTransfers) > 0 {
-		out["ft_transfers"] = ftTransfers
-	}
-
 	// Fetch handler contract code from DB (case-sensitive name match)
 	contractAddr := parseScheduledContractAddress(st.HandlerType) // "0xaddr"
 	contractName := parseScheduledContractName(st.HandlerType)     // "FlowYieldVaultsEVMWorkerOps"
@@ -313,164 +307,6 @@ func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map
 	}
 
 	return out, true
-}
-
-// buildFTTransfersFromEvents extracts FT transfer entries from events for system txs
-// that don't have app.ft_transfers records.
-// ftEventEntry holds a parsed FT event for pairing.
-type ftEventEntry struct {
-	isDeposit    bool
-	address      string // from (withdrawn) or to (deposited)
-	amount       string
-	tokenType    string
-	tokenID      string
-	contractName string
-	eventIndex   int
-}
-
-func (s *Server) buildFTTransfersFromEvents(events []models.Event, timestamp time.Time) []map[string]interface{} {
-	serviceAccount := "e467b9dd11fa00df"
-
-	// Collect all FT events
-	var withdrawals, deposits []ftEventEntry
-	for _, e := range events {
-		isWithdraw := strings.Contains(e.Type, "FungibleToken.Withdrawn")
-		isDeposit := strings.Contains(e.Type, "FungibleToken.Deposited")
-		if !isWithdraw && !isDeposit {
-			continue
-		}
-
-		var payload map[string]interface{}
-		if err := json.Unmarshal(e.Payload, &payload); err != nil {
-			continue
-		}
-
-		amount, _ := payload["amount"].(string)
-		tokenType, _ := payload["type"].(string)
-		if amount == "" {
-			continue
-		}
-
-		var addr string
-		if isDeposit {
-			addr, _ = payload["to"].(string)
-		} else {
-			addr, _ = payload["from"].(string)
-		}
-
-		// Skip service account (fee payments)
-		if addr == serviceAccount {
-			continue
-		}
-
-		tokenParts := strings.Split(tokenType, ".")
-		var tokenID, contractName string
-		if len(tokenParts) >= 3 {
-			contractName = tokenParts[2]
-			tokenID = tokenParts[1] + "." + tokenParts[2]
-		}
-
-		entry := ftEventEntry{
-			isDeposit:    isDeposit,
-			address:      addr,
-			amount:       amount,
-			tokenType:    tokenType,
-			tokenID:      tokenID,
-			contractName: contractName,
-			eventIndex:   e.EventIndex,
-		}
-
-		if isDeposit {
-			deposits = append(deposits, entry)
-		} else {
-			withdrawals = append(withdrawals, entry)
-		}
-	}
-
-	// Pair Withdrawn+Deposited by amount+tokenType
-	usedDeposits := make(map[int]bool)
-	var transfers []map[string]interface{}
-
-	for _, w := range withdrawals {
-		fromAddr := w.address
-		toAddr := ""
-		eventIdx := w.eventIndex
-
-		// Find matching deposit (same amount, same token)
-		for i, d := range deposits {
-			if !usedDeposits[i] && d.amount == w.amount && d.tokenID == w.tokenID {
-				toAddr = d.address
-				usedDeposits[i] = true
-				break
-			}
-		}
-
-		item := map[string]interface{}{
-			"token":         w.tokenID,
-			"from_address":  formatAddressV1(fromAddr),
-			"to_address":    formatAddressV1(toAddr),
-			"amount":        w.amount,
-			"event_index":   eventIdx,
-			"transfer_type": "transfer",
-		}
-
-		s.enrichFTTransferItem(item, w.contractName, w.tokenID, timestamp)
-		transfers = append(transfers, item)
-	}
-
-	// Any unmatched deposits (mints, etc.)
-	for i, d := range deposits {
-		if usedDeposits[i] {
-			continue
-		}
-		item := map[string]interface{}{
-			"token":         d.tokenID,
-			"from_address":  "",
-			"to_address":    formatAddressV1(d.address),
-			"amount":        d.amount,
-			"event_index":   d.eventIndex,
-			"transfer_type": "deposit",
-		}
-		s.enrichFTTransferItem(item, d.contractName, d.tokenID, timestamp)
-		transfers = append(transfers, item)
-	}
-
-	return transfers
-}
-
-func (s *Server) enrichFTTransferItem(item map[string]interface{}, contractName, tokenID string, timestamp time.Time) {
-	if tokenID == "" {
-		return
-	}
-	metas, _ := s.repo.GetFTTokenMetadataByIdentifiers(context.Background(), []string{tokenID})
-	if meta, ok := metas[tokenID]; ok {
-		item["token_name"] = meta.Name
-		item["token_symbol"] = meta.Symbol
-		item["token_logo"] = meta.Logo
-		item["token_decimals"] = meta.Decimals
-		if meta.MarketSymbol != "" {
-			if p, ok := s.priceCache.GetPriceAt(meta.MarketSymbol, timestamp); ok {
-				amount, _ := item["amount"].(string)
-				item["amount_usd"] = p * parseFloat64(amount)
-			}
-		}
-	}
-	if contractName == "FlowToken" {
-		if item["token_name"] == nil {
-			item["token_name"] = "Flow"
-			item["token_symbol"] = "FLOW"
-		}
-		amount, _ := item["amount"].(string)
-		if p, ok := s.priceCache.GetPriceAt("FLOW", timestamp); ok {
-			item["amount_usd"] = p * parseFloat64(amount)
-		}
-	}
-}
-
-func parseFloat64(s string) float64 {
-	f := 0.0
-	fmt.Sscanf(s, "%f", &f)
-	return f
 }
 
 // fetchTransactionFromRPC fetches a transaction and its result from the Flow access node.

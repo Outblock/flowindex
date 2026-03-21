@@ -1069,6 +1069,13 @@ function TransactionDetail() {
     const fullTx = useMemo(() => {
         if (!enrichments && !apiEnrichment) return transaction;
 
+        const isScheduledContext = Boolean(
+            transaction?.is_scheduled ||
+            apiEnrichment?.is_scheduled ||
+            (transaction?.scheduled_txs?.length || 0) > 0 ||
+            (apiEnrichment?.scheduled_txs?.length || 0) > 0
+        );
+
         // Enrich derived NFT transfers with API metadata
         let mergedNfts = enrichments?.nft_transfers || [];
         const apiNfts = apiEnrichment?.nft_transfers || transaction?.nft_transfers || [];
@@ -1094,13 +1101,42 @@ function TransactionDetail() {
             });
         }
 
-        // For ft_transfers: use API data as base (has usd_value, token metadata),
-        // but event-decoder's transfer_type ALWAYS wins (more accurate, evidence-based).
+        // For scheduled txs, event-decoder is the source of truth for asset flow.
+        // API ft_transfers are only used as optional metadata/USD overlays there.
+        // For normal txs, keep the existing API-first merge because it has richer enrichment.
         const derivedFt = enrichments?.ft_transfers;
-        let ftTransfers = apiEnrichment?.ft_transfers?.length > 0
-            ? apiEnrichment.ft_transfers
-            : ((derivedFt && derivedFt.length > 0) ? derivedFt : transaction?.ft_transfers);
-        if (ftTransfers && enrichments?.ft_transfers && enrichments.ft_transfers.length > 0 && ftTransfers !== enrichments.ft_transfers) {
+        const apiFtTransfers = apiEnrichment?.ft_transfers || [];
+        let ftTransfers = isScheduledContext
+            ? ((derivedFt && derivedFt.length > 0) ? derivedFt : (apiFtTransfers.length > 0 ? apiFtTransfers : transaction?.ft_transfers))
+            : (apiFtTransfers.length > 0
+                ? apiFtTransfers
+                : ((derivedFt && derivedFt.length > 0) ? derivedFt : transaction?.ft_transfers));
+        if (isScheduledContext && ftTransfers && apiFtTransfers.length > 0 && ftTransfers !== apiFtTransfers) {
+            const apiByEvent = new Map<string, any>();
+            const apiByFlow = new Map<string, any>();
+            const apiByToken = new Map<string, any>();
+            for (const ft of apiFtTransfers) {
+                apiByEvent.set(`${ft.token}:${ft.event_index}`, ft);
+                apiByFlow.set(`${ft.token}:${ft.amount}:${ft.from_address || ''}:${ft.to_address || ''}`, ft);
+                if (ft.token && !apiByToken.has(ft.token)) apiByToken.set(ft.token, ft);
+            }
+            ftTransfers = ftTransfers.map((ft: any) => {
+                const meta =
+                    apiByEvent.get(`${ft.token}:${ft.event_index}`) ||
+                    apiByFlow.get(`${ft.token}:${ft.amount}:${ft.from_address || ''}:${ft.to_address || ''}`) ||
+                    apiByToken.get(ft.token) ||
+                    {};
+                return {
+                    ...ft,
+                    token_logo: ft.token_logo || meta.token_logo,
+                    token_symbol: ft.token_symbol || meta.token_symbol,
+                    token_name: ft.token_name || meta.token_name,
+                    token_decimals: ft.token_decimals ?? meta.token_decimals,
+                    approx_usd_price: ft.approx_usd_price ?? meta.approx_usd_price,
+                    usd_value: ft.usd_value ?? meta.usd_value,
+                };
+            });
+        } else if (ftTransfers && enrichments?.ft_transfers && enrichments.ft_transfers.length > 0 && ftTransfers !== enrichments.ft_transfers) {
             const derivedByKey = new Map<string, any>();
             for (const ft of enrichments!.ft_transfers) {
                 derivedByKey.set(`${ft.token}:${ft.event_index}`, ft);
@@ -1208,6 +1244,9 @@ function TransactionDetail() {
             nft_transfers: mergedNfts.length > 0 ? mergedNfts : apiNfts,
             defi_events: apiEnrichment?.defi_events?.length > 0 ? apiEnrichment.defi_events : transaction?.defi_events,
             evm_executions: evmExecs,
+            is_scheduled: apiEnrichment?.is_scheduled ?? transaction?.is_scheduled,
+            scheduled: apiEnrichment?.scheduled || transaction?.scheduled,
+            scheduled_txs: apiEnrichment?.scheduled_txs || transaction?.scheduled_txs,
             contract_imports: (enrichments?.contract_imports && enrichments.contract_imports.length > 0 ? enrichments.contract_imports : apiEnrichment?.contract_imports) || transaction?.contract_imports,
             fee: enrichments?.fee || apiEnrichment?.fee || transaction?.fee,
             fee_usd: apiEnrichment?.fee_usd || transaction?.fee_usd,

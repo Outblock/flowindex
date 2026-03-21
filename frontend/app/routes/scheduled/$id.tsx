@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity, Code, FileText } from 'lucide-react';
 import { AddressLink } from '../../components/AddressLink';
 import { resolveApiBaseUrl } from '../../api';
 import { PageHeader } from '../../components/ui/PageHeader';
+import { deriveEnrichments } from '../../lib/deriveFromEvents';
+import { buildTxDetailAssetView } from '../../lib/txAssetFlow';
 
 interface ScheduledTx {
     scheduled_id: number;
@@ -53,14 +55,21 @@ function isExcludedEvent(eventType: string): boolean {
     return EXCLUDED_EVENT_SOURCES.some(source => eventType.includes(source));
 }
 
-// Service account address — used to filter out fee transfers
-const SERVICE_ACCOUNT = 'e467b9dd11fa00df';
-
 interface FTTransfer {
-    direction: 'in' | 'out';
-    address: string;
+    from_address?: string;
+    to_address?: string;
     amount: string;
     tokenType: string;
+    transfer_type?: string;
+    evm_to_address?: string;
+    evm_from_address?: string;
+}
+
+interface NFTTransfer {
+    from_address?: string;
+    to_address?: string;
+    token: string;
+    token_id: string;
 }
 
 interface AppEvent {
@@ -70,53 +79,47 @@ interface AppEvent {
 
 interface ExecutionSummary {
     ftTransfers: FTTransfer[];
+    nftTransfers: NFTTransfer[];
     appEvents: AppEvent[];
     hasEVM: boolean;
     isIdle: boolean;
 }
 
 function buildExecutionSummary(events: TxEvent[]): ExecutionSummary {
-    const ftTransfers: FTTransfer[] = [];
+    const enrichments = deriveEnrichments(events);
+    const assetView = buildTxDetailAssetView({
+        events,
+        ft_transfers: enrichments.ft_transfers,
+        raw_ft_transfers: enrichments.ft_transfers,
+        nft_transfers: enrichments.nft_transfers,
+        evm_executions: enrichments.evm_executions,
+    });
+
+    const ftTransfers: FTTransfer[] = assetView.canonicalFtTransfers.map((ft: any) => ({
+        from_address: ft.from_address || '',
+        to_address: ft.to_address || '',
+        amount: String(ft.amount || '0'),
+        tokenType: ft.token_symbol || ft.token_name || String(ft.token || ''),
+        transfer_type: ft.transfer_type,
+        evm_to_address: ft.evm_to_address,
+        evm_from_address: ft.evm_from_address,
+    }));
+    const nftTransfers: NFTTransfer[] = (enrichments.nft_transfers || []).map((nt: any) => ({
+        from_address: nt.from_address || '',
+        to_address: nt.to_address || '',
+        token: String(nt.token || ''),
+        token_id: String(nt.token_id || ''),
+    }));
     const appEvents: AppEvent[] = [];
-    let hasEVM = false;
+    const hasEVM = (enrichments.evm_executions || []).length > 0;
 
     for (const evt of events) {
         const shortType = parseEventType(evt.type);
 
-        // FT Transfers
-        if (shortType === 'FungibleToken.Deposited' && evt.payload) {
-            const to = String(evt.payload.to || '');
-            if (to && to !== SERVICE_ACCOUNT) {
-                const tokenParts = String(evt.payload.type || '').split('.');
-                ftTransfers.push({
-                    direction: 'in',
-                    address: to,
-                    amount: String(evt.payload.amount || '0'),
-                    tokenType: tokenParts.length >= 4 ? tokenParts[2] + '.' + tokenParts[3] : String(evt.payload.type || ''),
-                });
-            }
-        }
-        if (shortType === 'FungibleToken.Withdrawn' && evt.payload) {
-            const from = String(evt.payload.from || '');
-            if (from && from !== SERVICE_ACCOUNT) {
-                const tokenParts = String(evt.payload.type || '').split('.');
-                ftTransfers.push({
-                    direction: 'out',
-                    address: from,
-                    amount: String(evt.payload.amount || '0'),
-                    tokenType: tokenParts.length >= 4 ? tokenParts[2] + '.' + tokenParts[3] : String(evt.payload.type || ''),
-                });
-            }
-        }
-
-        // EVM activity
-        if (shortType === 'EVM.TransactionExecuted') {
-            hasEVM = true;
-        }
-
         // App-specific events (not system, not FT, not FlowToken)
         if (!isExcludedEvent(evt.type)
             && !evt.type.includes('FungibleToken')
+            && !evt.type.includes('NonFungibleToken')
             && !evt.type.includes('FlowToken')
             && !evt.type.includes('EVM.TransactionExecuted')
             && evt.payload) {
@@ -132,10 +135,10 @@ function buildExecutionSummary(events: TxEvent[]): ExecutionSummary {
         }
     }
 
-    // Idle = only system events (no FT transfers to non-service, no app events, no EVM)
-    const isIdle = ftTransfers.length === 0 && appEvents.length === 0 && !hasEVM;
+    // Idle = only system events (no FT/NFT/app activity, no EVM)
+    const isIdle = ftTransfers.length === 0 && nftTransfers.length === 0 && appEvents.length === 0 && !hasEVM;
 
-    return { ftTransfers, appEvents, hasEVM, isIdle };
+    return { ftTransfers, nftTransfers, appEvents, hasEVM, isIdle };
 }
 
 function isAddress(val: string): boolean {
@@ -351,7 +354,7 @@ function ScheduledTransactionDetail() {
     // Filter executor events from the detail response (already included by backend)
     const allEvents = tx?.executor_events || [];
     const executorEvents = allEvents.filter(e => !isExcludedEvent(e.type));
-    const summary = buildExecutionSummary(allEvents);
+    const summary = useMemo(() => buildExecutionSummary(allEvents), [allEvents]);
 
     // Fetch handler contract code
     useEffect(() => {
@@ -621,16 +624,62 @@ function ScheduledTransactionDetail() {
                                                 {summary.ftTransfers.map((ft, i) => (
                                                     <div key={i} className="flex items-center gap-2 text-xs">
                                                         <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                                            ft.direction === 'out'
+                                                            ft.transfer_type === 'burn' || ft.transfer_type === 'stake'
                                                                 ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                                : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                                                : ft.transfer_type === 'mint' || ft.transfer_type === 'unstake'
+                                                                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                                                    : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
                                                         }`}>
-                                                            {ft.direction === 'out' ? 'OUT' : 'IN'}
+                                                            {(ft.transfer_type || 'transfer').toUpperCase()}
                                                         </span>
                                                         <span className="font-medium text-zinc-800 dark:text-zinc-200">{parseFloat(ft.amount).toFixed(4)}</span>
                                                         <span className="text-zinc-500">{ft.tokenType}</span>
-                                                        <span className="text-zinc-400">{ft.direction === 'out' ? 'from' : 'to'}</span>
-                                                        <AddressLink address={`0x${ft.address}`} prefixLen={8} suffixLen={4} size={12} />
+                                                        {ft.from_address && (
+                                                            <>
+                                                                <span className="text-zinc-400">from</span>
+                                                                <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} />
+                                                            </>
+                                                        )}
+                                                        {ft.to_address && (
+                                                            <>
+                                                                <span className="text-zinc-400">to</span>
+                                                                <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} />
+                                                            </>
+                                                        )}
+                                                        {ft.evm_to_address && (
+                                                            <span className="text-[10px] text-purple-500 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded">
+                                                                EVM to {ft.evm_to_address.slice(0, 10)}...{ft.evm_to_address.slice(-4)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {summary.nftTransfers.length > 0 && (
+                                        <div className="px-4 py-3">
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">NFT Transfers</div>
+                                            <div className="space-y-2">
+                                                {summary.nftTransfers.map((nt, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium bg-fuchsia-500/10 text-fuchsia-500 border border-fuchsia-500/20">
+                                                            NFT
+                                                        </span>
+                                                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{nt.token.split('.').pop() || nt.token}</span>
+                                                        <span className="text-zinc-500">#{nt.token_id}</span>
+                                                        {nt.from_address && (
+                                                            <>
+                                                                <span className="text-zinc-400">from</span>
+                                                                <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={12} />
+                                                            </>
+                                                        )}
+                                                        {nt.to_address && (
+                                                            <>
+                                                                <span className="text-zinc-400">to</span>
+                                                                <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={12} />
+                                                            </>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
