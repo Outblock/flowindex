@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity } from 'lucide-react';
+import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity, Code, FileText } from 'lucide-react';
 import { AddressLink } from '../../components/AddressLink';
 import { resolveApiBaseUrl } from '../../api';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -114,6 +114,120 @@ const statusIcon = (status: string) => {
     }
 };
 
+// Cadence syntax highlighting tokenizer
+const CADENCE_KEYWORDS = new Set([
+    'import', 'from', 'access', 'all', 'fun', 'let', 'var', 'if', 'else', 'return',
+    'self', 'create', 'destroy', 'emit', 'pub', 'priv', 'pre', 'post', 'execute',
+    'prepare', 'transaction', 'resource', 'struct', 'contract', 'event', 'interface',
+    'init', 'nil', 'true', 'false', 'as', 'while', 'for', 'in', 'break', 'continue',
+    'switch', 'case', 'default',
+]);
+
+function highlightCadenceLine(line: string): React.ReactNode[] {
+    const tokens: React.ReactNode[] = [];
+    let i = 0;
+
+    // Check for line comments first
+    const commentIdx = line.indexOf('//');
+    let codePart = line;
+    let commentPart = '';
+    if (commentIdx !== -1) {
+        // Make sure it's not inside a string
+        let inString = false;
+        for (let j = 0; j < commentIdx; j++) {
+            if (line[j] === '"' && (j === 0 || line[j - 1] !== '\\')) inString = !inString;
+        }
+        if (!inString) {
+            codePart = line.slice(0, commentIdx);
+            commentPart = line.slice(commentIdx);
+        }
+    }
+
+    // Tokenize the code part
+    i = 0;
+    while (i < codePart.length) {
+        // String literal
+        if (codePart[i] === '"') {
+            let end = i + 1;
+            while (end < codePart.length && codePart[end] !== '"') {
+                if (codePart[end] === '\\') end++; // skip escaped char
+                end++;
+            }
+            if (end < codePart.length) end++; // include closing quote
+            tokens.push(<span key={`s${i}`} className="text-amber-300">{codePart.slice(i, end)}</span>);
+            i = end;
+            continue;
+        }
+
+        // Address literal (0x followed by hex)
+        if (codePart[i] === '0' && i + 1 < codePart.length && codePart[i + 1] === 'x') {
+            let end = i + 2;
+            while (end < codePart.length && /[0-9a-fA-F]/.test(codePart[end])) end++;
+            if (end > i + 2) {
+                tokens.push(<span key={`a${i}`} className="text-emerald-400">{codePart.slice(i, end)}</span>);
+                i = end;
+                continue;
+            }
+        }
+
+        // Number
+        if (/[0-9]/.test(codePart[i]) && (i === 0 || !/[a-zA-Z_]/.test(codePart[i - 1]))) {
+            let end = i;
+            while (end < codePart.length && /[0-9.]/.test(codePart[end])) end++;
+            // Don't match if followed by a letter (part of identifier)
+            if (end === codePart.length || !/[a-zA-Z_]/.test(codePart[end])) {
+                tokens.push(<span key={`n${i}`} className="text-orange-400">{codePart.slice(i, end)}</span>);
+                i = end;
+                continue;
+            }
+        }
+
+        // Word (identifier / keyword / type)
+        if (/[a-zA-Z_]/.test(codePart[i])) {
+            let end = i;
+            while (end < codePart.length && /[a-zA-Z0-9_]/.test(codePart[end])) end++;
+            const word = codePart.slice(i, end);
+
+            // Look ahead for function call
+            let lookAhead = end;
+            while (lookAhead < codePart.length && codePart[lookAhead] === ' ') lookAhead++;
+            const isFunc = lookAhead < codePart.length && codePart[lookAhead] === '(';
+
+            // Look behind for type context (after : or < or as)
+            let lookBehind = i - 1;
+            while (lookBehind >= 0 && codePart[lookBehind] === ' ') lookBehind--;
+            const prevChar = lookBehind >= 0 ? codePart[lookBehind] : '';
+            const isTypeCtx = prevChar === ':' || prevChar === '<' || prevChar === '@';
+
+            if (CADENCE_KEYWORDS.has(word)) {
+                tokens.push(<span key={`k${i}`} className="text-purple-400">{word}</span>);
+            } else if (isTypeCtx && /^[A-Z]/.test(word)) {
+                tokens.push(<span key={`t${i}`} className="text-cyan-400">{word}</span>);
+            } else if (isFunc) {
+                tokens.push(<span key={`f${i}`} className="text-blue-400">{word}</span>);
+            } else if (/^[A-Z]/.test(word) && (isTypeCtx || prevChar === '.' || prevChar === '{' || i === 0 || codePart.slice(Math.max(0, i - 10), i).match(/\b(resource|struct|contract|event|interface|import)\s*$/))) {
+                // Capitalized words in likely type positions
+                tokens.push(<span key={`t${i}`} className="text-cyan-400">{word}</span>);
+            } else {
+                tokens.push(<span key={`w${i}`} className="text-zinc-300">{word}</span>);
+            }
+            i = end;
+            continue;
+        }
+
+        // Default: single character
+        tokens.push(<span key={`c${i}`} className="text-zinc-300">{codePart[i]}</span>);
+        i++;
+    }
+
+    // Append comment part
+    if (commentPart) {
+        tokens.push(<span key="comment" className="text-zinc-500 italic">{commentPart}</span>);
+    }
+
+    return tokens;
+}
+
 function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
     return (
@@ -136,8 +250,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
+type DetailTab = 'overview' | 'events' | 'contract';
+
 function ScheduledTransactionDetail() {
     const { tx } = Route.useLoaderData() as { tx: ScheduledTx | null };
+    const [activeTab, setActiveTab] = useState<DetailTab>('overview');
     const [contractCode, setContractCode] = useState<string | null>(null);
     const [loadingCode, setLoadingCode] = useState(false);
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
@@ -185,6 +302,8 @@ function ScheduledTransactionDetail() {
         );
     }
 
+    const showEventsTab = tx.status === 'EXECUTED';
+
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono transition-colors duration-300">
             <div className="max-w-5xl mx-auto px-4 pt-12 pb-24">
@@ -214,150 +333,181 @@ function ScheduledTransactionDetail() {
                     </span>
                 </div>
 
-                {/* Detail fields */}
-                <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 px-4">
-                    <Field label="ID">
-                        <span className="font-medium">{tx.scheduled_id}</span>
-                    </Field>
-
-                    <Field label="Owner">
-                        <div className="flex items-center gap-2">
-                            <AddressLink address={tx.handler_owner} prefixLen={16} suffixLen={8} size={14} />
-                            <CopyButton text={tx.handler_owner} />
-                        </div>
-                    </Field>
-
-                    <Field label="Fees">
-                        <span className="font-medium">{parseFloat(tx.fees).toFixed(8)} FLOW</span>
-                    </Field>
-
-                    <Field label="Handler Contract">
-                        <div className="flex items-center gap-2">
-                            <Link
-                                to={`/contracts/${tx.handler_contract_address.replace('0x', '')}.${tx.handler_contract}` as any}
-                                className="text-nothing-green-dark dark:text-nothing-green hover:underline font-medium"
-                            >
-                                {tx.handler_contract}
-                            </Link>
-                            <ExternalLink className="h-3 w-3 text-zinc-400" />
-                        </div>
-                    </Field>
-
-                    <Field label="Handler UUID">{tx.handler_uuid}</Field>
-
-                    <Field label="Handler">
-                        <span className="break-all">{tx.handler_type}</span>
-                    </Field>
-
-                    {tx.handler_public_path && (
-                        <Field label="Public Path">{tx.handler_public_path}</Field>
+                {/* Tab bar */}
+                <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-white/10 mb-6">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
+                            activeTab === 'overview' ? 'border-nothing-green text-zinc-900 dark:text-white' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                    >
+                        <FileText className="h-3.5 w-3.5" />
+                        Overview
+                    </button>
+                    {showEventsTab && (
+                        <button
+                            onClick={() => setActiveTab('events')}
+                            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
+                                activeTab === 'events' ? 'border-nothing-green text-zinc-900 dark:text-white' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                            }`}
+                        >
+                            <Activity className="h-3.5 w-3.5" />
+                            Events ({executorEvents.length})
+                        </button>
                     )}
-
-                    <Field label="Scheduled At">{formatDate(tx.scheduled_at)}</Field>
-                    <Field label="Expected At">{formatDate(tx.expected_at)}</Field>
-
-                    <Field label="Scheduled By">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                                to={`/blocks/${tx.scheduled_block}` as any}
-                                className="text-nothing-green-dark dark:text-nothing-green hover:underline"
-                            >
-                                #{tx.scheduled_block}
-                            </Link>
-                            <span className="text-zinc-400">|</span>
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green border border-nothing-green/20 uppercase font-bold">
-                                FLOW
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase font-bold">
-                                SEALED
-                            </span>
-                            <Link
-                                to={`/txs/${tx.scheduled_tx_id.replace('0x', '')}` as any}
-                                className="text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
-                            >
-                                {tx.scheduled_tx_id}
-                            </Link>
-                            <CopyButton text={tx.scheduled_tx_id} />
-                        </div>
-                    </Field>
-
-                    {tx.status === 'EXECUTED' && tx.executed_tx_id && (
-                        <Field label="Executed In">
-                            <div className="flex flex-wrap items-center gap-2">
-                                {tx.executed_block && (
-                                    <>
-                                        <Link
-                                            to={`/blocks/${tx.executed_block}` as any}
-                                            className="text-nothing-green-dark dark:text-nothing-green hover:underline"
-                                        >
-                                            #{tx.executed_block}
-                                        </Link>
-                                        <span className="text-zinc-400">|</span>
-                                    </>
-                                )}
-                                <Link
-                                    to={`/txs/${tx.executed_tx_id.replace('0x', '')}` as any}
-                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
-                                >
-                                    {tx.executed_tx_id}
-                                </Link>
-                                <CopyButton text={tx.executed_tx_id} />
-                                {tx.executed_at && (
-                                    <>
-                                        <span className="text-zinc-400">|</span>
-                                        <span className="text-zinc-500">{formatDate(tx.executed_at)}</span>
-                                    </>
-                                )}
-                            </div>
-                        </Field>
-                    )}
-
-                    {tx.status === 'CANCELED' && (
-                        <>
-                            {tx.fees_returned && (
-                                <Field label="Fees Returned">{tx.fees_returned} FLOW</Field>
-                            )}
-                            {tx.fees_deducted && (
-                                <Field label="Fees Deducted">{tx.fees_deducted} FLOW</Field>
-                            )}
-                        </>
-                    )}
+                    <button
+                        onClick={() => setActiveTab('contract')}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
+                            activeTab === 'contract' ? 'border-nothing-green text-zinc-900 dark:text-white' : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                    >
+                        <Code className="h-3.5 w-3.5" />
+                        Contract
+                    </button>
                 </div>
 
-                {/* Handler Stats */}
-                {tx.handler_stats && Object.keys(tx.handler_stats).length > 0 && (
-                    <div className="mt-8">
-                        <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4" />
-                            Handler Execution Stats
-                            <span className="text-[10px] font-normal text-zinc-500">(owner: {tx.handler_owner})</span>
-                        </h2>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {[
-                                { label: 'Total', value: Object.values(tx.handler_stats).reduce((a, b) => a + b, 0), color: 'text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10' },
-                                { label: 'Scheduled', value: tx.handler_stats['SCHEDULED'] || 0, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' },
-                                { label: 'Executed', value: tx.handler_stats['EXECUTED'] || 0, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
-                                { label: 'Canceled', value: tx.handler_stats['CANCELED'] || 0, color: 'text-red-500 bg-red-500/10 border-red-500/20' },
-                            ].map(({ label, value, color }) => (
-                                <div key={label} className={`rounded-lg border px-4 py-3 ${color}`}>
-                                    <div className="text-[10px] uppercase tracking-widest opacity-70">{label}</div>
-                                    <div className="text-xl font-bold mt-1">{value.toLocaleString()}</div>
+                {/* Overview tab */}
+                {activeTab === 'overview' && (
+                    <>
+                        {/* Detail fields */}
+                        <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 px-4">
+                            <Field label="ID">
+                                <span className="font-medium">{tx.scheduled_id}</span>
+                            </Field>
+
+                            <Field label="Owner">
+                                <div className="flex items-center gap-2">
+                                    <AddressLink address={tx.handler_owner} prefixLen={16} suffixLen={8} size={14} />
+                                    <CopyButton text={tx.handler_owner} />
                                 </div>
-                            ))}
+                            </Field>
+
+                            <Field label="Fees">
+                                <span className="font-medium">{parseFloat(tx.fees).toFixed(8)} FLOW</span>
+                            </Field>
+
+                            <Field label="Handler Contract">
+                                <div className="flex items-center gap-2">
+                                    <Link
+                                        to={`/contracts/${tx.handler_contract_address.replace('0x', '')}.${tx.handler_contract}` as any}
+                                        className="text-nothing-green-dark dark:text-nothing-green hover:underline font-medium"
+                                    >
+                                        {tx.handler_contract}
+                                    </Link>
+                                    <ExternalLink className="h-3 w-3 text-zinc-400" />
+                                </div>
+                            </Field>
+
+                            <Field label="Handler UUID">{tx.handler_uuid}</Field>
+
+                            <Field label="Handler">
+                                <span className="break-all">{tx.handler_type}</span>
+                            </Field>
+
+                            {tx.handler_public_path && (
+                                <Field label="Public Path">{tx.handler_public_path}</Field>
+                            )}
+
+                            <Field label="Scheduled At">{formatDate(tx.scheduled_at)}</Field>
+                            <Field label="Expected At">{formatDate(tx.expected_at)}</Field>
+
+                            <Field label="Scheduled By">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Link
+                                        to={`/blocks/${tx.scheduled_block}` as any}
+                                        className="text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                    >
+                                        #{tx.scheduled_block}
+                                    </Link>
+                                    <span className="text-zinc-400">|</span>
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-nothing-green/10 text-nothing-green-dark dark:text-nothing-green border border-nothing-green/20 uppercase font-bold">
+                                        FLOW
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase font-bold">
+                                        SEALED
+                                    </span>
+                                    <Link
+                                        to={`/txs/${tx.scheduled_tx_id.replace('0x', '')}` as any}
+                                        className="text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
+                                    >
+                                        {tx.scheduled_tx_id}
+                                    </Link>
+                                    <CopyButton text={tx.scheduled_tx_id} />
+                                </div>
+                            </Field>
+
+                            {tx.status === 'EXECUTED' && tx.executed_tx_id && (
+                                <Field label="Executed In">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {tx.executed_block && (
+                                            <>
+                                                <Link
+                                                    to={`/blocks/${tx.executed_block}` as any}
+                                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline"
+                                                >
+                                                    #{tx.executed_block}
+                                                </Link>
+                                                <span className="text-zinc-400">|</span>
+                                            </>
+                                        )}
+                                        <Link
+                                            to={`/txs/${tx.executed_tx_id.replace('0x', '')}` as any}
+                                            className="text-nothing-green-dark dark:text-nothing-green hover:underline break-all"
+                                        >
+                                            {tx.executed_tx_id}
+                                        </Link>
+                                        <CopyButton text={tx.executed_tx_id} />
+                                        {tx.executed_at && (
+                                            <>
+                                                <span className="text-zinc-400">|</span>
+                                                <span className="text-zinc-500">{formatDate(tx.executed_at)}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </Field>
+                            )}
+
+                            {tx.status === 'CANCELED' && (
+                                <>
+                                    {tx.fees_returned && (
+                                        <Field label="Fees Returned">{tx.fees_returned} FLOW</Field>
+                                    )}
+                                    {tx.fees_deducted && (
+                                        <Field label="Fees Deducted">{tx.fees_deducted} FLOW</Field>
+                                    )}
+                                </>
+                            )}
                         </div>
-                    </div>
+
+                        {/* Handler Stats */}
+                        {tx.handler_stats && Object.keys(tx.handler_stats).length > 0 && (
+                            <div className="mt-8">
+                                <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                                    <BarChart3 className="h-4 w-4" />
+                                    Handler Execution Stats
+                                    <span className="text-[10px] font-normal text-zinc-500">(owner: {tx.handler_owner})</span>
+                                </h2>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {[
+                                        { label: 'Total', value: Object.values(tx.handler_stats).reduce((a, b) => a + b, 0), color: 'text-zinc-800 dark:text-zinc-200 bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10' },
+                                        { label: 'Scheduled', value: tx.handler_stats['SCHEDULED'] || 0, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' },
+                                        { label: 'Executed', value: tx.handler_stats['EXECUTED'] || 0, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
+                                        { label: 'Canceled', value: tx.handler_stats['CANCELED'] || 0, color: 'text-red-500 bg-red-500/10 border-red-500/20' },
+                                    ].map(({ label, value, color }) => (
+                                        <div key={label} className={`rounded-lg border px-4 py-3 ${color}`}>
+                                            <div className="text-[10px] uppercase tracking-widest opacity-70">{label}</div>
+                                            <div className="text-xl font-bold mt-1">{value.toLocaleString()}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
 
-                {/* Executor Events */}
-                {tx.status === 'EXECUTED' && tx.executed_tx_id && (
-                    <div className="mt-8">
-                        <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                            <Activity className="h-4 w-4" />
-                            Executor Events
-                            {executorEvents.length > 0 && (
-                                <span className="text-[10px] font-normal text-zinc-500">({executorEvents.length} events)</span>
-                            )}
-                        </h2>
+                {/* Events tab */}
+                {activeTab === 'events' && showEventsTab && (
+                    <div>
                         {executorEvents.length === 0 ? (
                             <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 px-4 py-6 text-center text-zinc-500 text-xs">
                                 No application events
@@ -424,33 +574,34 @@ function ScheduledTransactionDetail() {
                     </div>
                 )}
 
-                {/* Handler Contract Code */}
-                <div className="mt-8">
-                    <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300">Handler contract code:</h2>
-                    <div className="bg-zinc-900 rounded-lg border border-zinc-700 overflow-hidden">
-                        {loadingCode ? (
-                            <div className="p-6 text-center text-zinc-500 text-xs">Loading contract code...</div>
-                        ) : contractCode ? (
-                            <div className="relative">
-                                <div className="absolute top-2 right-2 z-10">
-                                    <CopyButton text={contractCode} />
+                {/* Contract tab */}
+                {activeTab === 'contract' && (
+                    <div>
+                        <div className="bg-zinc-900 rounded-lg border border-zinc-700 overflow-hidden">
+                            {loadingCode ? (
+                                <div className="p-6 text-center text-zinc-500 text-xs">Loading contract code...</div>
+                            ) : contractCode ? (
+                                <div className="relative">
+                                    <div className="absolute top-2 right-2 z-10">
+                                        <CopyButton text={contractCode} />
+                                    </div>
+                                    <pre className="p-4 text-xs overflow-x-auto max-h-[600px] overflow-y-auto leading-5">
+                                        <code>
+                                            {contractCode.split('\n').map((line, i) => (
+                                                <div key={i} className="flex">
+                                                    <span className="text-zinc-600 w-10 flex-shrink-0 text-right pr-3 select-none border-r border-zinc-800 mr-3">{i + 1}</span>
+                                                    <span className="flex-1">{highlightCadenceLine(line)}</span>
+                                                </div>
+                                            ))}
+                                        </code>
+                                    </pre>
                                 </div>
-                                <pre className="p-4 text-xs text-zinc-300 overflow-x-auto max-h-[600px] overflow-y-auto leading-5">
-                                    <code>
-                                        {contractCode.split('\n').map((line, i) => (
-                                            <div key={i} className="flex">
-                                                <span className="text-zinc-600 w-10 flex-shrink-0 text-right pr-3 select-none">{i + 1}</span>
-                                                <span className="flex-1">{line}</span>
-                                            </div>
-                                        ))}
-                                    </code>
-                                </pre>
-                            </div>
-                        ) : (
-                            <div className="p-6 text-center text-zinc-500 text-xs">Contract code not available</div>
-                        )}
+                            ) : (
+                                <div className="p-6 text-center text-zinc-500 text-xs">Contract code not available</div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );
