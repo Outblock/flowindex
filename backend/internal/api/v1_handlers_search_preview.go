@@ -21,10 +21,20 @@ import (
 
 // SearchPreviewTxResponse is the response for type=tx search preview.
 type SearchPreviewTxResponse struct {
-	Query   string                 `json:"query"`
-	Cadence *SearchPreviewCadence  `json:"cadence"`
-	EVM     *SearchPreviewEVM      `json:"evm"`
-	Link    *SearchPreviewTxLink   `json:"link"`
+	Query     string                    `json:"query"`
+	Cadence   *SearchPreviewCadence     `json:"cadence"`
+	EVM       *SearchPreviewEVM         `json:"evm"`
+	Link      *SearchPreviewTxLink      `json:"link"`
+	Scheduled *SearchPreviewScheduled   `json:"scheduled"`
+}
+
+// SearchPreviewScheduled holds scheduled transaction details for search.
+type SearchPreviewScheduled struct {
+	ScheduledID int64  `json:"scheduled_id"`
+	Status      string `json:"status"`
+	Handler     string `json:"handler_contract"`
+	Owner       string `json:"handler_owner"`
+	MatchedBy   string `json:"matched_by"` // "scheduled_tx" or "executed_tx"
 }
 
 // SearchPreviewCadence holds Cadence transaction details.
@@ -231,6 +241,26 @@ func (s *Server) handleSearchPreviewTx(w http.ResponseWriter, r *http.Request, q
 		mu.Unlock()
 	}()
 
+	// 4) Local DB: scheduled transaction lookup (by scheduled_tx_id or executed_tx_id)
+	var scheduledMatch *SearchPreviewScheduled
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		st, matchedBy, err := s.repo.FindScheduledTransactionByTxHash(ctx, hash)
+		if err != nil || st == nil {
+			return
+		}
+		mu.Lock()
+		scheduledMatch = &SearchPreviewScheduled{
+			ScheduledID: st.ScheduledID,
+			Status:      st.Status,
+			Handler:     parseScheduledContractName(st.HandlerType),
+			Owner:       formatAddressV1(st.HandlerOwner),
+			MatchedBy:   matchedBy,
+		}
+		mu.Unlock()
+	}()
+
 	wg.Wait()
 
 	// Follow-up: if EVM hash resolved to a Cadence parent but we didn't find it directly
@@ -302,6 +332,8 @@ func (s *Server) handleSearchPreviewTx(w http.ResponseWriter, r *http.Request, q
 			EVMHash:     &prefixed,
 		}
 	}
+
+	resp.Scheduled = scheduledMatch
 
 	writeAPIResponse(w, resp, nil, nil)
 }

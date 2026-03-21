@@ -170,14 +170,22 @@ function Header() {
       // EVM tx hash (with 0x prefix) -> resolve to Cadence tx via /txs/evm route
       navigate({ to: '/txs/evm/$txId', params: { txId: query } } as any);
     } else if (/^[a-fA-F0-9]{64}$/.test(query)) {
-      // 64 hex chars: try Cadence tx first, fall back to EVM tx
+      // 64 hex chars: try Cadence tx first, then scheduled tx, fall back to EVM tx
       try {
         const baseUrl = await resolveApiBaseUrl();
         const res = await fetch(`${baseUrl}/flow/v1/transaction/${query}`, { method: 'HEAD' });
         if (res.ok) {
           navigate({ to: '/txs/$txId', params: { txId: query }, search: { tab: undefined } });
         } else {
-          navigate({ to: '/txs/evm/$txId', params: { txId: `0x${query}` } } as any);
+          // Check if it's a scheduled tx (system tx)
+          const schedRes = await fetch(`${baseUrl}/flow/search/preview?q=${query}&type=tx`);
+          const schedData = schedRes.ok ? await schedRes.json() : null;
+          const scheduled = schedData?.data?.scheduled;
+          if (scheduled?.scheduled_id) {
+            navigate({ to: '/scheduled/$id', params: { id: String(scheduled.scheduled_id) } } as any);
+          } else {
+            navigate({ to: '/txs/evm/$txId', params: { txId: `0x${query}` } } as any);
+          }
         }
       } catch {
         navigate({ to: '/txs/$txId', params: { txId: query }, search: { tab: undefined } });
