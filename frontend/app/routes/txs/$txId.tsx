@@ -951,9 +951,13 @@ function TransactionSummaryCard({ transaction, assetView, addressBook, formatAdd
                         {rows.map((row, idx) => (
                             <div key={`${row.hash}-${idx}`} className="flex flex-col gap-3 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/5 p-3 rounded-sm md:flex-row md:items-center md:justify-between">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all min-w-0">
+                                    <Link
+                                        to={`/txs/evm/$txId` as any}
+                                        params={{ txId: `0x${row.hash.replace(/^0x/, '')}` }}
+                                        className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all min-w-0 hover:underline"
+                                    >
                                         0x{row.hash.replace(/^0x/, '')}
-                                    </code>
+                                    </Link>
                                     <a href={`https://evm.flowindex.io/tx/0x${row.hash.replace(/^0x/, '')}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 transition-colors flex-shrink-0">
                                         <ExternalLink className="h-3.5 w-3.5" />
                                     </a>
@@ -2654,9 +2658,13 @@ function TransactionDetail() {
                                                 <div>
                                                     <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EVM Hash</p>
                                                     <div className="flex items-center gap-2">
-                                                        <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">
+                                                        <Link
+                                                            to={`/txs/evm/$txId` as any}
+                                                            params={{ txId: `0x${exec.hash?.replace(/^0x/i, '')}` }}
+                                                            className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all hover:underline"
+                                                        >
                                                             0x{exec.hash?.replace(/^0x/i, '')}
-                                                        </code>
+                                                        </Link>
                                                         <a
                                                             href={`https://evm.flowindex.io/tx/0x${exec.hash?.replace(/^0x/i, '')}`}
                                                             target="_blank"
@@ -2992,7 +3000,7 @@ function TransactionDetail() {
                                         <div className="bg-zinc-50 dark:bg-black/30 p-4 border border-zinc-200 dark:border-white/5 space-y-1 rounded-sm">
                                             <p className="text-[10px] text-zinc-500 uppercase">EVM Hash</p>
                                             <div className="flex items-center gap-2">
-                                                <p className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">{fullTx.evm_hash}</p>
+                                                <Link to={`/txs/evm/$txId` as any} params={{ txId: fullTx.evm_hash }} className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all hover:underline">{fullTx.evm_hash}</Link>
                                                 {fullTx.evm_hash && (
                                                     <a href={`https://evm.flowindex.io/tx/${fullTx.evm_hash}`} target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-blue-500 flex-shrink-0">
                                                         <ExternalLink className="h-3.5 w-3.5" />
