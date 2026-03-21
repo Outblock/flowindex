@@ -563,8 +563,8 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                 {/* Table Header */}
                 <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-white/10">
                     <div className="col-span-1">ID</div>
-                    <div className="col-span-2">Owner</div>
-                    <div className="col-span-2">Handler</div>
+                    <div className="col-span-2">{isFiltered ? 'Executor TX' : 'Owner'}</div>
+                    <div className="col-span-2">{isFiltered ? 'Scheduling TX' : 'Handler'}</div>
                     <div className="col-span-1">Priority</div>
                     <div className="col-span-1">Fees</div>
                     <div className="col-span-2">Expected At</div>
@@ -601,20 +601,42 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                                     </Link>
                                 </div>
 
-                                {/* Owner */}
+                                {/* Owner or Executor TX */}
                                 <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                                    {tx.handler_owner ? (
-                                        <AddressLink address={tx.handler_owner} prefixLen={8} suffixLen={4} size={14} />
+                                    {isFiltered ? (
+                                        tx.executed_tx_id ? (
+                                            <Link
+                                                to={`/txs/${tx.executed_tx_id.replace('0x', '')}` as any}
+                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline text-[10px] font-mono truncate block"
+                                                title={tx.executed_tx_id}
+                                            >
+                                                {tx.executed_tx_id.slice(0, 10)}...{tx.executed_tx_id.slice(-6)}
+                                            </Link>
+                                        ) : <span className="text-xs text-zinc-400">-</span>
                                     ) : (
-                                        <span className="text-xs text-zinc-400">-</span>
+                                        tx.handler_owner ? (
+                                            <AddressLink address={tx.handler_owner} prefixLen={8} suffixLen={4} size={14} />
+                                        ) : (
+                                            <span className="text-xs text-zinc-400">-</span>
+                                        )
                                     )}
                                 </div>
 
-                                {/* Handler Contract */}
-                                <div className="col-span-2">
-                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate block" title={tx.handler_type}>
-                                        {tx.handler_contract}
-                                    </span>
+                                {/* Handler or Scheduling TX */}
+                                <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+                                    {isFiltered ? (
+                                        <Link
+                                            to={`/txs/${tx.scheduled_tx_id.replace('0x', '')}` as any}
+                                            className="text-nothing-green-dark dark:text-nothing-green hover:underline text-[10px] font-mono truncate block"
+                                            title={tx.scheduled_tx_id}
+                                        >
+                                            {tx.scheduled_tx_id.slice(0, 10)}...{tx.scheduled_tx_id.slice(-6)}
+                                        </Link>
+                                    ) : (
+                                        <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate block" title={tx.handler_type}>
+                                            {tx.handler_contract}
+                                        </span>
+                                    )}
                                 </div>
 
                                 {/* Priority */}
