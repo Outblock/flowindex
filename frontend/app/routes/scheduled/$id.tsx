@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react';
-import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity, Code, FileText } from 'lucide-react';
+import { CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity, Code, FileText, ArrowRight, Coins } from 'lucide-react';
 import { AddressLink } from '../../components/AddressLink';
 import { resolveApiBaseUrl } from '../../api';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { deriveEnrichments } from '../../lib/deriveFromEvents';
-import { buildTxDetailAssetView } from '../../lib/txAssetFlow';
+import { decodeEvents, normalizeHexValue } from '@flowindex/event-decoder';
+import type { RawEvent, DecodedEvents } from '@flowindex/event-decoder';
 
 interface ScheduledTx {
     scheduled_id: number;
@@ -55,21 +54,32 @@ function isExcludedEvent(eventType: string): boolean {
     return EXCLUDED_EVENT_SOURCES.some(source => eventType.includes(source));
 }
 
-interface FTTransfer {
-    from_address?: string;
-    to_address?: string;
-    amount: string;
-    tokenType: string;
-    transfer_type?: string;
-    evm_to_address?: string;
-    evm_from_address?: string;
+/** Convert executor events from API format to RawEvent[] for event-decoder */
+function toRawEvents(events: TxEvent[]): RawEvent[] {
+    return events.map(e => ({
+        type: e.type,
+        payload: e.payload,
+        event_index: e.event_index,
+    }));
 }
 
-interface NFTTransfer {
-    from_address?: string;
-    to_address?: string;
-    token: string;
-    token_id: string;
+/** Extract user EVM address from FYV-specific events */
+function extractUserAddress(events: TxEvent[]): string | null {
+    for (const evt of events) {
+        // RequestFailed has userAddress as direct hex string
+        if (evt.event_name === 'RequestFailed' && evt.payload?.userAddress) {
+            return '0x' + String(evt.payload.userAddress).replace(/^0x/, '');
+        }
+        // WorkerHandlerScheduled has user.bytes
+        if (evt.event_name === 'WorkerHandlerScheduled' || evt.event_name === 'WorkerHandlerPanicDetected') {
+            const request = evt.payload?.scheduledRequest?.request || evt.payload?.request?.request;
+            if (request?.user?.bytes) {
+                const hex = normalizeHexValue(request.user.bytes);
+                if (hex && hex.length === 40) return '0x' + hex;
+            }
+        }
+    }
+    return null;
 }
 
 interface AppEvent {
@@ -77,68 +87,49 @@ interface AppEvent {
     fields: Record<string, string>;
 }
 
-interface ExecutionSummary {
-    ftTransfers: FTTransfer[];
-    nftTransfers: NFTTransfer[];
-    appEvents: AppEvent[];
-    hasEVM: boolean;
-    isIdle: boolean;
-}
-
-function buildExecutionSummary(events: TxEvent[]): ExecutionSummary {
-    const enrichments = deriveEnrichments(events);
-    const assetView = buildTxDetailAssetView({
-        events,
-        ft_transfers: enrichments.ft_transfers,
-        raw_ft_transfers: enrichments.ft_transfers,
-        nft_transfers: enrichments.nft_transfers,
-        evm_executions: enrichments.evm_executions,
-    });
-
-    const ftTransfers: FTTransfer[] = assetView.canonicalFtTransfers.map((ft: any) => ({
-        from_address: ft.from_address || '',
-        to_address: ft.to_address || '',
-        amount: String(ft.amount || '0'),
-        tokenType: ft.token_symbol || ft.token_name || String(ft.token || ''),
-        transfer_type: ft.transfer_type,
-        evm_to_address: ft.evm_to_address,
-        evm_from_address: ft.evm_from_address,
-    }));
-    const nftTransfers: NFTTransfer[] = (enrichments.nft_transfers || []).map((nt: any) => ({
-        from_address: nt.from_address || '',
-        to_address: nt.to_address || '',
-        token: String(nt.token || ''),
-        token_id: String(nt.token_id || ''),
-    }));
+function extractAppEvents(events: TxEvent[]): AppEvent[] {
     const appEvents: AppEvent[] = [];
-    const hasEVM = (enrichments.evm_executions || []).length > 0;
-
     for (const evt of events) {
-        const shortType = parseEventType(evt.type);
-
-        // App-specific events (not system, not FT, not FlowToken)
-        if (!isExcludedEvent(evt.type)
-            && !evt.type.includes('FungibleToken')
-            && !evt.type.includes('NonFungibleToken')
-            && !evt.type.includes('FlowToken')
-            && !evt.type.includes('EVM.TransactionExecuted')
-            && evt.payload) {
-            const fields: Record<string, string> = {};
-            for (const [k, v] of Object.entries(evt.payload)) {
-                if (v != null && typeof v !== 'object') {
-                    fields[k] = String(v);
-                }
-            }
-            if (Object.keys(fields).length > 0) {
-                appEvents.push({ name: shortType, fields });
+        if (isExcludedEvent(evt.type)
+            || evt.type.includes('FungibleToken')
+            || evt.type.includes('FlowToken')
+            || evt.type.includes('EVM.TransactionExecuted')
+            || !evt.payload) continue;
+        const fields: Record<string, string> = {};
+        for (const [k, v] of Object.entries(evt.payload)) {
+            if (v != null && typeof v !== 'object') {
+                fields[k] = String(v);
             }
         }
+        if (Object.keys(fields).length > 0) {
+            appEvents.push({ name: parseEventType(evt.type), fields });
+        }
     }
+    return appEvents;
+}
 
-    // Idle = only system events (no FT/NFT/app activity, no EVM)
-    const isIdle = ftTransfers.length === 0 && nftTransfers.length === 0 && appEvents.length === 0 && !hasEVM;
+/** Format a token identifier for display: "A.addr.FlowToken.Vault" -> "FlowToken" */
+function formatTokenName(token: string): string {
+    const parts = token.split('.');
+    // A.addr.ContractName -> ContractName
+    if (parts.length >= 3 && parts[0] === 'A') return parts[2];
+    return parts[parts.length - 1] || token;
+}
 
-    return { ftTransfers, nftTransfers, appEvents, hasEVM, isIdle };
+/** Format EVM wei to human-readable */
+function formatEVMAmount(amount: string, decimals: number = 18): string {
+    try {
+        const val = BigInt(amount);
+        if (val === 0n) return '0';
+        const divisor = 10n ** BigInt(decimals);
+        const whole = val / divisor;
+        const frac = val % divisor;
+        if (frac === 0n) return whole.toString();
+        const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '');
+        return `${whole}.${fracStr.slice(0, 6)}`;
+    } catch {
+        return amount;
+    }
 }
 
 function isAddress(val: string): boolean {
@@ -354,7 +345,24 @@ function ScheduledTransactionDetail() {
     // Filter executor events from the detail response (already included by backend)
     const allEvents = tx?.executor_events || [];
     const executorEvents = allEvents.filter(e => !isExcludedEvent(e.type));
-    const summary = useMemo(() => buildExecutionSummary(allEvents), [allEvents]);
+
+    // Decode events using the shared event-decoder package
+    const decoded = useMemo<DecodedEvents | null>(() => {
+        if (!allEvents.length) return null;
+        try {
+            return decodeEvents(toRawEvents(allEvents));
+        } catch { return null; }
+    }, [allEvents]);
+
+    const userAddress = useMemo(() => extractUserAddress(allEvents), [allEvents]);
+    const appEvents = useMemo(() => extractAppEvents(allEvents), [allEvents]);
+
+    const isIdle = !decoded
+        || (decoded.transfers.length === 0
+            && decoded.nftTransfers.length === 0
+            && decoded.evmExecutions.length === 0
+            && decoded.evmLogTransfers.length === 0
+            && appEvents.length === 0);
 
     // Fetch handler contract code
     useEffect(() => {
@@ -609,46 +617,80 @@ function ScheduledTransactionDetail() {
                         )}
 
                         {/* Execution Summary */}
-                        {tx.status === 'EXECUTED' && !summary.isIdle && (
+                        {tx.status === 'EXECUTED' && !isIdle && decoded && (
                             <div className="mt-8">
                                 <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
                                     <Activity className="h-4 w-4" />
                                     Execution Summary
                                 </h2>
                                 <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
-                                    {/* FT Transfers */}
-                                    {summary.ftTransfers.length > 0 && (
+                                    {/* User Address (extracted from FYV events) */}
+                                    {userAddress && (
                                         <div className="px-4 py-3">
-                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Token Transfers</div>
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">User</div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-500 border border-cyan-500/20 font-medium">EVM</span>
+                                                <Link
+                                                    to={`/accounts/${userAddress}` as any}
+                                                    className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
+                                                >
+                                                    {userAddress}
+                                                </Link>
+                                                <CopyButton text={userAddress} />
+                                                <a
+                                                    href={`https://evm.flowindex.io/address/${userAddress}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                    title="View on EVM explorer"
+                                                >
+                                                    <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Cadence FT Transfers (paired) */}
+                                    {decoded.transfers.length > 0 && (
+                                        <div className="px-4 py-3">
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">
+                                                <Coins className="h-3 w-3 inline mr-1" />
+                                                Token Transfers
+                                            </div>
                                             <div className="space-y-2">
-                                                {summary.ftTransfers.map((ft, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                {decoded.transfers.map((ft, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                                         <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
                                                             ft.transfer_type === 'burn' || ft.transfer_type === 'stake'
                                                                 ? 'bg-red-500/10 text-red-500 border border-red-500/20'
                                                                 : ft.transfer_type === 'mint' || ft.transfer_type === 'unstake'
                                                                     ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                                                    : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                                                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                                                         }`}>
                                                             {(ft.transfer_type || 'transfer').toUpperCase()}
                                                         </span>
-                                                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{parseFloat(ft.amount).toFixed(4)}</span>
-                                                        <span className="text-zinc-500">{ft.tokenType}</span>
+                                                        <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                                                            {parseFloat(ft.amount).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                                        </span>
+                                                        <span className="text-zinc-500">{formatTokenName(ft.token)}</span>
                                                         {ft.from_address && (
                                                             <>
                                                                 <span className="text-zinc-400">from</span>
-                                                                <AddressLink address={ft.from_address} prefixLen={8} suffixLen={4} size={12} />
+                                                                <AddressLink address={ft.from_address.startsWith('0x') ? ft.from_address : `0x${ft.from_address}`} prefixLen={8} suffixLen={4} size={12} />
                                                             </>
+                                                        )}
+                                                        {ft.from_address && ft.to_address && (
+                                                            <ArrowRight className="h-3 w-3 text-zinc-400" />
                                                         )}
                                                         {ft.to_address && (
                                                             <>
-                                                                <span className="text-zinc-400">to</span>
-                                                                <AddressLink address={ft.to_address} prefixLen={8} suffixLen={4} size={12} />
+                                                                {!ft.from_address && <span className="text-zinc-400">to</span>}
+                                                                <AddressLink address={ft.to_address.startsWith('0x') ? ft.to_address : `0x${ft.to_address}`} prefixLen={8} suffixLen={4} size={12} />
                                                             </>
                                                         )}
                                                         {ft.evm_to_address && (
                                                             <span className="text-[10px] text-purple-500 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded">
-                                                                EVM to {ft.evm_to_address.slice(0, 10)}...{ft.evm_to_address.slice(-4)}
+                                                                EVM to {ft.evm_to_address.slice(0, 10)}…{ft.evm_to_address.slice(-4)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -657,12 +699,13 @@ function ScheduledTransactionDetail() {
                                         </div>
                                     )}
 
-                                    {summary.nftTransfers.length > 0 && (
+                                    {/* NFT Transfers */}
+                                    {decoded.nftTransfers.length > 0 && (
                                         <div className="px-4 py-3">
                                             <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">NFT Transfers</div>
                                             <div className="space-y-2">
-                                                {summary.nftTransfers.map((nt, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                {decoded.nftTransfers.map((nt, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
                                                         <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium bg-fuchsia-500/10 text-fuchsia-500 border border-fuchsia-500/20">
                                                             NFT
                                                         </span>
@@ -671,13 +714,14 @@ function ScheduledTransactionDetail() {
                                                         {nt.from_address && (
                                                             <>
                                                                 <span className="text-zinc-400">from</span>
-                                                                <AddressLink address={nt.from_address} prefixLen={8} suffixLen={4} size={12} />
+                                                                <AddressLink address={nt.from_address.startsWith('0x') ? nt.from_address : `0x${nt.from_address}`} prefixLen={8} suffixLen={4} size={12} />
                                                             </>
                                                         )}
+                                                        {nt.from_address && nt.to_address && <ArrowRight className="h-3 w-3 text-zinc-400" />}
                                                         {nt.to_address && (
                                                             <>
-                                                                <span className="text-zinc-400">to</span>
-                                                                <AddressLink address={nt.to_address} prefixLen={8} suffixLen={4} size={12} />
+                                                                {!nt.from_address && <span className="text-zinc-400">to</span>}
+                                                                <AddressLink address={nt.to_address.startsWith('0x') ? nt.to_address : `0x${nt.to_address}`} prefixLen={8} suffixLen={4} size={12} />
                                                             </>
                                                         )}
                                                     </div>
@@ -686,18 +730,103 @@ function ScheduledTransactionDetail() {
                                         </div>
                                     )}
 
-                                    {/* EVM Activity */}
-                                    {summary.hasEVM && (
+                                    {/* EVM Executions */}
+                                    {decoded.evmExecutions.length > 0 && (
                                         <div className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 font-medium">EVM</span>
-                                                <span className="text-xs text-zinc-600 dark:text-zinc-400">Cross-chain EVM transaction executed</span>
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">EVM Transactions</div>
+                                            <div className="space-y-2">
+                                                {decoded.evmExecutions.map((evm, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                                        <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 font-medium">EVM</span>
+                                                        {evm.from && (
+                                                            <span className="font-mono text-zinc-600 dark:text-zinc-400" title={evm.from}>
+                                                                {evm.from.slice(0, 10)}…{evm.from.slice(-4)}
+                                                            </span>
+                                                        )}
+                                                        <ArrowRight className="h-3 w-3 text-zinc-400" />
+                                                        {evm.to && (
+                                                            <Link
+                                                                to={`/accounts/${evm.to}` as any}
+                                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
+                                                                title={evm.to}
+                                                            >
+                                                                {evm.to.slice(0, 10)}…{evm.to.slice(-4)}
+                                                            </Link>
+                                                        )}
+                                                        <span className="text-zinc-500">gas: {Number(evm.gas_used).toLocaleString()}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <Link
+                                                                to={`/txs/evm/${evm.hash}` as any}
+                                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono text-[10px]"
+                                                                title={evm.hash}
+                                                            >
+                                                                {evm.hash.slice(0, 10)}…{evm.hash.slice(-6)}
+                                                            </Link>
+                                                            <a
+                                                                href={`https://evm.flowindex.io/tx/${evm.hash}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                                                title="View on EVM explorer"
+                                                            >
+                                                                <ExternalLink className="h-3 w-3" />
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* EVM Log Transfers (ERC-20/721/1155) */}
+                                    {decoded.evmLogTransfers.length > 0 && (
+                                        <div className="px-4 py-3">
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">EVM Token Transfers</div>
+                                            <div className="space-y-2">
+                                                {decoded.evmLogTransfers.map((t, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs flex-wrap">
+                                                        <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                                            t.standard === 'erc20' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20'
+                                                                : 'bg-pink-500/10 text-pink-500 border border-pink-500/20'
+                                                        }`}>
+                                                            {t.standard.toUpperCase()}
+                                                        </span>
+                                                        <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                                                            {t.standard === 'erc20'
+                                                                ? formatEVMAmount(t.amount)
+                                                                : `#${t.tokenId}${t.standard === 'erc1155' ? ` ×${t.amount}` : ''}`
+                                                            }
+                                                        </span>
+                                                        <Link
+                                                            to={`/accounts/${t.contractAddress}` as any}
+                                                            className="text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-mono text-[10px]"
+                                                            title={t.contractAddress}
+                                                        >
+                                                            ({t.contractAddress.slice(0, 8)}…)
+                                                        </Link>
+                                                        {t.from && (
+                                                            <span className="font-mono text-zinc-600 dark:text-zinc-400" title={t.from}>
+                                                                {t.from.slice(0, 8)}…{t.from.slice(-4)}
+                                                            </span>
+                                                        )}
+                                                        <ArrowRight className="h-3 w-3 text-zinc-400" />
+                                                        {t.to && (
+                                                            <Link
+                                                                to={`/accounts/${t.to}` as any}
+                                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline font-mono"
+                                                                title={t.to}
+                                                            >
+                                                                {t.to.slice(0, 8)}…{t.to.slice(-4)}
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
 
                                     {/* App Events */}
-                                    {summary.appEvents.map((evt, i) => (
+                                    {appEvents.map((evt, i) => (
                                         <div key={i} className="px-4 py-3">
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
@@ -724,7 +853,7 @@ function ScheduledTransactionDetail() {
                             </div>
                         )}
 
-                        {tx.status === 'EXECUTED' && summary.isIdle && (
+                        {tx.status === 'EXECUTED' && isIdle && (
                             <div className="mt-8 text-center text-zinc-500 text-xs italic py-4">
                                 Idle run — no application activity
                             </div>
