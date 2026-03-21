@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3 } from 'lucide-react';
+import { Clock, CheckCircle, Ban, Timer, Zap, ArrowLeft, Copy, Check, ExternalLink, BarChart3, ChevronDown, ChevronRight, Activity } from 'lucide-react';
 import { AddressLink } from '../../components/AddressLink';
 import { resolveApiBaseUrl } from '../../api';
 import { PageHeader } from '../../components/ui/PageHeader';
@@ -28,6 +28,28 @@ interface ScheduledTx {
     fees_returned?: string;
     fees_deducted?: string;
     handler_stats?: Record<string, number>;
+}
+
+interface TxEvent {
+    type: string;
+    transaction_index: number;
+    event_index: number;
+    value: Record<string, any>;
+}
+
+const EXCLUDED_EVENT_SOURCES = ['FlowTransactionScheduler', 'FlowFees', 'FlowServiceAccount'];
+
+function parseEventType(fullType: string): string {
+    // Format: A.1654653399040a61.FungibleToken.Deposited -> FungibleToken.Deposited
+    const parts = fullType.split('.');
+    if (parts.length >= 4) {
+        return parts.slice(2).join('.');
+    }
+    return fullType;
+}
+
+function isExcludedEvent(eventType: string): boolean {
+    return EXCLUDED_EVENT_SOURCES.some(source => eventType.includes(source));
 }
 
 function DetailSkeleton() {
@@ -117,6 +139,25 @@ function ScheduledTransactionDetail() {
     const { tx } = Route.useLoaderData() as { tx: ScheduledTx | null };
     const [contractCode, setContractCode] = useState<string | null>(null);
     const [loadingCode, setLoadingCode] = useState(false);
+    const [executorEvents, setExecutorEvents] = useState<TxEvent[]>([]);
+    const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
+
+    // Fetch executor transaction events
+    useEffect(() => {
+        if (!tx || tx.status !== 'EXECUTED' || !tx.executed_tx_id) return;
+
+        const txid = tx.executed_tx_id.replace('0x', '');
+        resolveApiBaseUrl().then(baseUrl => {
+            fetch(`${baseUrl}/flow/v1/transaction/${txid}`)
+                .then(r => r.json())
+                .then(payload => {
+                    const events: TxEvent[] = payload?.data?.events || [];
+                    const filtered = events.filter(e => !isExcludedEvent(e.type));
+                    setExecutorEvents(filtered);
+                })
+                .catch(() => {});
+        });
+    }, [tx]);
 
     // Fetch handler contract code
     useEffect(() => {
@@ -318,6 +359,82 @@ function ScheduledTransactionDetail() {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                )}
+
+                {/* Executor Events */}
+                {tx.status === 'EXECUTED' && tx.executed_tx_id && (
+                    <div className="mt-8">
+                        <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            Executor Events
+                            {executorEvents.length > 0 && (
+                                <span className="text-[10px] font-normal text-zinc-500">({executorEvents.length} events)</span>
+                            )}
+                        </h2>
+                        {executorEvents.length === 0 ? (
+                            <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 px-4 py-6 text-center text-zinc-500 text-xs">
+                                No application events
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {executorEvents.map((evt) => {
+                                    const isExpanded = expandedEvents.has(evt.event_index);
+                                    const displayName = parseEventType(evt.type);
+                                    const valueEntries = evt.value ? Object.entries(evt.value) : [];
+                                    return (
+                                        <div
+                                            key={evt.event_index}
+                                            className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 overflow-hidden"
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    setExpandedEvents(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(evt.event_index)) {
+                                                            next.delete(evt.event_index);
+                                                        } else {
+                                                            next.add(evt.event_index);
+                                                        }
+                                                        return next;
+                                                    });
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
+                                            >
+                                                {isExpanded ? (
+                                                    <ChevronDown className="h-3.5 w-3.5 text-zinc-400 flex-shrink-0" />
+                                                ) : (
+                                                    <ChevronRight className="h-3.5 w-3.5 text-zinc-400 flex-shrink-0" />
+                                                )}
+                                                <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                                                    {displayName}
+                                                </span>
+                                                <span className="text-[10px] text-zinc-500 ml-auto flex-shrink-0">
+                                                    index {evt.event_index}
+                                                </span>
+                                            </button>
+                                            {isExpanded && valueEntries.length > 0 && (
+                                                <div className="border-t border-zinc-100 dark:border-white/5 px-4 py-2">
+                                                    {valueEntries.map(([key, val]) => (
+                                                        <div
+                                                            key={key}
+                                                            className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-1 md:gap-4 py-2 border-b border-zinc-100 dark:border-white/5 last:border-0"
+                                                        >
+                                                            <span className="text-[10px] uppercase tracking-widest text-zinc-500 self-center">
+                                                                {key}
+                                                            </span>
+                                                            <span className="text-xs text-zinc-800 dark:text-zinc-200 break-all">
+                                                                {typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 

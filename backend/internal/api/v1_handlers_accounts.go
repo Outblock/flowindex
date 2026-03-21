@@ -787,6 +787,64 @@ func scheduledPriorityLabel(p int) string {
 
 // parseScheduledContractName extracts the contract name from a type identifier
 // like "A.b13b21a06b75536d.SwapKeepAliveHandler.Handler" -> "SwapKeepAliveHandler"
+func (s *Server) handleFlowScheduledHandlers(w http.ResponseWriter, r *http.Request) {
+	limit, offset := parseLimitOffset(r)
+	ownerFilter := normalizeAddr(r.URL.Query().Get("owner"))
+	items, total, err := s.repo.GetScheduledHandlers(r.Context(), limit, offset, ownerFilter)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, h := range items {
+		out = append(out, toScheduledHandlerOutput(h))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total": total}, nil)
+}
+
+func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *http.Request) {
+	owner := normalizeAddr(mux.Vars(r)["owner"])
+	uuidStr := mux.Vars(r)["uuid"]
+	handlerUUID, err := strconv.ParseInt(uuidStr, 10, 64)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid handler uuid")
+		return
+	}
+	limit, offset := parseLimitOffset(r)
+	items, total, err := s.repo.GetScheduledTransactionsByHandler(r.Context(), owner, handlerUUID, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(items))
+	for _, st := range items {
+		out = append(out, toScheduledTransactionOutput(st))
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total": total}, nil)
+}
+
+func toScheduledHandlerOutput(h models.ScheduledHandler) map[string]interface{} {
+	out := map[string]interface{}{
+		"handler_owner":            formatAddressV1(h.HandlerOwner),
+		"handler_type":             h.HandlerType,
+		"handler_contract":         parseScheduledContractName(h.HandlerType),
+		"handler_contract_address": parseScheduledContractAddress(h.HandlerType),
+		"handler_uuid":             h.HandlerUUID,
+		"total_count":              h.TotalCount,
+		"scheduled_count":          h.ScheduledCount,
+		"executed_count":           h.ExecutedCount,
+		"canceled_count":           h.CanceledCount,
+		"total_fees":               h.TotalFees,
+		"first_scheduled":          h.FirstScheduled.Format(time.RFC3339),
+		"last_scheduled":           h.LastScheduled.Format(time.RFC3339),
+		"last_executed_at":         nil,
+	}
+	if h.LastExecutedAt != nil {
+		out["last_executed_at"] = h.LastExecutedAt.Format(time.RFC3339)
+	}
+	return out
+}
+
 func parseScheduledContractName(typeID string) string {
 	parts := strings.Split(typeID, ".")
 	if len(parts) >= 3 {

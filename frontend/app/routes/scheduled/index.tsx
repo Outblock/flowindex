@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AddressLink } from '../../components/AddressLink';
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCircle, ChevronRight, Timer, Zap, Ban } from 'lucide-react';
+import { CheckCircle, ChevronRight, Timer, Zap, Ban, ArrowLeft, LayoutGrid, List } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { resolveApiBaseUrl } from '../../api';
 import { Pagination } from '../../components/Pagination';
@@ -33,6 +33,28 @@ interface ScheduledTx {
     fees_deducted?: string;
 }
 
+interface HandlerSummary {
+    handler_owner: string;
+    handler_type: string;
+    handler_contract: string;
+    handler_contract_address: string;
+    handler_uuid: number;
+    total_count: number;
+    scheduled_count: number;
+    executed_count: number;
+    canceled_count: number;
+    total_fees: string;
+    first_scheduled: string;
+    last_scheduled: string;
+    last_executed_at?: string;
+}
+
+interface ScheduledSearch {
+    tab?: 'transactions' | 'handlers';
+    handler_owner?: string;
+    handler_uuid?: number;
+}
+
 function ScheduledSkeleton() {
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono">
@@ -59,8 +81,13 @@ function ScheduledSkeleton() {
 }
 
 export const Route = createFileRoute('/scheduled/')({
-    component: ScheduledTransactions,
+    component: ScheduledPage,
     pendingComponent: ScheduledSkeleton,
+    validateSearch: (search: Record<string, unknown>): ScheduledSearch => ({
+        tab: (search.tab as ScheduledSearch['tab']) || undefined,
+        handler_owner: (search.handler_owner as string) || undefined,
+        handler_uuid: search.handler_uuid ? Number(search.handler_uuid) : undefined,
+    }),
     loader: async () => {
         try {
             const baseUrl = await resolveApiBaseUrl();
@@ -224,183 +251,413 @@ function ExpandedRow({ tx }: { tx: ScheduledTx }) {
     );
 }
 
-function ScheduledTransactions() {
-    const { initialData } = Route.useLoaderData();
-    const [transactions, setTransactions] = useState<ScheduledTx[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [total, setTotal] = useState(0);
-    const [hasNext, setHasNext] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [expandedId, setExpandedId] = useState<number | null>(null);
-    const nowTick = useTimeTicker(20000);
+/* ── Handlers Tab ─────────────────────────────────────── */
 
-    useEffect(() => {
-        if (initialData?.data) {
-            setTransactions(initialData.data);
-            const meta = initialData._meta;
-            setTotal(meta?.total || 0);
-            setHasNext((meta?.count || 0) >= 20);
-        }
-    }, [initialData]);
+function HandlersTab() {
+    const navigate = useNavigate({ from: '/scheduled/' });
+    const [handlers, setHandlers] = useState<HandlerSummary[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNext, setHasNext] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const nowTick = useTimeTicker(20000);
 
     const loadPage = useCallback(async (page: number) => {
         setLoading(true);
         try {
             const offset = (page - 1) * 20;
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`);
+            const res = await fetch(`${baseUrl}/flow/scheduled-handler?limit=20&offset=${offset}`);
             const payload = await res.json();
-            setTransactions(payload?.data || []);
+            setHandlers(payload?.data || []);
             const meta = payload?._meta;
-            setTotal(meta?.total || 0);
             setHasNext((meta?.count || 0) >= 20);
         } catch (err) {
-            console.error('Failed to load scheduled transactions', err);
+            console.error('Failed to load handlers', err);
         } finally {
             setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        if (currentPage > 1) loadPage(currentPage);
+        loadPage(currentPage);
+    }, [currentPage, loadPage]);
+
+    const handleCardClick = (h: HandlerSummary) => {
+        navigate({
+            search: {
+                tab: 'transactions' as const,
+                handler_owner: h.handler_owner,
+                handler_uuid: h.handler_uuid,
+            },
+            replace: false,
+        });
+    };
+
+    return (
+        <div>
+            <div className="min-h-[300px] relative">
+                {loading && handlers.length === 0 && (
+                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                        <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
+                    </div>
+                )}
+
+                {!loading && handlers.length === 0 && (
+                    <div className="text-center text-zinc-500 italic py-12">No handlers found</div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {handlers.map((h) => (
+                        <div
+                            key={`${h.handler_owner}-${h.handler_uuid}`}
+                            onClick={() => handleCardClick(h)}
+                            className="border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors cursor-pointer p-4 space-y-3"
+                        >
+                            {/* Contract name */}
+                            <div className="flex items-start justify-between gap-2">
+                                <h3 className="text-sm font-bold text-zinc-900 dark:text-white truncate" title={h.handler_type}>
+                                    {h.handler_contract}
+                                </h3>
+                                <ChevronRight className="h-4 w-4 text-zinc-400 flex-shrink-0 mt-0.5" />
+                            </div>
+
+                            {/* Owner */}
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Owner</span>
+                                <div className="mt-0.5">
+                                    <AddressLink address={h.handler_owner} prefixLen={8} suffixLen={4} size={14} />
+                                </div>
+                            </div>
+
+                            {/* Stats badges */}
+                            <div className="flex flex-wrap gap-1.5">
+                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 font-medium">
+                                    {h.total_count.toLocaleString()} total
+                                </span>
+                                {h.scheduled_count > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-amber-500/20 text-amber-500 bg-amber-500/10 font-medium">
+                                        <Timer className="h-2.5 w-2.5" />
+                                        {h.scheduled_count.toLocaleString()}
+                                    </span>
+                                )}
+                                {h.executed_count > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/20 text-emerald-500 bg-emerald-500/10 font-medium">
+                                        <CheckCircle className="h-2.5 w-2.5" />
+                                        {h.executed_count.toLocaleString()}
+                                    </span>
+                                )}
+                                {h.canceled_count > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-red-500/20 text-red-500 bg-red-500/10 font-medium">
+                                        <Ban className="h-2.5 w-2.5" />
+                                        {h.canceled_count.toLocaleString()}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Fees + times */}
+                            <div className="space-y-1.5 text-[10px]">
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-500 uppercase tracking-wider">Total Fees</span>
+                                    <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                                        {parseFloat(h.total_fees).toFixed(4)} FLOW
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-500 uppercase tracking-wider">Last Scheduled</span>
+                                    <span className="text-zinc-500">
+                                        {h.last_scheduled ? formatRelativeTime(h.last_scheduled, nowTick) : '-'}
+                                    </span>
+                                </div>
+                                {h.last_executed_at && (
+                                    <div className="flex justify-between">
+                                        <span className="text-zinc-500 uppercase tracking-wider">Last Executed</span>
+                                        <span className="text-zinc-500">
+                                            {formatRelativeTime(h.last_executed_at, nowTick)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <Pagination
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                hasNext={hasNext}
+            />
+        </div>
+    );
+}
+
+/* ── Transactions Tab ─────────────────────────────────── */
+
+function TransactionsTab({ handlerOwner, handlerUuid }: { handlerOwner?: string; handlerUuid?: number }) {
+    const { initialData } = Route.useLoaderData();
+    const navigate = useNavigate({ from: '/scheduled/' });
+    const [transactions, setTransactions] = useState<ScheduledTx[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasNext, setHasNext] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+    const nowTick = useTimeTicker(20000);
+
+    const isFiltered = !!(handlerOwner && handlerUuid);
+
+    // Build the fetch URL based on whether we're filtered by handler
+    const buildUrl = useCallback((baseUrl: string, offset: number) => {
+        if (isFiltered) {
+            const ownerClean = handlerOwner!.replace(/^0x/, '');
+            return `${baseUrl}/flow/scheduled-handler/${ownerClean}/${handlerUuid}?limit=20&offset=${offset}`;
+        }
+        return `${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`;
+    }, [isFiltered, handlerOwner, handlerUuid]);
+
+    // Use initial data only when NOT filtered
+    useEffect(() => {
+        if (!isFiltered && initialData?.data) {
+            setTransactions(initialData.data);
+            const meta = initialData._meta;
+            setHasNext((meta?.count || 0) >= 20);
+        }
+    }, [initialData, isFiltered]);
+
+    const loadPage = useCallback(async (page: number) => {
+        setLoading(true);
+        try {
+            const offset = (page - 1) * 20;
+            const baseUrl = await resolveApiBaseUrl();
+            const res = await fetch(buildUrl(baseUrl, offset));
+            const payload = await res.json();
+            setTransactions(payload?.data || []);
+            const meta = payload?._meta;
+            setHasNext((meta?.count || 0) >= 20);
+        } catch (err) {
+            console.error('Failed to load scheduled transactions', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [buildUrl]);
+
+    // Load filtered data on mount, or when page changes
+    useEffect(() => {
+        if (isFiltered || currentPage > 1) {
+            loadPage(currentPage);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage]);
+    }, [currentPage, isFiltered]);
+
+    const clearFilter = () => {
+        setCurrentPage(1);
+        navigate({ search: {}, replace: true });
+    };
+
+    return (
+        <div>
+            {/* Handler filter banner */}
+            {isFiltered && (
+                <div className="mb-4 flex items-center gap-3 px-4 py-2.5 border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/[0.02]">
+                    <button
+                        onClick={clearFilter}
+                        className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    >
+                        <ArrowLeft className="h-3 w-3" />
+                        Clear filter
+                    </button>
+                    <span className="text-[10px] text-zinc-400">|</span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                        Showing transactions for handler <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerOwner}</span>
+                        {' / '}
+                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerUuid}</span>
+                    </span>
+                </div>
+            )}
+
+            <div className="overflow-x-auto min-h-[300px] relative">
+                {loading && transactions.length === 0 && (
+                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
+                        <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
+                    </div>
+                )}
+
+                {/* Table Header */}
+                <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-white/10">
+                    <div className="col-span-1">ID</div>
+                    <div className="col-span-2">Owner</div>
+                    <div className="col-span-2">Handler</div>
+                    <div className="col-span-1">Priority</div>
+                    <div className="col-span-1">Fees</div>
+                    <div className="col-span-2">Expected At</div>
+                    <div className="col-span-1">Status</div>
+                    <div className="col-span-2 text-right">Scheduled</div>
+                </div>
+
+                {/* Rows */}
+                {transactions.map((tx) => {
+                    const isExpanded = expandedId === tx.scheduled_id;
+                    const timeStr = tx.scheduled_at ? formatRelativeTime(tx.scheduled_at, nowTick) : '';
+
+                    return (
+                        <div key={tx.scheduled_id}>
+                            <div
+                                className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors items-center cursor-pointer"
+                                onClick={() => setExpandedId(isExpanded ? null : tx.scheduled_id)}
+                            >
+                                {/* ID */}
+                                <div className="col-span-1 flex items-center gap-1.5">
+                                    <motion.div
+                                        animate={{ rotate: isExpanded ? 90 : 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="flex-shrink-0"
+                                    >
+                                        <ChevronRight className="h-3 w-3 text-zinc-400" />
+                                    </motion.div>
+                                    <Link
+                                        to={`/scheduled/${tx.scheduled_id}` as any}
+                                        className="text-nothing-green-dark dark:text-nothing-green hover:underline text-xs font-medium"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {tx.scheduled_id}
+                                    </Link>
+                                </div>
+
+                                {/* Owner */}
+                                <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
+                                    {tx.handler_owner ? (
+                                        <AddressLink address={tx.handler_owner} prefixLen={8} suffixLen={4} size={14} />
+                                    ) : (
+                                        <span className="text-xs text-zinc-400">-</span>
+                                    )}
+                                </div>
+
+                                {/* Handler Contract */}
+                                <div className="col-span-2">
+                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate block" title={tx.handler_type}>
+                                        {tx.handler_contract}
+                                    </span>
+                                </div>
+
+                                {/* Priority */}
+                                <div className="col-span-1">
+                                    <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${priorityColor(tx.priority)}`}>
+                                        <Zap className="h-2.5 w-2.5" />
+                                        {tx.priority_label}
+                                    </span>
+                                </div>
+
+                                {/* Fees */}
+                                <div className="col-span-1">
+                                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                                        {parseFloat(tx.fees).toFixed(4)}
+                                    </span>
+                                </div>
+
+                                {/* Expected At */}
+                                <div className="col-span-2">
+                                    <span className="text-[10px] text-zinc-500">{formatDate(tx.expected_at)}</span>
+                                </div>
+
+                                {/* Status */}
+                                <div className="col-span-1">
+                                    <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold ${statusColor(tx.status)}`}>
+                                        {statusIcon(tx.status)}
+                                        {tx.status}
+                                    </span>
+                                </div>
+
+                                {/* Scheduled Time */}
+                                <div className="col-span-2 text-right">
+                                    <span className="text-[10px] text-zinc-400">{timeStr}</span>
+                                </div>
+                            </div>
+
+                            {/* Expanded details */}
+                            <AnimatePresence initial={false}>
+                                {isExpanded && (
+                                    <motion.div
+                                        key="expand"
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                        style={{ overflow: 'hidden' }}
+                                    >
+                                        <ExpandedRow tx={tx} />
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    );
+                })}
+
+                {transactions.length === 0 && !loading && (
+                    <div className="text-center text-zinc-500 italic py-12">No scheduled transactions found</div>
+                )}
+            </div>
+
+            <Pagination
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                hasNext={hasNext}
+            />
+        </div>
+    );
+}
+
+/* ── Main Page ────────────────────────────────────────── */
+
+function ScheduledPage() {
+    const { tab: searchTab, handler_owner, handler_uuid } = Route.useSearch();
+    const navigate = useNavigate({ from: '/scheduled/' });
+
+    // If handler filter params are present, force to transactions tab
+    const isFiltered = !!(handler_owner && handler_uuid);
+    const activeTab = isFiltered ? 'transactions' : (searchTab || 'transactions');
+
+    const setTab = (tab: 'transactions' | 'handlers') => {
+        navigate({ search: { tab: tab === 'transactions' ? undefined : tab }, replace: true });
+    };
 
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono transition-colors duration-300">
             <div className="max-w-7xl mx-auto px-4 pt-12 pb-24">
                 <PageHeader
                     title="Scheduled Transactions"
-                    subtitle={`FlowTransactionScheduler entries${total > 0 ? ` (${total.toLocaleString()} total)` : ''}`}
+                    subtitle="FlowTransactionScheduler entries"
                 />
 
-                <div className="overflow-x-auto min-h-[300px] relative">
-                    {loading && transactions.length === 0 && (
-                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
-                            <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
-                        </div>
-                    )}
-
-                    {/* Table Header */}
-                    <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-white/10">
-                        <div className="col-span-1">ID</div>
-                        <div className="col-span-2">Owner</div>
-                        <div className="col-span-2">Handler</div>
-                        <div className="col-span-1">Priority</div>
-                        <div className="col-span-1">Fees</div>
-                        <div className="col-span-2">Expected At</div>
-                        <div className="col-span-1">Status</div>
-                        <div className="col-span-2 text-right">Scheduled</div>
-                    </div>
-
-                    {/* Rows */}
-                    {transactions.map((tx) => {
-                        const isExpanded = expandedId === tx.scheduled_id;
-                        const timeStr = tx.scheduled_at ? formatRelativeTime(tx.scheduled_at, nowTick) : '';
-
-                        return (
-                            <div key={tx.scheduled_id}>
-                                <div
-                                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors items-center cursor-pointer"
-                                    onClick={() => setExpandedId(isExpanded ? null : tx.scheduled_id)}
-                                >
-                                    {/* ID */}
-                                    <div className="col-span-1 flex items-center gap-1.5">
-                                        <motion.div
-                                            animate={{ rotate: isExpanded ? 90 : 0 }}
-                                            transition={{ duration: 0.2 }}
-                                            className="flex-shrink-0"
-                                        >
-                                            <ChevronRight className="h-3 w-3 text-zinc-400" />
-                                        </motion.div>
-                                        <Link
-                                            to={`/scheduled/${tx.scheduled_id}` as any}
-                                            className="text-nothing-green-dark dark:text-nothing-green hover:underline text-xs font-medium"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {tx.scheduled_id}
-                                        </Link>
-                                    </div>
-
-                                    {/* Owner */}
-                                    <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                                        {tx.handler_owner ? (
-                                            <AddressLink address={tx.handler_owner} prefixLen={8} suffixLen={4} size={14} />
-                                        ) : (
-                                            <span className="text-xs text-zinc-400">-</span>
-                                        )}
-                                    </div>
-
-                                    {/* Handler Contract */}
-                                    <div className="col-span-2">
-                                        <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate block" title={tx.handler_type}>
-                                            {tx.handler_contract}
-                                        </span>
-                                    </div>
-
-                                    {/* Priority */}
-                                    <div className="col-span-1">
-                                        <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${priorityColor(tx.priority)}`}>
-                                            <Zap className="h-2.5 w-2.5" />
-                                            {tx.priority_label}
-                                        </span>
-                                    </div>
-
-                                    {/* Fees */}
-                                    <div className="col-span-1">
-                                        <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                                            {parseFloat(tx.fees).toFixed(4)}
-                                        </span>
-                                    </div>
-
-                                    {/* Expected At */}
-                                    <div className="col-span-2">
-                                        <span className="text-[10px] text-zinc-500">{formatDate(tx.expected_at)}</span>
-                                    </div>
-
-                                    {/* Status */}
-                                    <div className="col-span-1">
-                                        <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold ${statusColor(tx.status)}`}>
-                                            {statusIcon(tx.status)}
-                                            {tx.status}
-                                        </span>
-                                    </div>
-
-                                    {/* Scheduled Time */}
-                                    <div className="col-span-2 text-right">
-                                        <span className="text-[10px] text-zinc-400">{timeStr}</span>
-                                    </div>
-                                </div>
-
-                                {/* Expanded details */}
-                                <AnimatePresence initial={false}>
-                                    {isExpanded && (
-                                        <motion.div
-                                            key="expand"
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: 'auto', opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                                            style={{ overflow: 'hidden' }}
-                                        >
-                                            <ExpandedRow tx={tx} />
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        );
-                    })}
-
-                    {transactions.length === 0 && !loading && (
-                        <div className="text-center text-zinc-500 italic py-12">No scheduled transactions found</div>
-                    )}
+                {/* Tab bar */}
+                <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-white/10 mb-6">
+                    <button
+                        onClick={() => setTab('transactions')}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
+                            activeTab === 'transactions'
+                                ? 'border-nothing-green text-zinc-900 dark:text-white'
+                                : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                    >
+                        <List className="h-3.5 w-3.5" />
+                        Transactions
+                    </button>
+                    <button
+                        onClick={() => setTab('handlers')}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
+                            activeTab === 'handlers'
+                                ? 'border-nothing-green text-zinc-900 dark:text-white'
+                                : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                        }`}
+                    >
+                        <LayoutGrid className="h-3.5 w-3.5" />
+                        Handlers
+                    </button>
                 </div>
 
-                <Pagination
-                    currentPage={currentPage}
-                    onPageChange={setCurrentPage}
-                    hasNext={hasNext}
-                />
+                {activeTab === 'transactions' ? (
+                    <TransactionsTab handlerOwner={handler_owner} handlerUuid={handler_uuid} />
+                ) : (
+                    <HandlersTab />
+                )}
             </div>
         </div>
     );

@@ -464,6 +464,21 @@ type ScheduledTransaction struct {
 	FeesDeducted      *string    `json:"fees_deducted,omitempty"`
 }
 
+// ScheduledHandler represents an aggregated view of a handler with status counts.
+type ScheduledHandler struct {
+	HandlerOwner    string    `json:"handler_owner"`
+	HandlerType     string    `json:"handler_type"`
+	HandlerUUID     int64     `json:"handler_uuid"`
+	TotalCount      int       `json:"total_count"`
+	ScheduledCount  int       `json:"scheduled_count"`
+	ExecutedCount   int       `json:"executed_count"`
+	CanceledCount   int       `json:"canceled_count"`
+	TotalFees       string    `json:"total_fees"`
+	FirstScheduled  time.Time `json:"first_scheduled"`
+	LastScheduled   time.Time `json:"last_scheduled"`
+	LastExecutedAt  *time.Time `json:"last_executed_at,omitempty"`
+}
+
 // StakingDelegator represents a staking delegator from app.staking_delegators.
 type StakingDelegator struct {
 	DelegatorID     int       `json:"delegator_id"`

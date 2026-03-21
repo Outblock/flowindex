@@ -7,7 +7,7 @@ import {
     getFlowV1AccountByAddressFtTransfer,
     getFlowV1NftTransfer,
 } from '../../api/gen/find';
-import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, List, CalendarDays, Landmark } from 'lucide-react';
+import { Activity, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Repeat, Clock, List, CalendarDays, Landmark, ChevronDown, ChevronRight } from 'lucide-react';
 import { normalizeAddress, formatShort } from './accountUtils';
 import { EVENT_LABELS, EVENT_COLORS } from './AccountStakingTab';
 import { AddressLink } from '../AddressLink';
@@ -142,9 +142,21 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
 
     // Scheduled transactions state (lazy-loaded)
     const [scheduledTxs, setScheduledTxs] = useState<any[]>([]);
-    const [scheduledCursor, setScheduledCursor] = useState('');
     const [scheduledHasMore, setScheduledHasMore] = useState(false);
     const [scheduledLoading, setScheduledLoading] = useState(false);
+    const [expandedHandler, setExpandedHandler] = useState<number | null>(null);
+
+    const groupedScheduled = useMemo(() => {
+        const map = new Map<number, { handler_type: string; handler_contract: string; handler_uuid: number; txs: any[] }>();
+        for (const tx of scheduledTxs) {
+            const key = tx.handler_uuid;
+            if (!map.has(key)) {
+                map.set(key, { handler_type: tx.handler_type, handler_contract: tx.handler_contract, handler_uuid: tx.handler_uuid, txs: [] });
+            }
+            map.get(key)!.txs.push(tx);
+        }
+        return Array.from(map.values());
+    }, [scheduledTxs]);
 
     // Staking activity state (lazy-loaded)
     const [stakingEvents, setStakingEvents] = useState<any[]>([]);
@@ -201,7 +213,6 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
             setNftTimelineOffset(0);
             setNftTimelineHasMore(true);
             setScheduledTxs([]);
-            setScheduledCursor('');
             setScheduledHasMore(false);
             setStakingEvents([]);
             setStakingPage(1);
@@ -411,20 +422,19 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
         setScheduledLoading(true);
         try {
             const baseUrl = await resolveApiBaseUrl();
-            const url = `${baseUrl}/accounts/${normalizedAddress}/scheduled-transactions?cursor=${encodeURIComponent(cursorValue)}&limit=20`;
+            const offset = append ? scheduledTxs.length : 0;
+            const url = `${baseUrl}/flow/account/${normalizedAddress}/scheduled-transaction?limit=20&offset=${offset}`;
             const res = await fetch(url);
             const payload: any = await res.json();
-            const items = payload?.items ?? (Array.isArray(payload) ? payload : []);
+            const items = payload?.data ?? (Array.isArray(payload) ? payload : []);
             const mapped = items.map((tx: any) => ({
                 ...tx,
-                payer: tx.payer_address || tx.payer || tx.proposer_address,
-                proposer: tx.proposer_address || tx.proposer,
-                blockHeight: tx.block_height,
+                payer: tx.handler_owner,
+                proposer: tx.handler_owner,
+                blockHeight: tx.scheduled_block,
             }));
             setScheduledTxs(append ? prev => dedup([...prev, ...mapped]) : dedup(mapped));
-            const next = payload?.next_cursor ?? '';
-            setScheduledCursor(next);
-            setScheduledHasMore(!!next);
+            setScheduledHasMore(items.length >= 20);
         } catch (err) {
             console.error('Failed to load scheduled transactions', err);
         } finally {
@@ -907,22 +917,72 @@ export function AccountActivityTab({ address, initialTransactions, initialNextCu
                 {/* Scheduled transactions list */}
                 {filterMode === 'scheduled' && scheduledTxs.length > 0 && (
                     <div className="space-y-0">
-                        {scheduledTxs.map((tx) => {
-                            const txKey = `${tx.id}:${tx.block_height ?? tx.blockHeight ?? ''}`;
+                        {groupedScheduled.map((group) => {
+                            const isExpanded = expandedHandler === group.handler_uuid;
+                            const executed = group.txs.filter(t => t.status === 'EXECUTED').length;
+                            const canceled = group.txs.filter(t => t.status === 'CANCELED').length;
+                            const pending = group.txs.length - executed - canceled;
                             return (
-                                <ActivityRow
-                                    key={txKey}
-                                    tx={tx}
-                                    address={normalizedAddress}
-                                    expanded={expandedTxId === txKey}
-                                    onToggle={() => setExpandedTxId(prev => prev === txKey ? null : txKey)}
-                                    tokenMeta={tokenMeta}
-                                />
+                                <div key={group.handler_uuid}>
+                                    <button
+                                        onClick={() => setExpandedHandler(isExpanded ? null : group.handler_uuid)}
+                                        className="w-full flex items-center gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors text-left"
+                                    >
+                                        {isExpanded ? <ChevronDown className="w-4 h-4 text-zinc-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-zinc-400 shrink-0" />}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 text-sm">
+                                                <span className="font-medium text-zinc-800 dark:text-zinc-200 truncate">{group.handler_contract || 'Unknown'}</span>
+                                                <span className="font-mono text-[10px] text-zinc-400">#{group.handler_uuid}</span>
+                                                <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{group.handler_type}</span>
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+                                                <span>{group.txs.length} tx{group.txs.length !== 1 ? 's' : ''}</span>
+                                                {executed > 0 && <span className="text-emerald-600 dark:text-emerald-400">{executed} executed</span>}
+                                                {pending > 0 && <span className="text-amber-600 dark:text-amber-400">{pending} pending</span>}
+                                                {canceled > 0 && <span className="text-red-600 dark:text-red-400">{canceled} canceled</span>}
+                                            </div>
+                                        </div>
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="bg-zinc-50/50 dark:bg-white/[0.01]">
+                                            {group.txs.map((tx) => (
+                                                <Link
+                                                    key={`sched:${tx.scheduled_id}`}
+                                                    to="/scheduled/$id"
+                                                    params={{ id: String(tx.scheduled_id) }}
+                                                    className="flex items-center gap-3 pl-11 pr-4 py-2.5 border-b border-zinc-100/50 dark:border-white/[0.03] hover:bg-zinc-100/50 dark:hover:bg-white/[0.02] transition-colors"
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 text-sm">
+                                                            <span className="font-mono text-xs text-zinc-600 dark:text-zinc-400">#{tx.scheduled_id}</span>
+                                                            <span className={`text-xs px-1.5 py-0.5 rounded-sm font-medium ${
+                                                                tx.status === 'EXECUTED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                tx.status === 'CANCELED' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                                'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                            }`}>{tx.status}</span>
+                                                            <span className={`text-xs px-1.5 py-0.5 rounded-sm ${
+                                                                tx.priority === 0 ? 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400' :
+                                                                tx.priority === 1 ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' :
+                                                                'bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
+                                                            }`}>{tx.priority_label}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                                                            <span>Fee: {tx.fees} FLOW</span>
+                                                            <span>Effort: {tx.execution_effort}</span>
+                                                            {tx.scheduled_at && <span>Scheduled: {formatRelativeTime(tx.scheduled_at)}</span>}
+                                                            {tx.executed_at && <span>Executed: {formatRelativeTime(tx.executed_at)}</span>}
+                                                        </div>
+                                                    </div>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             );
                         })}
                         {scheduledHasMore && (
                             <div className="text-center py-3">
-                                <button onClick={() => loadScheduledTransactions(scheduledCursor, true)} disabled={scheduledLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{scheduledLoading ? 'Loading...' : 'Load More'}</button>
+                                <button onClick={() => loadScheduledTransactions('', true)} disabled={scheduledLoading} className="px-4 py-2 text-xs border border-zinc-200 dark:border-white/10 rounded-sm hover:bg-zinc-100 dark:hover:bg-white/5 disabled:opacity-50">{scheduledLoading ? 'Loading...' : 'Load More'}</button>
                             </div>
                         )}
                     </div>
