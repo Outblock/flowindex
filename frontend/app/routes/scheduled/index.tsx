@@ -51,13 +51,9 @@ interface HandlerSummary {
     avg_interval_sec: number | null;
 }
 
-interface ScheduledSearchTx extends ScheduledTx {
-    matched_event_type: string;
-    matched_event_name: string;
-}
 
 interface ScheduledSearch {
-    tab?: 'transactions' | 'handlers' | 'search';
+    tab?: 'transactions' | 'handlers';
     handler_owner?: string;
     handler_type?: string;
 }
@@ -275,6 +271,7 @@ function HandlersTab() {
     const [hasNext, setHasNext] = useState(false);
     const [loading, setLoading] = useState(true);
     const [hideRecurring, setHideRecurring] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const nowTick = useTimeTicker(20000);
 
     const loadPage = useCallback(async (page: number) => {
@@ -282,11 +279,11 @@ function HandlersTab() {
         try {
             const offset = (page - 1) * 20;
             const baseUrl = await resolveApiBaseUrl();
-            const res = await fetch(`${baseUrl}/flow/scheduled-handler?limit=20&offset=${offset}`);
+            const res = await fetch(`${baseUrl}/flow/scheduled-handler?limit=100&offset=${offset}`);
             const payload = await res.json();
             setHandlers(payload?.data || []);
             const meta = payload?._meta;
-            setHasNext((meta?.count || 0) >= 20);
+            setHasNext((meta?.count || 0) >= 100);
         } catch (err) {
             console.error('Failed to load handlers', err);
         } finally {
@@ -309,12 +306,31 @@ function HandlersTab() {
         });
     };
 
-    const displayedHandlers = hideRecurring ? handlers.filter((h) => !h.is_recurring) : handlers;
+    const displayedHandlers = handlers.filter((h) => {
+        if (hideRecurring && h.is_recurring) return false;
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            return h.handler_contract.toLowerCase().includes(q)
+                || h.handler_owner.toLowerCase().includes(q)
+                || h.handler_type.toLowerCase().includes(q);
+        }
+        return true;
+    });
 
     return (
         <div>
-            {/* Hide recurring toggle */}
-            <div className="flex items-center gap-2 mb-4">
+            {/* Search bar + filters */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                <div className="relative flex-1 w-full sm:max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by handler name or address..."
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green rounded-sm"
+                    />
+                </div>
                 <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
                     <input
                         type="checkbox"
@@ -668,253 +684,6 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
     );
 }
 
-/* ── Search Tab ───────────────────────────────────────── */
-
-function SearchTab() {
-    const [ownerAddr, setOwnerAddr] = useState('');
-    const [eventType, setEventType] = useState('');
-    const [fieldName, setFieldName] = useState('');
-    const [fieldValue, setFieldValue] = useState('');
-    const [results, setResults] = useState<ScheduledSearchTx[]>([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [hasNext, setHasNext] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
-    const [expandedId, setExpandedId] = useState<number | null>(null);
-    const nowTick = useTimeTicker(20000);
-
-    const doSearch = useCallback(async (page: number, owner: string, evtType: string, fName: string, fValue: string) => {
-        if (!owner.trim() || !evtType.trim()) return;
-        setLoading(true);
-        setHasSearched(true);
-        try {
-            const offset = (page - 1) * 20;
-            const baseUrl = await resolveApiBaseUrl();
-            const params = new URLSearchParams({ owner: owner.trim().replace(/^0x/, ''), event_type: evtType.trim(), limit: '20', offset: String(offset) });
-            if (fName.trim()) params.set('field', fName.trim());
-            if (fValue.trim()) params.set('value', fValue.trim());
-            const res = await fetch(`${baseUrl}/flow/scheduled-transaction/search?${params}`);
-            const payload = await res.json();
-            setResults(payload?.data || []);
-            const meta = payload?._meta;
-            setHasNext((meta?.count || 0) >= 20);
-        } catch (err) {
-            console.error('Search failed', err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setCurrentPage(1);
-        doSearch(1, ownerAddr, eventType, fieldName, fieldValue);
-    };
-
-    useEffect(() => {
-        if (hasSearched && currentPage > 1) {
-            doSearch(currentPage, ownerAddr, eventType, fieldName, fieldValue);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage]);
-
-    return (
-        <div>
-            {/* Search form */}
-            <form onSubmit={handleSubmit} className="mb-6 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Owner Address</label>
-                        <input
-                            type="text"
-                            value={ownerAddr}
-                            onChange={(e) => setOwnerAddr(e.target.value)}
-                            placeholder="e.g., 0xa7d9a1bece1378a3"
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Event Type</label>
-                        <input
-                            type="text"
-                            value={eventType}
-                            onChange={(e) => setEventType(e.target.value)}
-                            placeholder="e.g., FungibleToken.Deposited"
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Field Name <span className="text-zinc-400">(optional)</span></label>
-                        <input
-                            type="text"
-                            value={fieldName}
-                            onChange={(e) => setFieldName(e.target.value)}
-                            placeholder="e.g., to"
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Field Value <span className="text-zinc-400">(optional)</span></label>
-                        <input
-                            type="text"
-                            value={fieldValue}
-                            onChange={(e) => setFieldValue(e.target.value)}
-                            placeholder="e.g., 0xa7d9a1bece1378a3"
-                            className="w-full px-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green"
-                        />
-                    </div>
-                </div>
-                <button
-                    type="submit"
-                    disabled={!ownerAddr.trim() || !eventType.trim() || loading}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs uppercase tracking-widest font-medium bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                    <Search className="h-3 w-3" />
-                    Search
-                </button>
-            </form>
-
-            {/* Results */}
-            <div className="overflow-x-auto min-h-[200px] relative">
-                {loading && results.length === 0 && (
-                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 backdrop-blur-sm">
-                        <div className="w-8 h-8 border-2 border-dashed border-zinc-900 dark:border-white rounded-full animate-spin" />
-                    </div>
-                )}
-
-                {hasSearched && !loading && results.length === 0 && (
-                    <div className="text-center text-zinc-500 italic py-12">No matching scheduled transactions found</div>
-                )}
-
-                {!hasSearched && !loading && (
-                    <div className="text-center text-zinc-500 italic py-12">Enter an event type and click Search</div>
-                )}
-
-                {results.length > 0 && (
-                    <>
-                        {/* Table Header */}
-                        <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-white/10">
-                            <div className="col-span-1">ID</div>
-                            <div className="col-span-2">Owner</div>
-                            <div className="col-span-2">Matched Event</div>
-                            <div className="col-span-1">Priority</div>
-                            <div className="col-span-1">Fees</div>
-                            <div className="col-span-2">Expected At</div>
-                            <div className="col-span-1">Status</div>
-                            <div className="col-span-2 text-right">Scheduled</div>
-                        </div>
-
-                        {results.map((tx) => {
-                            const isExpanded = expandedId === tx.scheduled_id;
-                            const timeStr = tx.scheduled_at ? formatRelativeTime(tx.scheduled_at, nowTick) : '';
-
-                            return (
-                                <div key={tx.scheduled_id}>
-                                    <div
-                                        className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-3 px-4 py-3 border-b border-zinc-100 dark:border-white/5 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors items-center cursor-pointer"
-                                        onClick={() => setExpandedId(isExpanded ? null : tx.scheduled_id)}
-                                    >
-                                        {/* ID */}
-                                        <div className="col-span-1 flex items-center gap-1.5">
-                                            <motion.div
-                                                animate={{ rotate: isExpanded ? 90 : 0 }}
-                                                transition={{ duration: 0.2 }}
-                                                className="flex-shrink-0"
-                                            >
-                                                <ChevronRight className="h-3 w-3 text-zinc-400" />
-                                            </motion.div>
-                                            <Link
-                                                to={`/scheduled/${tx.scheduled_id}` as any}
-                                                className="text-nothing-green-dark dark:text-nothing-green hover:underline text-xs font-medium"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                {tx.scheduled_id}
-                                            </Link>
-                                        </div>
-
-                                        {/* Owner */}
-                                        <div className="col-span-2" onClick={(e) => e.stopPropagation()}>
-                                            {tx.handler_owner ? (
-                                                <AddressLink address={tx.handler_owner} prefixLen={8} suffixLen={4} size={14} />
-                                            ) : (
-                                                <span className="text-xs text-zinc-400">-</span>
-                                            )}
-                                        </div>
-
-                                        {/* Matched Event */}
-                                        <div className="col-span-2">
-                                            <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded border border-purple-500/20 text-purple-500 bg-purple-500/10 font-medium truncate" title={tx.matched_event_type}>
-                                                {tx.matched_event_name || tx.matched_event_type}
-                                            </span>
-                                        </div>
-
-                                        {/* Priority */}
-                                        <div className="col-span-1">
-                                            <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border font-medium ${priorityColor(tx.priority)}`}>
-                                                <Zap className="h-2.5 w-2.5" />
-                                                {tx.priority_label}
-                                            </span>
-                                        </div>
-
-                                        {/* Fees */}
-                                        <div className="col-span-1">
-                                            <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                                                {parseFloat(tx.fees).toFixed(4)}
-                                            </span>
-                                        </div>
-
-                                        {/* Expected At */}
-                                        <div className="col-span-2">
-                                            <span className="text-[10px] text-zinc-500">{formatDate(tx.expected_at)}</span>
-                                        </div>
-
-                                        {/* Status */}
-                                        <div className="col-span-1">
-                                            <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold ${statusColor(tx.status)}`}>
-                                                {statusIcon(tx.status)}
-                                                {tx.status}
-                                            </span>
-                                        </div>
-
-                                        {/* Scheduled Time */}
-                                        <div className="col-span-2 text-right">
-                                            <span className="text-[10px] text-zinc-400">{timeStr}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Expanded details */}
-                                    <AnimatePresence initial={false}>
-                                        {isExpanded && (
-                                            <motion.div
-                                                key="expand"
-                                                initial={{ height: 0, opacity: 0 }}
-                                                animate={{ height: 'auto', opacity: 1 }}
-                                                exit={{ height: 0, opacity: 0 }}
-                                                transition={{ duration: 0.2, ease: 'easeInOut' }}
-                                                style={{ overflow: 'hidden' }}
-                                            >
-                                                <ExpandedRow tx={tx} />
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                            );
-                        })}
-                    </>
-                )}
-            </div>
-
-            {results.length > 0 && (
-                <Pagination
-                    currentPage={currentPage}
-                    onPageChange={setCurrentPage}
-                    hasNext={hasNext}
-                />
-            )}
-        </div>
-    );
-}
-
 /* ── Main Page ────────────────────────────────────────── */
 
 function ScheduledPage() {
@@ -923,10 +692,10 @@ function ScheduledPage() {
 
     // If handler filter params are present, force to transactions tab
     const isFiltered = !!(handler_owner && handler_type);
-    const activeTab = isFiltered ? 'transactions' : (searchTab || 'transactions');
+    const activeTab = isFiltered ? 'transactions' : (searchTab || 'handlers');
 
-    const setTab = (tab: 'transactions' | 'handlers' | 'search') => {
-        navigate({ search: { tab: tab === 'transactions' ? undefined : tab }, replace: true });
+    const setTab = (tab: 'handlers' | 'transactions') => {
+        navigate({ search: { tab: tab === 'handlers' ? undefined : tab }, replace: true });
     };
 
     return (
@@ -940,17 +709,6 @@ function ScheduledPage() {
                 {/* Tab bar */}
                 <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-white/10 mb-6">
                     <button
-                        onClick={() => setTab('transactions')}
-                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
-                            activeTab === 'transactions'
-                                ? 'border-nothing-green text-zinc-900 dark:text-white'
-                                : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                        }`}
-                    >
-                        <List className="h-3.5 w-3.5" />
-                        Transactions
-                    </button>
-                    <button
                         onClick={() => setTab('handlers')}
                         className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
                             activeTab === 'handlers'
@@ -962,22 +720,20 @@ function ScheduledPage() {
                         Handlers
                     </button>
                     <button
-                        onClick={() => setTab('search')}
+                        onClick={() => setTab('transactions')}
                         className={`flex items-center gap-1.5 px-4 py-2.5 text-xs uppercase tracking-widest font-medium border-b-2 transition-colors ${
-                            activeTab === 'search'
+                            activeTab === 'transactions'
                                 ? 'border-nothing-green text-zinc-900 dark:text-white'
                                 : 'border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
                         }`}
                     >
-                        <Search className="h-3.5 w-3.5" />
-                        Search
+                        <List className="h-3.5 w-3.5" />
+                        Transactions
                     </button>
                 </div>
 
                 {activeTab === 'transactions' ? (
                     <TransactionsTab handlerOwner={handler_owner} handlerType={handler_type} />
-                ) : activeTab === 'search' ? (
-                    <SearchTab />
                 ) : (
                     <HandlersTab />
                 )}
