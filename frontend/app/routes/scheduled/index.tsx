@@ -657,6 +657,7 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
 /* ── Search Tab ───────────────────────────────────────── */
 
 function SearchTab() {
+    const [ownerAddr, setOwnerAddr] = useState('');
     const [eventType, setEventType] = useState('');
     const [fieldName, setFieldName] = useState('');
     const [fieldValue, setFieldValue] = useState('');
@@ -668,14 +669,14 @@ function SearchTab() {
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const nowTick = useTimeTicker(20000);
 
-    const doSearch = useCallback(async (page: number, evtType: string, fName: string, fValue: string) => {
-        if (!evtType.trim()) return;
+    const doSearch = useCallback(async (page: number, owner: string, evtType: string, fName: string, fValue: string) => {
+        if (!owner.trim() || !evtType.trim()) return;
         setLoading(true);
         setHasSearched(true);
         try {
             const offset = (page - 1) * 20;
             const baseUrl = await resolveApiBaseUrl();
-            const params = new URLSearchParams({ event_type: evtType.trim(), limit: '20', offset: String(offset) });
+            const params = new URLSearchParams({ owner: owner.trim().replace(/^0x/, ''), event_type: evtType.trim(), limit: '20', offset: String(offset) });
             if (fName.trim()) params.set('field', fName.trim());
             if (fValue.trim()) params.set('value', fValue.trim());
             const res = await fetch(`${baseUrl}/flow/scheduled-transaction/search?${params}`);
@@ -693,12 +694,12 @@ function SearchTab() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setCurrentPage(1);
-        doSearch(1, eventType, fieldName, fieldValue);
+        doSearch(1, ownerAddr, eventType, fieldName, fieldValue);
     };
 
     useEffect(() => {
         if (hasSearched && currentPage > 1) {
-            doSearch(currentPage, eventType, fieldName, fieldValue);
+            doSearch(currentPage, ownerAddr, eventType, fieldName, fieldValue);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage]);
@@ -707,7 +708,17 @@ function SearchTab() {
         <div>
             {/* Search form */}
             <form onSubmit={handleSubmit} className="mb-6 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Owner Address</label>
+                        <input
+                            type="text"
+                            value={ownerAddr}
+                            onChange={(e) => setOwnerAddr(e.target.value)}
+                            placeholder="e.g., 0xa7d9a1bece1378a3"
+                            className="w-full px-3 py-2 text-xs bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-nothing-green"
+                        />
+                    </div>
                     <div>
                         <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Event Type</label>
                         <input
@@ -741,7 +752,7 @@ function SearchTab() {
                 </div>
                 <button
                     type="submit"
-                    disabled={!eventType.trim() || loading}
+                    disabled={!ownerAddr.trim() || !eventType.trim() || loading}
                     className="inline-flex items-center gap-1.5 px-4 py-2 text-xs uppercase tracking-widest font-medium bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-700 dark:hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                     <Search className="h-3 w-3" />

@@ -28,13 +28,14 @@ interface ScheduledTx {
     fees_returned?: string;
     fees_deducted?: string;
     handler_stats?: Record<string, number>;
+    executor_events?: TxEvent[];
 }
 
 interface TxEvent {
     type: string;
-    transaction_index: number;
+    event_name: string;
     event_index: number;
-    value: Record<string, any>;
+    payload: Record<string, any>;
 }
 
 const EXCLUDED_EVENT_SOURCES = ['FlowTransactionScheduler', 'FlowFees', 'FlowServiceAccount'];
@@ -139,25 +140,10 @@ function ScheduledTransactionDetail() {
     const { tx } = Route.useLoaderData() as { tx: ScheduledTx | null };
     const [contractCode, setContractCode] = useState<string | null>(null);
     const [loadingCode, setLoadingCode] = useState(false);
-    const [executorEvents, setExecutorEvents] = useState<TxEvent[]>([]);
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
 
-    // Fetch executor transaction events
-    useEffect(() => {
-        if (!tx || tx.status !== 'EXECUTED' || !tx.executed_tx_id) return;
-
-        const txid = tx.executed_tx_id.replace('0x', '');
-        resolveApiBaseUrl().then(baseUrl => {
-            fetch(`${baseUrl}/flow/v1/transaction/${txid}`)
-                .then(r => r.json())
-                .then(payload => {
-                    const events: TxEvent[] = payload?.data?.events || [];
-                    const filtered = events.filter(e => !isExcludedEvent(e.type));
-                    setExecutorEvents(filtered);
-                })
-                .catch(() => {});
-        });
-    }, [tx]);
+    // Filter executor events from the detail response (already included by backend)
+    const executorEvents = (tx?.executor_events || []).filter(e => !isExcludedEvent(e.type));
 
     // Fetch handler contract code
     useEffect(() => {
@@ -381,7 +367,7 @@ function ScheduledTransactionDetail() {
                                 {executorEvents.map((evt) => {
                                     const isExpanded = expandedEvents.has(evt.event_index);
                                     const displayName = parseEventType(evt.type);
-                                    const valueEntries = evt.value ? Object.entries(evt.value) : [];
+                                    const valueEntries = evt.payload ? Object.entries(evt.payload) : [];
                                     return (
                                         <div
                                             key={evt.event_index}

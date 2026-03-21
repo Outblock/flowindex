@@ -442,11 +442,46 @@ func (r *Repository) GetScheduledTransactionsByOwner(ctx context.Context, owner 
 	return results, total, nil
 }
 
+// GetExecutorEvents returns events for a scheduled transaction's executor tx from raw.events.
+func (r *Repository) GetExecutorEvents(ctx context.Context, txID string, blockHeight uint64) ([]map[string]interface{}, error) {
+	txIDBytes, _ := hex.DecodeString(txID)
+
+	q := `
+		SELECT type, COALESCE(event_name, ''), event_index, payload
+		FROM raw.events
+		WHERE transaction_id = $1 AND block_height = $2
+		ORDER BY event_index
+	`
+	rows, err := r.db.Query(ctx, q, txIDBytes, blockHeight)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		var eventType, eventName string
+		var eventIndex int
+		var payload interface{}
+		if err := rows.Scan(&eventType, &eventName, &eventIndex, &payload); err != nil {
+			return nil, err
+		}
+		results = append(results, map[string]interface{}{
+			"type":        eventType,
+			"event_name":  eventName,
+			"event_index": eventIndex,
+			"payload":     payload,
+		})
+	}
+	return results, nil
+}
+
 // SearchScheduledByEvent searches for scheduled transactions whose executor tx
-// emitted events matching the given event_type and optional JSONB field conditions.
-func (r *Repository) SearchScheduledByEvent(ctx context.Context, eventType string, fieldKey, fieldValue string, limit, offset int) ([]models.ScheduledTxSearchResult, int, error) {
-	args := []interface{}{eventType}
-	argIdx := 2
+// emitted events matching the given event_type, scoped to a specific owner.
+func (r *Repository) SearchScheduledByEvent(ctx context.Context, owner string, eventType string, fieldKey, fieldValue string, limit, offset int) ([]models.ScheduledTxSearchResult, int, error) {
+	ownerBytes, _ := hex.DecodeString(owner)
+	args := []interface{}{ownerBytes, eventType}
+	argIdx := 3
 
 	fieldClause := ""
 	if fieldKey != "" && fieldValue != "" {
@@ -455,14 +490,14 @@ func (r *Repository) SearchScheduledByEvent(ctx context.Context, eventType strin
 		argIdx += 2
 	}
 
-	// Count
+	// Count (scoped to owner — fast)
 	var total int
 	countQ := fmt.Sprintf(`
 		SELECT COUNT(DISTINCT st.scheduled_id)
 		FROM app.scheduled_transactions st
 		JOIN raw.events e ON e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
-		WHERE st.status = 'EXECUTED'
-		  AND e.type ILIKE '%%' || $1 || '%%'
+		WHERE st.handler_owner = $1 AND st.status = 'EXECUTED'
+		  AND e.type ILIKE '%%' || $2 || '%%'
 		  %s
 	`, fieldClause)
 	if err := r.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
@@ -482,8 +517,8 @@ func (r *Repository) SearchScheduledByEvent(ctx context.Context, eventType strin
 			e.type, COALESCE(e.event_name, '')
 		FROM app.scheduled_transactions st
 		JOIN raw.events e ON e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
-		WHERE st.status = 'EXECUTED'
-		  AND e.type ILIKE '%%' || $1 || '%%'
+		WHERE st.handler_owner = $1 AND st.status = 'EXECUTED'
+		  AND e.type ILIKE '%%' || $2 || '%%'
 		  %s
 		ORDER BY st.scheduled_id DESC
 		LIMIT $%d OFFSET $%d

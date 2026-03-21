@@ -736,6 +736,13 @@ func (s *Server) handleFlowScheduledTransactionByID(w http.ResponseWriter, r *ht
 		out["handler_stats"] = stats
 	}
 
+	// Include executor events for executed scheduled txs
+	if st.Status == "EXECUTED" && st.ExecutedTxID != nil && st.ExecutedBlock != nil {
+		if events, err := s.repo.GetExecutorEvents(r.Context(), *st.ExecutedTxID, *st.ExecutedBlock); err == nil {
+			out["executor_events"] = events
+		}
+	}
+
 	writeAPIResponse(w, out, nil, nil)
 }
 
@@ -823,6 +830,11 @@ func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *htt
 }
 
 func (s *Server) handleFlowScheduledTransactionSearch(w http.ResponseWriter, r *http.Request) {
+	owner := normalizeAddr(r.URL.Query().Get("owner"))
+	if owner == "" {
+		writeAPIError(w, http.StatusBadRequest, "owner parameter is required")
+		return
+	}
 	eventType := r.URL.Query().Get("event_type")
 	if eventType == "" {
 		writeAPIError(w, http.StatusBadRequest, "event_type parameter is required")
@@ -832,7 +844,7 @@ func (s *Server) handleFlowScheduledTransactionSearch(w http.ResponseWriter, r *
 	fieldValue := r.URL.Query().Get("value")
 	limit, offset := parseLimitOffset(r)
 
-	results, total, err := s.repo.SearchScheduledByEvent(r.Context(), eventType, fieldKey, fieldValue, limit, offset)
+	results, total, err := s.repo.SearchScheduledByEvent(r.Context(), owner, eventType, fieldKey, fieldValue, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
