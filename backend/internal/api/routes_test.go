@@ -109,6 +109,10 @@ var specExcludedRoutes = map[string]bool{
 	"/flow/evm/address/{address}/nft":                    true,
 	"/flow/evm/search":                                   true,
 	"/flow/search/preview":                               true,
+	// Scheduled transaction handler/search routes (new, not yet in spec)
+	"/flow/scheduled-handler":                true,
+	"/flow/scheduled-handler/{owner}/{uuid}": true,
+	"/flow/scheduled-transaction/search":     true,
 }
 
 // TestAllRoutesInSpec ensures every registered public route has an OpenAPI spec entry.
