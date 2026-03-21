@@ -73,24 +73,24 @@ type Transaction struct {
 
 // EVMTransaction represents details from 'evm_transactions' table
 type EVMTransaction struct {
-	TransactionID   string `json:"transaction_id"`
-	EVMHash         string `json:"evm_hash"`
-	FromAddress     string `json:"from_address"`
-	ToAddress       string `json:"to_address"`
-	Nonce           uint64 `json:"nonce"`
-	GasLimit        uint64 `json:"gas_limit"`
-	GasUsed         uint64 `json:"gas_used"`
-	GasPrice        string `json:"gas_price"`
-	GasFeeCap       string `json:"gas_fee_cap"`
-	GasTipCap       string `json:"gas_tip_cap"`
-	Value           string `json:"value"`
-	TxType          int    `json:"tx_type"`
-	ChainID         string `json:"chain_id"`
-	Data            string `json:"data"`
-	Logs            []byte `json:"logs"`
-	TransactionIndex int   `json:"transaction_index"`
-	StatusCode      int    `json:"status_code"`
-	Status          string `json:"status"`
+	TransactionID    string `json:"transaction_id"`
+	EVMHash          string `json:"evm_hash"`
+	FromAddress      string `json:"from_address"`
+	ToAddress        string `json:"to_address"`
+	Nonce            uint64 `json:"nonce"`
+	GasLimit         uint64 `json:"gas_limit"`
+	GasUsed          uint64 `json:"gas_used"`
+	GasPrice         string `json:"gas_price"`
+	GasFeeCap        string `json:"gas_fee_cap"`
+	GasTipCap        string `json:"gas_tip_cap"`
+	Value            string `json:"value"`
+	TxType           int    `json:"tx_type"`
+	ChainID          string `json:"chain_id"`
+	Data             string `json:"data"`
+	Logs             []byte `json:"logs"`
+	TransactionIndex int    `json:"transaction_index"`
+	StatusCode       int    `json:"status_code"`
+	Status           string `json:"status"`
 }
 
 // EVMTxHash represents a mapping from a Cadence tx to one or more EVM tx hashes.
@@ -135,7 +135,6 @@ type Event struct {
 	Timestamp        time.Time       `json:"timestamp"`
 	CreatedAt        time.Time       `json:"created_at"`
 }
-
 
 // TokenTransfer represents FT/NFT transfers (app.ft_transfers / app.nft_transfers).
 type TokenTransfer struct {
@@ -259,20 +258,20 @@ type AccountCatalog struct {
 
 // FTToken represents app.ft_tokens
 type FTToken struct {
-	ContractAddress string    `json:"contract_address"`
-	ContractName    string    `json:"contract_name,omitempty"`
-	Name            string    `json:"name"`
-	Symbol          string    `json:"symbol"`
-	Decimals        int       `json:"decimals"`
-	Description     string    `json:"description,omitempty"`
-	ExternalURL     string    `json:"external_url,omitempty"`
-	Logo            string    `json:"logo,omitempty"`
-	VaultPath       string    `json:"vault_path,omitempty"`
-	ReceiverPath    string    `json:"receiver_path,omitempty"`
-	BalancePath     string    `json:"balance_path,omitempty"`
-	Socials         []byte    `json:"socials,omitempty"`
-	EVMAddress      string    `json:"evm_address,omitempty"`
-	TotalSupply     string    `json:"total_supply,omitempty"`
+	ContractAddress string     `json:"contract_address"`
+	ContractName    string     `json:"contract_name,omitempty"`
+	Name            string     `json:"name"`
+	Symbol          string     `json:"symbol"`
+	Decimals        int        `json:"decimals"`
+	Description     string     `json:"description,omitempty"`
+	ExternalURL     string     `json:"external_url,omitempty"`
+	Logo            string     `json:"logo,omitempty"`
+	VaultPath       string     `json:"vault_path,omitempty"`
+	ReceiverPath    string     `json:"receiver_path,omitempty"`
+	BalancePath     string     `json:"balance_path,omitempty"`
+	Socials         []byte     `json:"socials,omitempty"`
+	EVMAddress      string     `json:"evm_address,omitempty"`
+	TotalSupply     string     `json:"total_supply,omitempty"`
 	HolderCount     int64      `json:"holder_count,omitempty"`
 	TransferCount   int64      `json:"transfer_count,omitempty"`
 	IsVerified      bool       `json:"is_verified"`
@@ -354,22 +353,22 @@ type StatusSnapshot struct {
 
 // NFTItem represents NFT item metadata from app.nft_items.
 type NFTItem struct {
-	ContractAddress  string    `json:"contract_address"`
-	ContractName     string    `json:"contract_name,omitempty"`
-	NFTID            string    `json:"nft_id"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description,omitempty"`
-	Thumbnail        string    `json:"thumbnail,omitempty"`
-	ExternalURL      string    `json:"external_url,omitempty"`
-	SerialNumber     *int64    `json:"serial_number,omitempty"`
-	EditionName      string    `json:"edition_name,omitempty"`
-	EditionNumber    *int64    `json:"edition_number,omitempty"`
-	EditionMax       *int64    `json:"edition_max,omitempty"`
-	RarityScore      string    `json:"rarity_score,omitempty"`
-	RarityDescription string   `json:"rarity_description,omitempty"`
-	Traits           []byte    `json:"traits,omitempty"`
-	Owner            string    `json:"owner,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ContractAddress   string    `json:"contract_address"`
+	ContractName      string    `json:"contract_name,omitempty"`
+	NFTID             string    `json:"nft_id"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description,omitempty"`
+	Thumbnail         string    `json:"thumbnail,omitempty"`
+	ExternalURL       string    `json:"external_url,omitempty"`
+	SerialNumber      *int64    `json:"serial_number,omitempty"`
+	EditionName       string    `json:"edition_name,omitempty"`
+	EditionNumber     *int64    `json:"edition_number,omitempty"`
+	EditionMax        *int64    `json:"edition_max,omitempty"`
+	RarityScore       string    `json:"rarity_score,omitempty"`
+	RarityDescription string    `json:"rarity_description,omitempty"`
+	Traits            []byte    `json:"traits,omitempty"`
+	Owner             string    `json:"owner,omitempty"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // DefiEvent represents a DeFi swap/liquidity event from app.defi_events.
@@ -462,22 +461,23 @@ type ScheduledTransaction struct {
 	ExecutedAt        *time.Time `json:"executed_at,omitempty"`
 	FeesReturned      *string    `json:"fees_returned,omitempty"`
 	FeesDeducted      *string    `json:"fees_deducted,omitempty"`
+	HasActivity       bool       `json:"has_activity"`
 }
 
 // ScheduledHandler represents an aggregated view of a handler with status counts.
 type ScheduledHandler struct {
-	HandlerOwner    string     `json:"handler_owner"`
-	HandlerType     string     `json:"handler_type"`
-	InstanceCount   int        `json:"instance_count"`
-	TotalCount      int        `json:"total_count"`
-	ScheduledCount  int        `json:"scheduled_count"`
-	ExecutedCount   int        `json:"executed_count"`
-	CanceledCount   int        `json:"canceled_count"`
-	TotalFees       string     `json:"total_fees"`
-	FirstScheduled  time.Time  `json:"first_scheduled"`
-	LastScheduled   time.Time  `json:"last_scheduled"`
-	LastExecutedAt  *time.Time `json:"last_executed_at,omitempty"`
-	AvgIntervalSec  *float64   `json:"avg_interval_sec,omitempty"`
+	HandlerOwner   string     `json:"handler_owner"`
+	HandlerType    string     `json:"handler_type"`
+	InstanceCount  int        `json:"instance_count"`
+	TotalCount     int        `json:"total_count"`
+	ScheduledCount int        `json:"scheduled_count"`
+	ExecutedCount  int        `json:"executed_count"`
+	CanceledCount  int        `json:"canceled_count"`
+	TotalFees      string     `json:"total_fees"`
+	FirstScheduled time.Time  `json:"first_scheduled"`
+	LastScheduled  time.Time  `json:"last_scheduled"`
+	LastExecutedAt *time.Time `json:"last_executed_at,omitempty"`
+	AvgIntervalSec *float64   `json:"avg_interval_sec,omitempty"`
 }
 
 // ScheduledTxSearchResult represents a scheduled tx matched via executor event search.
@@ -514,12 +514,12 @@ type EpochStats struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 
 	// Payout fields from EpochTotalRewardsPaid event
-	PayoutTotal    string    `json:"payout_total"`
-	PayoutFromFees string    `json:"payout_from_fees"`
-	PayoutMinted   string    `json:"payout_minted"`
-	PayoutFeesBurned string  `json:"payout_fees_burned"`
-	PayoutHeight   uint64    `json:"payout_height"`
-	PayoutTime     time.Time `json:"payout_time"`
+	PayoutTotal      string    `json:"payout_total"`
+	PayoutFromFees   string    `json:"payout_from_fees"`
+	PayoutMinted     string    `json:"payout_minted"`
+	PayoutFeesBurned string    `json:"payout_fees_burned"`
+	PayoutHeight     uint64    `json:"payout_height"`
+	PayoutTime       time.Time `json:"payout_time"`
 }
 
 // NodeMetadata represents GeoIP metadata for a staking node from app.node_metadata.

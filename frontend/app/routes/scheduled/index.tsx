@@ -477,10 +477,11 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
         if (isFiltered) {
             const ownerClean = handlerOwner!.replace(/^0x/, '');
             const params = new URLSearchParams({ handler_type: handlerType!, limit: '20', offset: String(offset) });
+            if (excludeEmpty) params.set('exclude_empty', 'true');
             return `${baseUrl}/flow/scheduled-handler/${ownerClean}?${params}`;
         }
         return `${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`;
-    }, [isFiltered, handlerOwner, handlerType]);
+    }, [isFiltered, handlerOwner, handlerType, excludeEmpty]);
 
     // Use initial data only when NOT filtered
     useEffect(() => {
@@ -514,16 +515,12 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
             loadPage(currentPage);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, isFiltered]);
+    }, [currentPage, isFiltered, excludeEmpty]);
 
     const clearFilter = () => {
         setCurrentPage(1);
         navigate({ search: {}, replace: true });
     };
-
-    const displayedTransactions = isFiltered && excludeEmpty
-        ? transactions.filter((tx) => !(tx.status === 'EXECUTED' && tx.is_idle))
-        : transactions;
 
     return (
         <div>
@@ -577,7 +574,7 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                 </div>
 
                 {/* Rows */}
-                {displayedTransactions.map((tx) => {
+                {transactions.map((tx) => {
                     const isExpanded = expandedId === tx.scheduled_id;
                     const timeStr = tx.scheduled_at ? formatRelativeTime(tx.scheduled_at, nowTick) : '';
 
@@ -696,12 +693,8 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                     );
                 })}
 
-                {displayedTransactions.length === 0 && !loading && (
-                    <div className="text-center text-zinc-500 italic py-12">
-                        {isFiltered && excludeEmpty && transactions.length > 0
-                            ? 'No non-idle transactions on this page'
-                            : 'No scheduled transactions found'}
-                    </div>
+                {transactions.length === 0 && !loading && (
+                    <div className="text-center text-zinc-500 italic py-12">No scheduled transactions found</div>
                 )}
             </div>
 

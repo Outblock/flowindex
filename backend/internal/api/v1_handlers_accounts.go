@@ -747,6 +747,7 @@ func (s *Server) handleFlowScheduledTransactionByID(w http.ResponseWriter, r *ht
 }
 
 func toScheduledTransactionOutput(st models.ScheduledTransaction) map[string]interface{} {
+	isIdle := st.Status == "EXECUTED" && !st.HasActivity
 	out := map[string]interface{}{
 		"scheduled_id":             st.ScheduledID,
 		"priority":                 st.Priority,
@@ -769,6 +770,8 @@ func toScheduledTransactionOutput(st models.ScheduledTransaction) map[string]int
 		"executed_at":              nil,
 		"fees_returned":            st.FeesReturned,
 		"fees_deducted":            st.FeesDeducted,
+		"has_activity":             st.HasActivity,
+		"is_idle":                  isIdle,
 	}
 	if st.ExecutedTxID != nil && *st.ExecutedTxID != "" {
 		out["executed_tx_id"] = "0x" + *st.ExecutedTxID
@@ -818,25 +821,14 @@ func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *htt
 	}
 	excludeEmpty := r.URL.Query().Get("exclude_empty") == "true"
 	limit, offset := parseLimitOffset(r)
-	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, limit, offset)
-	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	activityMap, err := s.repo.GetScheduledTransactionActivityMap(r.Context(), items, handlerType)
+	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, excludeEmpty, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	out := make([]map[string]interface{}, 0, len(items))
 	for _, st := range items {
-		o := toScheduledTransactionOutput(st)
-		isIdle := st.Status == "EXECUTED" && !activityMap[st.ScheduledID]
-		o["is_idle"] = isIdle
-		if excludeEmpty && isIdle {
-			continue
-		}
-		out = append(out, o)
+		out = append(out, toScheduledTransactionOutput(st))
 	}
 	writeAPIResponse(w, out, map[string]interface{}{
 		"limit":    limit,

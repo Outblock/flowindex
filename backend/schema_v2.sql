@@ -1075,10 +1075,47 @@ CREATE TABLE IF NOT EXISTS app.scheduled_transactions (
     executed_at          TIMESTAMPTZ,
     fees_returned        NUMERIC(18,8),
     fees_deducted        NUMERIC(18,8),
+    has_activity         BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (scheduled_id)
 );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'app'
+          AND table_name = 'scheduled_transactions'
+          AND column_name = 'has_activity'
+    ) THEN
+        ALTER TABLE app.scheduled_transactions
+            ADD COLUMN has_activity BOOLEAN NOT NULL DEFAULT FALSE;
+
+        UPDATE app.scheduled_transactions st
+        SET has_activity = EXISTS (
+            SELECT 1
+            FROM raw.events e
+            WHERE e.transaction_id = st.executed_tx_id
+              AND e.block_height = st.executed_block
+              AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%'
+              AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%'
+              AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%'
+              AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%'
+              AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%'
+              AND (
+                    split_part(st.handler_type, '.', 2) = ''
+                 OR split_part(st.handler_type, '.', 3) = ''
+                 OR e.type NOT LIKE ('A.' || split_part(st.handler_type, '.', 2) || '.' || split_part(st.handler_type, '.', 3) || '%')
+              )
+        )
+        WHERE st.status = 'EXECUTED'
+          AND st.executed_tx_id IS NOT NULL
+          AND st.executed_block IS NOT NULL;
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_sched_tx_owner ON app.scheduled_transactions (handler_owner, scheduled_id DESC);
 CREATE INDEX IF NOT EXISTS idx_sched_tx_owner_type ON app.scheduled_transactions (handler_owner, handler_type, scheduled_id DESC);
+CREATE INDEX IF NOT EXISTS idx_sched_tx_owner_type_visible ON app.scheduled_transactions (handler_owner, handler_type, scheduled_id DESC)
+    WHERE status != 'EXECUTED' OR has_activity = TRUE;
 CREATE INDEX IF NOT EXISTS idx_sched_tx_status ON app.scheduled_transactions (status, scheduled_id DESC);
 CREATE INDEX IF NOT EXISTS idx_sched_tx_block ON app.scheduled_transactions (scheduled_block DESC);
 

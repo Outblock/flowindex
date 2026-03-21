@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -26,6 +25,22 @@ type ScheduledCancelUpdate struct {
 	Timestamp    time.Time
 	FeesReturned string
 	FeesDeducted string
+}
+
+type scheduledTxScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanScheduledTransaction(scanner scheduledTxScanner, st *models.ScheduledTransaction) error {
+	return scanner.Scan(
+		&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
+		&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
+		&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
+		&st.Status,
+		&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
+		&st.FeesReturned, &st.FeesDeducted,
+		&st.HasActivity,
+	)
 }
 
 func (r *Repository) UpsertScheduledTransactions(ctx context.Context, items []models.ScheduledTransaction) error {
@@ -82,8 +97,27 @@ func (r *Repository) UpdateScheduledTransactionsExecuted(ctx context.Context, it
 	for _, item := range items {
 		txIDBytes, _ := hex.DecodeString(item.TxID)
 		_, err := tx.Exec(ctx, `
-			UPDATE app.scheduled_transactions
-			SET status = 'EXECUTED', executed_block = $2, executed_tx_id = $3, executed_at = $4
+			UPDATE app.scheduled_transactions st
+			SET status = 'EXECUTED',
+			    executed_block = $2,
+			    executed_tx_id = $3,
+			    executed_at = $4,
+			    has_activity = EXISTS (
+					SELECT 1
+					FROM raw.events e
+					WHERE e.transaction_id = $3
+					  AND e.block_height = $2
+					  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%%'
+					  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%%'
+					  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%%'
+					  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%%'
+					  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%%'
+					  AND (
+							split_part(st.handler_type, '.', 2) = ''
+						 OR split_part(st.handler_type, '.', 3) = ''
+						 OR e.type NOT LIKE ('A.' || split_part(st.handler_type, '.', 2) || '.' || split_part(st.handler_type, '.', 3) || '%%')
+					  )
+				)
 			WHERE scheduled_id = $1 AND status != 'EXECUTED'
 		`, item.ScheduledID, item.Block, txIDBytes, item.Timestamp)
 		if err != nil {
@@ -108,7 +142,7 @@ func (r *Repository) UpdateScheduledTransactionsCanceled(ctx context.Context, it
 		_, err := tx.Exec(ctx, `
 			UPDATE app.scheduled_transactions
 			SET status = 'CANCELED', executed_block = $2, executed_tx_id = $3, executed_at = $4,
-			    fees_returned = $5, fees_deducted = $6
+			    fees_returned = $5, fees_deducted = $6, has_activity = FALSE
 			WHERE scheduled_id = $1 AND status != 'CANCELED'
 		`, item.ScheduledID, item.Block, txIDBytes, item.Timestamp, item.FeesReturned, item.FeesDeducted)
 		if err != nil {
@@ -146,7 +180,8 @@ func (r *Repository) GetScheduledTransactionsPage(ctx context.Context, limit, of
 			status,
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
-			fees_returned, fees_deducted
+			fees_returned, fees_deducted,
+			has_activity
 		FROM app.scheduled_transactions
 		%s
 		ORDER BY scheduled_id DESC
@@ -162,14 +197,7 @@ func (r *Repository) GetScheduledTransactionsPage(ctx context.Context, limit, of
 	var results []models.ScheduledTransaction
 	for rows.Next() {
 		var st models.ScheduledTransaction
-		if err := rows.Scan(
-			&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
-			&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
-			&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
-			&st.Status,
-			&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
-			&st.FeesReturned, &st.FeesDeducted,
-		); err != nil {
+		if err := scanScheduledTransaction(rows, &st); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, st)
@@ -186,19 +214,13 @@ func (r *Repository) GetScheduledTransactionByID(ctx context.Context, id int64) 
 			status,
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
-			fees_returned, fees_deducted
+			fees_returned, fees_deducted,
+			has_activity
 		FROM app.scheduled_transactions
 		WHERE scheduled_id = $1
 	`
 	var st models.ScheduledTransaction
-	err := r.db.QueryRow(ctx, q, id).Scan(
-		&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
-		&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
-		&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
-		&st.Status,
-		&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
-		&st.FeesReturned, &st.FeesDeducted,
-	)
+	err := scanScheduledTransaction(r.db.QueryRow(ctx, q, id), &st)
 	if err != nil {
 		return nil, err
 	}
@@ -318,7 +340,8 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 			status,
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
-			fees_returned, fees_deducted
+			fees_returned, fees_deducted,
+			has_activity
 		FROM app.scheduled_transactions
 		WHERE handler_owner = $1 AND handler_uuid = $2
 		ORDER BY scheduled_id DESC
@@ -333,14 +356,7 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 	var results []models.ScheduledTransaction
 	for rows.Next() {
 		var st models.ScheduledTransaction
-		if err := rows.Scan(
-			&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
-			&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
-			&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
-			&st.Status,
-			&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
-			&st.FeesReturned, &st.FeesDeducted,
-		); err != nil {
+		if err := scanScheduledTransaction(rows, &st); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, st)
@@ -349,11 +365,15 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 }
 
 // GetScheduledTransactionsByHandlerType returns scheduled transactions for a specific handler type + owner.
-func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, limit, offset int) ([]models.ScheduledTransaction, int, error) {
+func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, excludeEmpty bool, limit, offset int) ([]models.ScheduledTransaction, int, error) {
 	ownerBytes, _ := hex.DecodeString(owner)
+	where := " WHERE st.handler_owner = $1 AND st.handler_type = $2"
+	if excludeEmpty {
+		where += " AND (st.status != 'EXECUTED' OR st.has_activity)"
+	}
 
 	var total int
-	countQ := "SELECT COUNT(*) FROM app.scheduled_transactions st WHERE st.handler_owner = $1 AND st.handler_type = $2"
+	countQ := "SELECT COUNT(*) FROM app.scheduled_transactions st" + where
 	if err := r.db.QueryRow(ctx, countQ, ownerBytes, handlerType).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -365,9 +385,10 @@ func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, 
 			st.status,
 			st.executed_block, CASE WHEN st.executed_tx_id IS NOT NULL THEN encode(st.executed_tx_id, 'hex') ELSE NULL END,
 			st.executed_at,
-			st.fees_returned, st.fees_deducted
+			st.fees_returned, st.fees_deducted,
+			st.has_activity
 		FROM app.scheduled_transactions st
-		WHERE st.handler_owner = $1 AND st.handler_type = $2
+	` + where + `
 		ORDER BY st.scheduled_id DESC
 		LIMIT $3 OFFSET $4
 	`
@@ -380,88 +401,12 @@ func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, 
 	var results []models.ScheduledTransaction
 	for rows.Next() {
 		var st models.ScheduledTransaction
-		if err := rows.Scan(
-			&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
-			&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
-			&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
-			&st.Status,
-			&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
-			&st.FeesReturned, &st.FeesDeducted,
-		); err != nil {
+		if err := scanScheduledTransaction(rows, &st); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, st)
 	}
 	return results, total, nil
-}
-
-// GetScheduledTransactionActivityMap returns a map of scheduled_id => hasApplicationActivity
-// for the provided page of scheduled transactions. This is used to mark idle runs without
-// forcing the database to filter the entire handler history.
-func (r *Repository) GetScheduledTransactionActivityMap(ctx context.Context, items []models.ScheduledTransaction, handlerType string) (map[int64]bool, error) {
-	results := make(map[int64]bool, len(items))
-	if len(items) == 0 {
-		return results, nil
-	}
-
-	values := make([]string, 0, len(items))
-	args := make([]interface{}, 0, len(items)*3)
-	argIdx := 1
-
-	for _, st := range items {
-		if st.Status != "EXECUTED" || st.ExecutedTxID == nil || st.ExecutedBlock == nil || *st.ExecutedTxID == "" {
-			continue
-		}
-		txIDBytes, err := hex.DecodeString(*st.ExecutedTxID)
-		if err != nil || len(txIDBytes) == 0 {
-			continue
-		}
-		values = append(values, fmt.Sprintf("($%d::bigint, $%d::bytea, $%d::bigint)", argIdx, argIdx+1, argIdx+2))
-		args = append(args, st.ScheduledID, txIDBytes, *st.ExecutedBlock)
-		argIdx += 3
-	}
-
-	if len(values) == 0 {
-		return results, nil
-	}
-
-	handlerExclude := ""
-	htParts := strings.Split(handlerType, ".")
-	if len(htParts) >= 3 {
-		prefix := "A." + htParts[1] + "." + htParts[2]
-		handlerExclude = fmt.Sprintf(" AND e.type NOT LIKE '%s%%'", prefix)
-	}
-
-	q := fmt.Sprintf(`
-		WITH target(scheduled_id, tx_id, block_height) AS (
-			VALUES %s
-		)
-		SELECT DISTINCT t.scheduled_id
-		FROM target t
-		JOIN raw.events e ON e.transaction_id = t.tx_id AND e.block_height = t.block_height
-		WHERE e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%%'
-		  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%%'
-		  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%%'
-		  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%%'
-		  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%%'
-		  %s
-	`, strings.Join(values, ","), handlerExclude)
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var scheduledID int64
-		if err := rows.Scan(&scheduledID); err != nil {
-			return nil, err
-		}
-		results[scheduledID] = true
-	}
-
-	return results, nil
 }
 
 // GetScheduledTransactionsByOwner returns scheduled transactions for a specific handler owner.
@@ -480,7 +425,8 @@ func (r *Repository) GetScheduledTransactionsByOwner(ctx context.Context, owner 
 			status,
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
-			fees_returned, fees_deducted
+			fees_returned, fees_deducted,
+			has_activity
 		FROM app.scheduled_transactions
 		WHERE handler_owner = $1
 		ORDER BY scheduled_id DESC
@@ -495,14 +441,7 @@ func (r *Repository) GetScheduledTransactionsByOwner(ctx context.Context, owner 
 	var results []models.ScheduledTransaction
 	for rows.Next() {
 		var st models.ScheduledTransaction
-		if err := rows.Scan(
-			&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
-			&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
-			&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
-			&st.Status,
-			&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
-			&st.FeesReturned, &st.FeesDeducted,
-		); err != nil {
+		if err := scanScheduledTransaction(rows, &st); err != nil {
 			return nil, 0, err
 		}
 		results = append(results, st)
@@ -560,6 +499,7 @@ func (r *Repository) FindScheduledTransactionByTxHash(ctx context.Context, txHas
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
 			fees_returned, fees_deducted,
+			has_activity,
 			CASE WHEN scheduled_tx_id = $1 THEN 'scheduled_tx' ELSE 'executed_tx' END
 		FROM app.scheduled_transactions
 		WHERE scheduled_tx_id = $1 OR executed_tx_id = $1
@@ -574,6 +514,7 @@ func (r *Repository) FindScheduledTransactionByTxHash(ctx context.Context, txHas
 		&st.Status,
 		&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
 		&st.FeesReturned, &st.FeesDeducted,
+		&st.HasActivity,
 		&matchedBy,
 	)
 	if err != nil {
@@ -618,6 +559,7 @@ func (r *Repository) FindAllScheduledTransactionsByTxHash(ctx context.Context, t
 			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
 			executed_at,
 			fees_returned, fees_deducted,
+			has_activity,
 			CASE WHEN scheduled_tx_id = $1 THEN 'scheduled_tx' ELSE 'executed_tx' END
 		FROM app.scheduled_transactions
 		WHERE scheduled_tx_id = $1 OR executed_tx_id = $1
@@ -639,6 +581,7 @@ func (r *Repository) FindAllScheduledTransactionsByTxHash(ctx context.Context, t
 			&m.ST.Status,
 			&m.ST.ExecutedBlock, &m.ST.ExecutedTxID, &m.ST.ExecutedAt,
 			&m.ST.FeesReturned, &m.ST.FeesDeducted,
+			&m.ST.HasActivity,
 			&m.MatchedBy,
 		); err != nil {
 			return nil, err
@@ -686,6 +629,7 @@ func (r *Repository) SearchScheduledByEvent(ctx context.Context, owner string, e
 			st.executed_block, CASE WHEN st.executed_tx_id IS NOT NULL THEN encode(st.executed_tx_id, 'hex') ELSE NULL END,
 			st.executed_at,
 			st.fees_returned, st.fees_deducted,
+			st.has_activity,
 			e.type, COALESCE(e.event_name, '')
 		FROM app.scheduled_transactions st
 		JOIN raw.events e ON e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
@@ -712,6 +656,7 @@ func (r *Repository) SearchScheduledByEvent(ctx context.Context, owner string, e
 			&sr.Status,
 			&sr.ExecutedBlock, &sr.ExecutedTxID, &sr.ExecutedAt,
 			&sr.FeesReturned, &sr.FeesDeducted,
+			&sr.HasActivity,
 			&sr.MatchedEventType, &sr.MatchedEventName,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan search result: %w", err)
