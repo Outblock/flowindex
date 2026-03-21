@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react';
 import { Link } from '@tanstack/react-router';
+// Force rebuild — AccountActivityTab scheduled fix was not included in previous deploys
 import { ensureHeyApiConfigured } from '../../api/heyapi';
 import { resolveApiBaseUrl } from '../../api';
 import {
