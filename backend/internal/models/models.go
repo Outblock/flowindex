@@ -466,17 +466,25 @@ type ScheduledTransaction struct {
 
 // ScheduledHandler represents an aggregated view of a handler with status counts.
 type ScheduledHandler struct {
-	HandlerOwner    string    `json:"handler_owner"`
-	HandlerType     string    `json:"handler_type"`
-	HandlerUUID     int64     `json:"handler_uuid"`
-	TotalCount      int       `json:"total_count"`
-	ScheduledCount  int       `json:"scheduled_count"`
-	ExecutedCount   int       `json:"executed_count"`
-	CanceledCount   int       `json:"canceled_count"`
-	TotalFees       string    `json:"total_fees"`
-	FirstScheduled  time.Time `json:"first_scheduled"`
-	LastScheduled   time.Time `json:"last_scheduled"`
+	HandlerOwner    string     `json:"handler_owner"`
+	HandlerType     string     `json:"handler_type"`
+	HandlerUUID     int64      `json:"handler_uuid"`
+	TotalCount      int        `json:"total_count"`
+	ScheduledCount  int        `json:"scheduled_count"`
+	ExecutedCount   int        `json:"executed_count"`
+	CanceledCount   int        `json:"canceled_count"`
+	TotalFees       string     `json:"total_fees"`
+	FirstScheduled  time.Time  `json:"first_scheduled"`
+	LastScheduled   time.Time  `json:"last_scheduled"`
 	LastExecutedAt  *time.Time `json:"last_executed_at,omitempty"`
+	AvgIntervalSec  *float64   `json:"avg_interval_sec,omitempty"`
+}
+
+// ScheduledTxSearchResult represents a scheduled tx matched via executor event search.
+type ScheduledTxSearchResult struct {
+	ScheduledTransaction
+	MatchedEventType string `json:"matched_event_type"`
+	MatchedEventName string `json:"matched_event_name"`
 }
 
 // StakingDelegator represents a staking delegator from app.staking_delegators.

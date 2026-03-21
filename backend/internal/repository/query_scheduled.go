@@ -263,7 +263,11 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 			COALESCE(SUM(fees::numeric), 0)::text AS total_fees,
 			MIN(scheduled_at) AS first_scheduled,
 			MAX(scheduled_at) AS last_scheduled,
-			MAX(executed_at) AS last_executed_at
+			MAX(executed_at) AS last_executed_at,
+			CASE WHEN COUNT(*) > 1
+				THEN EXTRACT(EPOCH FROM (MAX(scheduled_at) - MIN(scheduled_at))) / NULLIF(COUNT(*) - 1, 0)
+				ELSE NULL
+			END AS avg_interval_sec
 		FROM app.scheduled_transactions
 		%s
 		GROUP BY handler_owner, handler_type, handler_uuid
@@ -285,6 +289,7 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 			&h.TotalCount, &h.ScheduledCount, &h.ExecutedCount, &h.CanceledCount,
 			&h.TotalFees,
 			&h.FirstScheduled, &h.LastScheduled, &h.LastExecutedAt,
+			&h.AvgIntervalSec,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -384,6 +389,78 @@ func (r *Repository) GetScheduledTransactionsByOwner(ctx context.Context, owner 
 			return nil, 0, err
 		}
 		results = append(results, st)
+	}
+	return results, total, nil
+}
+
+// SearchScheduledByEvent searches for scheduled transactions whose executor tx
+// emitted events matching the given event_type and optional JSONB field conditions.
+func (r *Repository) SearchScheduledByEvent(ctx context.Context, eventType string, fieldKey, fieldValue string, limit, offset int) ([]models.ScheduledTxSearchResult, int, error) {
+	args := []interface{}{eventType}
+	argIdx := 2
+
+	fieldClause := ""
+	if fieldKey != "" && fieldValue != "" {
+		fieldClause = fmt.Sprintf(" AND e.payload->>$%d ILIKE $%d", argIdx, argIdx+1)
+		args = append(args, fieldKey, "%"+fieldValue+"%")
+		argIdx += 2
+	}
+
+	// Count
+	var total int
+	countQ := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT st.scheduled_id)
+		FROM app.scheduled_transactions st
+		JOIN raw.events e ON e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
+		WHERE st.status = 'EXECUTED'
+		  AND e.type ILIKE '%%' || $1 || '%%'
+		  %s
+	`, fieldClause)
+	if err := r.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count search: %w", err)
+	}
+
+	args = append(args, limit, offset)
+	q := fmt.Sprintf(`
+		SELECT DISTINCT ON (st.scheduled_id)
+			st.scheduled_id, st.priority, st.expected_timestamp, st.execution_effort, st.fees,
+			encode(st.handler_owner, 'hex'), st.handler_type, st.handler_uuid, COALESCE(st.handler_public_path, ''),
+			st.scheduled_block, encode(st.scheduled_tx_id, 'hex'), st.scheduled_at,
+			st.status,
+			st.executed_block, CASE WHEN st.executed_tx_id IS NOT NULL THEN encode(st.executed_tx_id, 'hex') ELSE NULL END,
+			st.executed_at,
+			st.fees_returned, st.fees_deducted,
+			e.type, COALESCE(e.event_name, '')
+		FROM app.scheduled_transactions st
+		JOIN raw.events e ON e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
+		WHERE st.status = 'EXECUTED'
+		  AND e.type ILIKE '%%' || $1 || '%%'
+		  %s
+		ORDER BY st.scheduled_id DESC
+		LIMIT $%d OFFSET $%d
+	`, fieldClause, argIdx, argIdx+1)
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search query: %w", err)
+	}
+	defer rows.Close()
+
+	var results []models.ScheduledTxSearchResult
+	for rows.Next() {
+		var sr models.ScheduledTxSearchResult
+		if err := rows.Scan(
+			&sr.ScheduledID, &sr.Priority, &sr.ExpectedTimestamp, &sr.ExecutionEffort, &sr.Fees,
+			&sr.HandlerOwner, &sr.HandlerType, &sr.HandlerUUID, &sr.HandlerPublicPath,
+			&sr.ScheduledBlock, &sr.ScheduledTxID, &sr.ScheduledAt,
+			&sr.Status,
+			&sr.ExecutedBlock, &sr.ExecutedTxID, &sr.ExecutedAt,
+			&sr.FeesReturned, &sr.FeesDeducted,
+			&sr.MatchedEventType, &sr.MatchedEventName,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan search result: %w", err)
+		}
+		results = append(results, sr)
 	}
 	return results, total, nil
 }

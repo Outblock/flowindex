@@ -823,7 +823,38 @@ func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *htt
 	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total": total}, nil)
 }
 
+func (s *Server) handleFlowScheduledTransactionSearch(w http.ResponseWriter, r *http.Request) {
+	eventType := r.URL.Query().Get("event_type")
+	if eventType == "" {
+		writeAPIError(w, http.StatusBadRequest, "event_type parameter is required")
+		return
+	}
+	fieldKey := r.URL.Query().Get("field")
+	fieldValue := r.URL.Query().Get("value")
+	limit, offset := parseLimitOffset(r)
+
+	results, total, err := s.repo.SearchScheduledByEvent(r.Context(), eventType, fieldKey, fieldValue, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out := make([]map[string]interface{}, 0, len(results))
+	for _, sr := range results {
+		o := toScheduledTransactionOutput(sr.ScheduledTransaction)
+		o["matched_event_type"] = sr.MatchedEventType
+		o["matched_event_name"] = sr.MatchedEventName
+		out = append(out, o)
+	}
+	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total": total}, nil)
+}
+
 func toScheduledHandlerOutput(h models.ScheduledHandler) map[string]interface{} {
+	// A handler is "recurring" if avg interval < 5 min AND total > 10
+	isRecurring := false
+	if h.AvgIntervalSec != nil && *h.AvgIntervalSec < 300 && h.TotalCount > 10 {
+		isRecurring = true
+	}
+
 	out := map[string]interface{}{
 		"handler_owner":            formatAddressV1(h.HandlerOwner),
 		"handler_type":             h.HandlerType,
@@ -838,6 +869,8 @@ func toScheduledHandlerOutput(h models.ScheduledHandler) map[string]interface{} 
 		"first_scheduled":          h.FirstScheduled.Format(time.RFC3339),
 		"last_scheduled":           h.LastScheduled.Format(time.RFC3339),
 		"last_executed_at":         nil,
+		"avg_interval_sec":         h.AvgIntervalSec,
+		"is_recurring":             isRecurring,
 	}
 	if h.LastExecutedAt != nil {
 		out["last_executed_at"] = h.LastExecutedAt.Format(time.RFC3339)
