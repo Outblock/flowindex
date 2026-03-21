@@ -145,6 +145,11 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
+		// Scheduled tx fallback — system txs aren't in raw.transactions
+		if out, ok := s.buildScheduledTxOutput(r.Context(), normalizeAddr(id)); ok {
+			writeAPIResponse(w, []interface{}{out}, nil, nil)
+			return
+		}
 		writeAPIError(w, http.StatusNotFound, "transaction not found")
 		return
 	}
@@ -193,6 +198,78 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 	s.enrichTransactionOutput(r, out, tx, evmExecs)
 
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+// buildScheduledTxOutput builds a transaction output from a scheduled tx.
+// System txs (scheduled tx executors) aren't stored in raw.transactions,
+// so we synthesize a transaction view from scheduled_transactions + raw.events.
+func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map[string]interface{}, bool) {
+	st, matchedBy, err := s.repo.FindScheduledTransactionByTxHash(ctx, txHash)
+	if err != nil || st == nil {
+		return nil, false
+	}
+
+	// Determine which tx hash and block to use for events
+	var eventTxID string
+	var eventBlock uint64
+	if matchedBy == "executed_tx" && st.ExecutedTxID != nil && st.ExecutedBlock != nil {
+		eventTxID = *st.ExecutedTxID
+		eventBlock = *st.ExecutedBlock
+	} else if matchedBy == "scheduled_tx" {
+		eventTxID = st.ScheduledTxID
+		eventBlock = st.ScheduledBlock
+	}
+
+	// Build synthetic transaction
+	synth := models.Transaction{
+		ID:              txHash,
+		BlockHeight:     eventBlock,
+		Status:          "SEALED",
+		ExecutionStatus: st.Status,
+		Timestamp:       st.ScheduledAt,
+		PayerAddress:    st.HandlerOwner,
+		ProposerAddress: st.HandlerOwner,
+		Authorizers:     []string{st.HandlerOwner},
+	}
+	if st.ExecutedAt != nil {
+		synth.Timestamp = *st.ExecutedAt
+	}
+
+	// Get events from raw.events (system txs aren't in the normal events pipeline)
+	var events []models.Event
+	if eventTxID != "" {
+		rawEvents, _ := s.repo.GetExecutorEvents(ctx, eventTxID, eventBlock)
+		for _, re := range rawEvents {
+			evtType, _ := re["type"].(string)
+			evtIndex, _ := re["event_index"].(int)
+			// Convert payload to json.RawMessage
+			var payloadRaw json.RawMessage
+			if p := re["payload"]; p != nil {
+				payloadRaw, _ = json.Marshal(p)
+			}
+			events = append(events, models.Event{
+				Type:        evtType,
+				EventIndex:  evtIndex,
+				Payload:     payloadRaw,
+				BlockHeight: eventBlock,
+				Timestamp:   synth.Timestamp,
+			})
+		}
+	}
+
+	out := toFlowTransactionOutput(synth, events, nil, nil, 0)
+
+	// Add scheduled tx metadata
+	out["is_scheduled"] = true
+	out["scheduled"] = toScheduledTransactionOutput(*st)
+
+	// Include handler stats
+	if stats, err := s.repo.GetScheduledHandlerStats(ctx, st.HandlerOwner); err == nil {
+		scheduled := out["scheduled"].(map[string]interface{})
+		scheduled["handler_stats"] = stats
+	}
+
+	return out, true
 }
 
 // fetchTransactionFromRPC fetches a transaction and its result from the Flow access node.

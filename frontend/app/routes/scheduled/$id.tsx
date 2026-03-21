@@ -53,6 +53,95 @@ function isExcludedEvent(eventType: string): boolean {
     return EXCLUDED_EVENT_SOURCES.some(source => eventType.includes(source));
 }
 
+// Service account address — used to filter out fee transfers
+const SERVICE_ACCOUNT = 'e467b9dd11fa00df';
+
+interface FTTransfer {
+    direction: 'in' | 'out';
+    address: string;
+    amount: string;
+    tokenType: string;
+}
+
+interface AppEvent {
+    name: string;
+    fields: Record<string, string>;
+}
+
+interface ExecutionSummary {
+    ftTransfers: FTTransfer[];
+    appEvents: AppEvent[];
+    hasEVM: boolean;
+    isIdle: boolean;
+}
+
+function buildExecutionSummary(events: TxEvent[]): ExecutionSummary {
+    const ftTransfers: FTTransfer[] = [];
+    const appEvents: AppEvent[] = [];
+    let hasEVM = false;
+
+    for (const evt of events) {
+        const shortType = parseEventType(evt.type);
+
+        // FT Transfers
+        if (shortType === 'FungibleToken.Deposited' && evt.payload) {
+            const to = String(evt.payload.to || '');
+            if (to && to !== SERVICE_ACCOUNT) {
+                const tokenParts = String(evt.payload.type || '').split('.');
+                ftTransfers.push({
+                    direction: 'in',
+                    address: to,
+                    amount: String(evt.payload.amount || '0'),
+                    tokenType: tokenParts.length >= 4 ? tokenParts[2] + '.' + tokenParts[3] : String(evt.payload.type || ''),
+                });
+            }
+        }
+        if (shortType === 'FungibleToken.Withdrawn' && evt.payload) {
+            const from = String(evt.payload.from || '');
+            if (from && from !== SERVICE_ACCOUNT) {
+                const tokenParts = String(evt.payload.type || '').split('.');
+                ftTransfers.push({
+                    direction: 'out',
+                    address: from,
+                    amount: String(evt.payload.amount || '0'),
+                    tokenType: tokenParts.length >= 4 ? tokenParts[2] + '.' + tokenParts[3] : String(evt.payload.type || ''),
+                });
+            }
+        }
+
+        // EVM activity
+        if (shortType === 'EVM.TransactionExecuted') {
+            hasEVM = true;
+        }
+
+        // App-specific events (not system, not FT, not FlowToken)
+        if (!isExcludedEvent(evt.type)
+            && !evt.type.includes('FungibleToken')
+            && !evt.type.includes('FlowToken')
+            && !evt.type.includes('EVM.TransactionExecuted')
+            && evt.payload) {
+            const fields: Record<string, string> = {};
+            for (const [k, v] of Object.entries(evt.payload)) {
+                if (v != null && typeof v !== 'object') {
+                    fields[k] = String(v);
+                }
+            }
+            if (Object.keys(fields).length > 0) {
+                appEvents.push({ name: shortType, fields });
+            }
+        }
+    }
+
+    // Idle = only system events (no FT transfers to non-service, no app events, no EVM)
+    const isIdle = ftTransfers.length === 0 && appEvents.length === 0 && !hasEVM;
+
+    return { ftTransfers, appEvents, hasEVM, isIdle };
+}
+
+function isAddress(val: string): boolean {
+    return /^[0-9a-f]{16}$/.test(val) || /^[0-9a-f]{40}$/.test(val);
+}
+
 function DetailSkeleton() {
     return (
         <div className="min-h-screen bg-gray-50/50 dark:bg-black text-zinc-900 dark:text-white font-mono">
@@ -260,7 +349,9 @@ function ScheduledTransactionDetail() {
     const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
 
     // Filter executor events from the detail response (already included by backend)
-    const executorEvents = (tx?.executor_events || []).filter(e => !isExcludedEvent(e.type));
+    const allEvents = tx?.executor_events || [];
+    const executorEvents = allEvents.filter(e => !isExcludedEvent(e.type));
+    const summary = buildExecutionSummary(allEvents);
 
     // Fetch handler contract code
     useEffect(() => {
@@ -508,6 +599,82 @@ function ScheduledTransactionDetail() {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Execution Summary */}
+                        {tx.status === 'EXECUTED' && !summary.isIdle && (
+                            <div className="mt-8">
+                                <h2 className="text-sm font-bold mb-3 text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                                    <Activity className="h-4 w-4" />
+                                    Execution Summary
+                                </h2>
+                                <div className="bg-white dark:bg-zinc-900/50 rounded-lg border border-zinc-200 dark:border-white/10 divide-y divide-zinc-100 dark:divide-white/5">
+                                    {/* FT Transfers */}
+                                    {summary.ftTransfers.length > 0 && (
+                                        <div className="px-4 py-3">
+                                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">Token Transfers</div>
+                                            <div className="space-y-2">
+                                                {summary.ftTransfers.map((ft, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                                            ft.direction === 'out'
+                                                                ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                                : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                                        }`}>
+                                                            {ft.direction === 'out' ? 'OUT' : 'IN'}
+                                                        </span>
+                                                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{parseFloat(ft.amount).toFixed(4)}</span>
+                                                        <span className="text-zinc-500">{ft.tokenType}</span>
+                                                        <span className="text-zinc-400">{ft.direction === 'out' ? 'from' : 'to'}</span>
+                                                        <AddressLink address={`0x${ft.address}`} prefixLen={8} suffixLen={4} size={12} />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* EVM Activity */}
+                                    {summary.hasEVM && (
+                                        <div className="px-4 py-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 border border-purple-500/20 font-medium">EVM</span>
+                                                <span className="text-xs text-zinc-600 dark:text-zinc-400">Cross-chain EVM transaction executed</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* App Events */}
+                                    {summary.appEvents.map((evt, i) => (
+                                        <div key={i} className="px-4 py-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 border border-blue-500/20 font-medium">
+                                                    {evt.name}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1">
+                                                {Object.entries(evt.fields).map(([k, v]) => (
+                                                    <div key={k} className="flex items-center gap-1.5 text-xs">
+                                                        <span className="text-zinc-500 text-[10px]">{k}:</span>
+                                                        {isAddress(v) ? (
+                                                            <AddressLink address={`0x${v}`} prefixLen={8} suffixLen={4} size={12} />
+                                                        ) : (
+                                                            <span className="text-zinc-800 dark:text-zinc-200 truncate" title={v}>
+                                                                {v.length > 30 ? v.slice(0, 27) + '...' : v}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {tx.status === 'EXECUTED' && summary.isIdle && (
+                            <div className="mt-8 text-center text-zinc-500 text-xs italic py-4">
+                                Idle run — no application activity
                             </div>
                         )}
                     </>
