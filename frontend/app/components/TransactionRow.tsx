@@ -324,6 +324,7 @@ export function buildSummaryLine(tx: any): string {
                 if (contract && method) return `${contract}.${method}()`;
                 if (method) return `${method}()`;
                 if (contract) return `Called ${contract}`;
+                if (exec?.to) return `Call ${formatShort(exec.to)}`;
                 return '';
             })
             .filter(Boolean)

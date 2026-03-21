@@ -322,6 +322,7 @@ function getEvmExecutionDisplayLabel(exec: any, events?: any[]): string {
     const methodLabel = inferEvmMethodLabel(exec, events);
     if (contract && methodLabel) return `${contract}.${methodLabel}`;
     if (contract) return contract;
+    if (exec?.to) return `Call ${formatShort(exec.to)}`;
     return methodLabel;
 }
 
@@ -1069,11 +1070,16 @@ function TransactionDetail() {
     const fullTx = useMemo(() => {
         if (!enrichments && !apiEnrichment) return transaction;
 
+        const relatedScheduledTxs = [
+            ...(Array.isArray(transaction?.scheduled_txs) ? transaction.scheduled_txs : []),
+            ...(Array.isArray(apiEnrichment?.scheduled_txs) ? apiEnrichment.scheduled_txs : []),
+        ];
         const isScheduledContext = Boolean(
             transaction?.is_scheduled ||
             apiEnrichment?.is_scheduled ||
-            (transaction?.scheduled_txs?.length || 0) > 0 ||
-            (apiEnrichment?.scheduled_txs?.length || 0) > 0
+            transaction?.scheduled ||
+            apiEnrichment?.scheduled ||
+            relatedScheduledTxs.some((st: any) => st?.matched_by === 'executed_tx')
         );
 
         // Enrich derived NFT transfers with API metadata

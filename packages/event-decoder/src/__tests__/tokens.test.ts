@@ -336,6 +336,47 @@ describe('parseTokenEvents', () => {
     expect(result.transfers).toHaveLength(0);
   });
 
+  it('should filter FlowTransactionScheduler fee transfers from scheduled tx decode', () => {
+    const schedulerAddr = '0xe467b9dd11fa00df';
+    const events: RawEvent[] = [
+      makeFTEvent(
+        'A.1654653399040a61.FlowToken.TokensWithdrawn',
+        [
+          cdcUFix64('amount', '4.00061000'),
+          cdcOptionalAddr('from', ADDR_ALICE),
+          cdcUInt64('withdrawnUUID', '51'),
+        ],
+        0,
+      ),
+      makeFTEvent(
+        'A.1654653399040a61.FlowToken.TokensDeposited',
+        [
+          cdcUFix64('amount', '4.00061000'),
+          cdcOptionalAddr('to', schedulerAddr),
+          cdcUInt64('depositedUUID', '51'),
+        ],
+        1,
+      ),
+      {
+        type: 'A.e467b9dd11fa00df.FlowTransactionScheduler.Scheduled',
+        contract_address: schedulerAddr,
+        payload: {
+          value: {
+            fields: [
+              cdcUFix64('fees', '4.00061000'),
+              cdcUInt64('id', '147560'),
+            ],
+          },
+        },
+        event_index: 2,
+      },
+    ];
+
+    const result = parseTokenEvents(events);
+    expect(result.transfers).toHaveLength(0);
+    expect(result.nftTransfers).toHaveLength(0);
+  });
+
   it('should return empty results for empty events', () => {
     const result = parseTokenEvents([]);
     expect(result.transfers).toHaveLength(0);

@@ -316,6 +316,10 @@ export function parseTokenEvents(events: RawEvent[]): {
   // Lightweight EVM execution info for cross-VM enrichment
   const evmExecs: EVMFromTo[] = [];
 
+  // Scheduled/system txs can move FlowToken into FlowTransactionScheduler as fee escrow.
+  // Those legs are operational bookkeeping, not user-facing asset flow.
+  const scheduledFeeTransfers: { amount: string; recipient: string }[] = [];
+
   // Context flags — scan all events once for evidence-based classification
   let hasStakingEvents = false;
   let hasFeesDeducted = false;
@@ -335,6 +339,19 @@ export function parseTokenEvents(events: RawEvent[]): {
     if (cn === 'FlowFees' && en === 'FeesDeducted') hasFeesDeducted = true;
     if (en === 'TokensBurned' || en === 'TokensBurnt') hasBurnEvent = true;
     if (en === 'TokensMinted') hasMintEvent = true;
+    if (et.includes('FlowTransactionScheduler.Scheduled')) {
+      try {
+        const payload = typeof event.payload === 'string' ? JSON.parse(event.payload) : event.payload;
+        const fields = parseCadenceEventFields(payload);
+        const amount = String(fields?.fees ?? '');
+        const recipient = normalizeFlowAddress(event.contract_address) || parseContractAddress(et);
+        if (amount && recipient) {
+          scheduledFeeTransfers.push({ amount, recipient });
+        }
+      } catch {
+        // Best-effort only; malformed scheduler payloads should not break token decode.
+      }
+    }
   }
 
   for (const event of events) {
@@ -494,6 +511,11 @@ export function parseTokenEvents(events: RawEvent[]): {
     const toNorm = normalizeFlowAddress(t.toAddress);
     // Filter fee vault transfers
     if (fromNorm === FEE_VAULT_ADDRESS || toNorm === FEE_VAULT_ADDRESS) continue;
+    // Filter scheduled fee payments into FlowTransactionScheduler.
+    if (
+      t.token.includes('FlowToken') &&
+      scheduledFeeTransfers.some((fee) => fee.amount === t.amount && toNorm === fee.recipient)
+    ) continue;
     // Filter small FlowToken noise in fee transactions
     if (hasFeesDeducted && t.token.includes('FlowToken') && !t.fromAddress !== !t.toAddress) {
       const amount = parseFloat(t.amount) || 0;
