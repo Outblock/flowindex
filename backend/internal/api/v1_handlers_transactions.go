@@ -302,15 +302,13 @@ func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map
 		out["ft_transfers"] = ftTransfers
 	}
 
-	// Fetch handler contract code as script from DB
-	contractID := strings.TrimPrefix(st.HandlerType, "A.")
-	// contractID is like "a7d9a1bece1378a3.FlowYieldVaultsEVMWorkerOps.SchedulerHandler"
-	// GetContractByIdentifier expects "address.ContractName"
-	idParts := strings.SplitN(contractID, ".", 3)
-	if len(idParts) >= 2 {
-		lookupID := idParts[0] + "." + idParts[1]
-		if contracts, err := s.repo.GetContractByIdentifier(ctx, lookupID); err == nil && len(contracts) > 0 && contracts[0].Code != "" {
-			out["script"] = "// Handler contract: " + st.HandlerType + "\n// This is a scheduled transaction (system tx) — the handler's executeTransaction() was called.\n\n" + contracts[0].Code
+	// Fetch handler contract code from DB (case-sensitive name match)
+	contractAddr := parseScheduledContractAddress(st.HandlerType) // "0xaddr"
+	contractName := parseScheduledContractName(st.HandlerType)     // "FlowYieldVaultsEVMWorkerOps"
+	if contractAddr != "" && contractName != "" {
+		addr := strings.TrimPrefix(contractAddr, "0x")
+		if code, err := s.repo.GetContractCode(ctx, addr, contractName); err == nil && code != "" {
+			out["script"] = "// Handler contract: " + st.HandlerType + "\n// This is a scheduled transaction (system tx) — the handler's executeTransaction() was called.\n\n" + code
 		}
 	}
 
@@ -352,6 +350,12 @@ func (s *Server) buildFTTransfersFromEvents(events []models.Event, timestamp tim
 			toAddr, _ = payload["to"].(string)
 		} else {
 			fromAddr, _ = payload["from"].(string)
+		}
+
+		// Skip fee transfers to/from service account
+		serviceAccount := "e467b9dd11fa00df"
+		if toAddr == serviceAccount || fromAddr == serviceAccount {
+			continue
 		}
 
 		item := map[string]interface{}{

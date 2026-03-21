@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"flowscan-clone/internal/models"
@@ -355,17 +356,26 @@ func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, 
 	// System event prefixes to exclude when filtering "empty" runs
 	emptyFilter := ""
 	if excludeEmpty {
-		emptyFilter = ` AND (
+		// Extract handler contract prefix from handler_type (A.{addr}.{Contract}.{Resource})
+		// to also exclude the handler's own events from the "has real activity" check
+		handlerExclude := ""
+		htParts := strings.Split(handlerType, ".")
+		if len(htParts) >= 3 {
+			prefix := "A." + htParts[1] + "." + htParts[2]
+			handlerExclude = fmt.Sprintf(" AND e.type NOT LIKE '%s%%'", prefix)
+		}
+		emptyFilter = fmt.Sprintf(` AND (
 			st.status != 'EXECUTED' OR EXISTS (
 				SELECT 1 FROM raw.events e
 				WHERE e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%'
-				  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%'
-				  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%'
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%'
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%'
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%%'
+				  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%%'
+				  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%%'
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%%'
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%%'
+				  %s
 			)
-		)`
+		)`, handlerExclude)
 	}
 
 	var total int
@@ -527,6 +537,20 @@ func (r *Repository) FindScheduledTransactionByTxHash(ctx context.Context, txHas
 		return nil, "", err
 	}
 	return &st, matchedBy, nil
+}
+
+// GetContractCode retrieves contract source code by address and name (case-sensitive).
+func (r *Repository) GetContractCode(ctx context.Context, address, name string) (string, error) {
+	addrBytes, _ := hex.DecodeString(address)
+	var code string
+	err := r.db.QueryRow(ctx,
+		"SELECT COALESCE(code, '') FROM app.smart_contracts WHERE address = $1 AND name = $2",
+		addrBytes, name,
+	).Scan(&code)
+	if err != nil {
+		return "", err
+	}
+	return code, nil
 }
 
 // ScheduledTxMatch holds a scheduled tx and how it was matched.
