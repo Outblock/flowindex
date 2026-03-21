@@ -40,6 +40,17 @@ const GENERIC_FLOW_CONTRACTS = new Set([
     'ViewResolver',
 ]);
 
+const HELPER_FLOW_CONTRACT_PATTERNS = [
+    /Factory/i,
+    /Minter/i,
+    /Registry/i,
+    /Scheduler/i,
+    /Utils/i,
+    /Views?$/i,
+];
+
+const SIGNER_ROLE_ORDER = ['Authorizer', 'Proposer', 'Payer'] as const;
+
 function normalizeTxAddress(address?: string | null): string {
     if (!address) return '';
     return normalizeAddress(address).toLowerCase();
@@ -58,6 +69,29 @@ function pushUnique(target: string[], value?: string | null) {
     target.push(next);
 }
 
+function canonicalizeSignerRole(role?: string | null): string {
+    const value = String(role || '').trim();
+    if (!value) return '';
+    if (/^Authorizer\b/i.test(value)) return 'Authorizer';
+    return value;
+}
+
+function formatSignerRoles(roles: string[]): string {
+    const normalized = roles
+        .map((role) => canonicalizeSignerRole(role))
+        .filter(Boolean)
+        .filter((role, index, items) => items.indexOf(role) === index)
+        .sort((a, b) => {
+            const aIndex = SIGNER_ROLE_ORDER.indexOf(a as (typeof SIGNER_ROLE_ORDER)[number]);
+            const bIndex = SIGNER_ROLE_ORDER.indexOf(b as (typeof SIGNER_ROLE_ORDER)[number]);
+            const aRank = aIndex === -1 ? SIGNER_ROLE_ORDER.length : aIndex;
+            const bRank = bIndex === -1 ? SIGNER_ROLE_ORDER.length : bIndex;
+            return aRank - bRank || a.localeCompare(b);
+        });
+
+    return normalized.join(' / ');
+}
+
 function parseFlowContractImport(identifier?: string | null): { address: string; name: string } | null {
     const value = String(identifier || '').trim();
     const match = value.match(/^A\.([a-f0-9]{16})\.(.+)$/i);
@@ -71,7 +105,17 @@ function parseFlowContractImport(identifier?: string | null): { address: string;
 function preferredFlowContractLabel(labels: string[]): string {
     const filtered = labels.filter(Boolean);
     if (filtered.length === 0) return '';
-    return filtered.find((label) => !GENERIC_FLOW_CONTRACTS.has(label)) || filtered[0];
+    const nonGeneric = filtered.filter((label) => !GENERIC_FLOW_CONTRACTS.has(label));
+    if (nonGeneric.length === 0) return filtered[0];
+
+    const businessFirst = nonGeneric.filter(
+        (label) => !HELPER_FLOW_CONTRACT_PATTERNS.some((pattern) => pattern.test(label)),
+    );
+    const ranked = (businessFirst.length > 0 ? businessFirst : nonGeneric)
+        .slice()
+        .sort((a, b) => b.length - a.length || a.localeCompare(b));
+
+    return ranked[0];
 }
 
 function preferredEvmLabel(labels: string[]): string {
@@ -110,7 +154,8 @@ function makeAddressEntry(address: string): MutableAddressEntry {
 
 function ownerPrimaryLabel(entry?: TxAddressBookEntry): string {
     if (!entry) return '';
-    if (entry.roleLabels.length > 0) return entry.roleLabels[0];
+    const signerRoles = formatSignerRoles(entry.roleLabels);
+    if (signerRoles) return signerRoles;
     if (entry.primaryLabel) return entry.primaryLabel;
     return entry.shortAddress;
 }
@@ -131,7 +176,7 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
     const addRole = (address?: string | null, role?: string | null) => {
         const entry = ensure(address);
         if (!entry) return;
-        pushUnique(entry.roles, role);
+        pushUnique(entry.roles, canonicalizeSignerRole(role));
     };
 
     addRole(transaction?.payer, 'Payer');
@@ -175,6 +220,9 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
     });
 
     (transaction?.evm_executions || []).forEach((exec: any) => {
+        collectCoaOwner(exec?.from, exec?.from_meta?.flow_address);
+        collectCoaOwner(exec?.to, exec?.to_meta?.flow_address);
+
         const fromEntry = ensure(exec?.from);
         if (fromEntry) {
             pushUnique(fromEntry.evmLabels, buildEvmLabel(exec?.from_meta));
@@ -199,12 +247,13 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
         if (!raw) return undefined;
 
         if (trail.has(normalized)) {
+            const roleLabel = formatSignerRoles(raw.roles);
             return {
                 address: normalized,
                 addressKind: raw.addressKind,
                 badges: [],
                 contractLabel: preferredFlowContractLabel(raw.flowContracts) || preferredEvmLabel(raw.evmLabels) || undefined,
-                primaryLabel: raw.roles[0] || preferredFlowContractLabel(raw.flowContracts) || preferredEvmLabel(raw.evmLabels) || undefined,
+                primaryLabel: roleLabel || preferredFlowContractLabel(raw.flowContracts) || preferredEvmLabel(raw.evmLabels) || undefined,
                 roleLabels: [...raw.roles],
                 shortAddress: formatShort(normalized, 8, 4),
             };
@@ -213,6 +262,7 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
         trail.add(normalized);
         const flowContractLabel = preferredFlowContractLabel(raw.flowContracts);
         const evmLabel = preferredEvmLabel(raw.evmLabels);
+        const roleLabel = formatSignerRoles(raw.roles);
         const owner = raw.ownerFlowAddress ? resolve(raw.ownerFlowAddress, trail) : undefined;
         trail.delete(normalized);
 
@@ -223,8 +273,8 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
                 primaryLabel = ownerLabel;
             }
         }
-        if (!primaryLabel && raw.roles.length > 0) {
-            primaryLabel = raw.roles[0];
+        if (!primaryLabel && roleLabel) {
+            primaryLabel = roleLabel;
         }
         if (!primaryLabel && raw.addressKind === 'flow' && flowContractLabel) {
             primaryLabel = flowContractLabel;
@@ -247,7 +297,7 @@ export function buildTxAddressBook(transaction: any): TxAddressBook {
             badges.push({ label: evmLabel, tone: 'neutral' });
         }
         raw.roles.forEach((role) => {
-            const promotedToPrimary = primaryLabel === role || primaryLabel === `${role} COA`;
+            const promotedToPrimary = primaryLabel === roleLabel || primaryLabel === role || primaryLabel === `${role} COA`;
             if (!promotedToPrimary) {
                 badges.push({ label: role, tone: 'neutral' });
             }
