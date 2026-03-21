@@ -206,10 +206,19 @@ export interface COALink {
   evm_address?: string;   // alias used in spec
 }
 
+export interface ScheduledTxPreview {
+  scheduled_id: number;
+  status: string;
+  handler_contract: string;
+  handler_owner: string;
+  matched_by: string;
+}
+
 export interface TxPreviewResponse {
   cadence: CadenceTxPreview | null;
   evm: EVMTxPreview | null;
   link: TxLink | null;
+  scheduled: ScheduledTxPreview | null;
 }
 
 export interface AddressPreviewResponse {

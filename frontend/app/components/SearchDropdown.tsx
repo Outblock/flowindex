@@ -73,6 +73,7 @@ function getFlatItems(state: SearchState): FlatItem[] {
       const data = state.previewData as TxPreviewResponse;
       if (data.cadence) items.push({ route: `/txs/${data.cadence.id}`, label: 'Cadence Transaction' });
       if (data.evm) items.push({ route: `/txs/${data.evm.hash}?view=evm`, label: 'EVM Transaction' });
+      if (data.scheduled) items.push({ route: `/scheduled/${data.scheduled.scheduled_id}`, label: 'Scheduled Transaction' });
     } else if (state.previewData && state.previewType === 'address') {
       const data = state.previewData as AddressPreviewResponse;
       // Show the searched address type first
@@ -323,7 +324,7 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
             {/* Preview tx results */}
             {!state.previewLoading && !state.error && state.previewType === 'tx' && (() => {
               const data = state.previewData as TxPreviewResponse | null;
-              if (!data || (!data.cadence && !data.evm)) {
+              if (!data || (!data.cadence && !data.evm && !data.scheduled)) {
                 return (
                   <div className="px-3 py-4 text-center text-sm text-zinc-500">
                     Transaction not found
@@ -417,6 +418,48 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                             <span className="font-mono">{truncateHash(data.evm.from, 8, 6)}</span>
                             <ArrowRight className="h-3 w-3 flex-shrink-0" />
                             <span className="font-mono">{data.evm.to ? truncateHash(data.evm.to, 8, 6) : 'Contract Creation'}</span>
+                          </div>
+                        </button>
+                      </>
+                    );
+                  })()}
+
+                  {data.scheduled && (() => {
+                    const idx = globalIdx++;
+                    return (
+                      <>
+                        <SectionLabel label="Scheduled Transaction" />
+                        <button
+                          type="button"
+                          data-index={idx}
+                          onClick={() => goTo(`/scheduled/${data.scheduled!.scheduled_id}`)}
+                          className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                            activeIndex === idx
+                              ? 'border-l-nothing-green bg-nothing-green/5'
+                              : 'border-l-transparent hover:bg-white/[0.02]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
+                              data.scheduled!.status === 'EXECUTED'
+                                ? 'bg-emerald-500/10 text-emerald-400'
+                                : data.scheduled!.status === 'CANCELED'
+                                  ? 'bg-red-500/10 text-red-400'
+                                  : 'bg-amber-500/10 text-amber-400'
+                            }`}>
+                              {data.scheduled!.status}
+                            </span>
+                            <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400">
+                              {data.scheduled!.matched_by === 'executed_tx' ? 'Executor' : 'Scheduling TX'}
+                            </span>
+                            <span className="text-xs text-zinc-400">
+                              #{data.scheduled!.scheduled_id}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-zinc-500">
+                            <span>{data.scheduled!.handler_contract}</span>
+                            <span className="text-zinc-600">·</span>
+                            <span>{data.scheduled!.handler_owner}</span>
                           </div>
                         </button>
                       </>
