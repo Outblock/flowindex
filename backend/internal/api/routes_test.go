@@ -111,7 +111,7 @@ var specExcludedRoutes = map[string]bool{
 	"/flow/search/preview":                               true,
 	// Scheduled transaction handler/search routes (new, not yet in spec)
 	"/flow/scheduled-handler":                true,
-	"/flow/scheduled-handler/{owner}/{uuid}": true,
+	"/flow/scheduled-handler/{owner}": true,
 	"/flow/scheduled-transaction/search":     true,
 }
 

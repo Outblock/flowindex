@@ -804,14 +804,13 @@ func (s *Server) handleFlowScheduledHandlers(w http.ResponseWriter, r *http.Requ
 
 func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *http.Request) {
 	owner := normalizeAddr(mux.Vars(r)["owner"])
-	uuidStr := mux.Vars(r)["uuid"]
-	handlerUUID, err := strconv.ParseInt(uuidStr, 10, 64)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid handler uuid")
+	handlerType := r.URL.Query().Get("handler_type")
+	if handlerType == "" {
+		writeAPIError(w, http.StatusBadRequest, "handler_type query parameter is required")
 		return
 	}
 	limit, offset := parseLimitOffset(r)
-	items, total, err := s.repo.GetScheduledTransactionsByHandler(r.Context(), owner, handlerUUID, limit, offset)
+	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -860,7 +859,7 @@ func toScheduledHandlerOutput(h models.ScheduledHandler) map[string]interface{} 
 		"handler_type":             h.HandlerType,
 		"handler_contract":         parseScheduledContractName(h.HandlerType),
 		"handler_contract_address": parseScheduledContractAddress(h.HandlerType),
-		"handler_uuid":             h.HandlerUUID,
+		"instance_count":           h.InstanceCount,
 		"total_count":              h.TotalCount,
 		"scheduled_count":          h.ScheduledCount,
 		"executed_count":           h.ExecutedCount,

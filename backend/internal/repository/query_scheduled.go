@@ -242,20 +242,20 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 		argIdx++
 	}
 
-	// Count distinct handlers
+	// Count distinct handlers (by owner + type, merging all UUID instances)
 	var total int
-	countQ := "SELECT COUNT(DISTINCT (handler_owner, handler_type, handler_uuid)) FROM app.scheduled_transactions" + where
+	countQ := "SELECT COUNT(DISTINCT (handler_owner, handler_type)) FROM app.scheduled_transactions" + where
 	if err := r.db.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	// Aggregated data
+	// Aggregated data — group by owner + type (merge all UUID instances)
 	args = append(args, limit, offset)
 	q := fmt.Sprintf(`
 		SELECT
 			encode(handler_owner, 'hex'),
 			handler_type,
-			handler_uuid,
+			COUNT(DISTINCT handler_uuid) AS instance_count,
 			COUNT(*) AS total_count,
 			COUNT(*) FILTER (WHERE status = 'SCHEDULED') AS scheduled_count,
 			COUNT(*) FILTER (WHERE status = 'EXECUTED') AS executed_count,
@@ -270,7 +270,7 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 			END AS avg_interval_sec
 		FROM app.scheduled_transactions
 		%s
-		GROUP BY handler_owner, handler_type, handler_uuid
+		GROUP BY handler_owner, handler_type
 		ORDER BY MAX(scheduled_id) DESC
 		LIMIT $%d OFFSET $%d
 	`, where, argIdx, argIdx+1)
@@ -285,7 +285,7 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 	for rows.Next() {
 		var h models.ScheduledHandler
 		if err := rows.Scan(
-			&h.HandlerOwner, &h.HandlerType, &h.HandlerUUID,
+			&h.HandlerOwner, &h.HandlerType, &h.InstanceCount,
 			&h.TotalCount, &h.ScheduledCount, &h.ExecutedCount, &h.CanceledCount,
 			&h.TotalFees,
 			&h.FirstScheduled, &h.LastScheduled, &h.LastExecutedAt,
@@ -298,7 +298,7 @@ func (r *Repository) GetScheduledHandlers(ctx context.Context, limit, offset int
 	return results, total, nil
 }
 
-// GetScheduledTransactionsByHandler returns scheduled transactions for a specific handler.
+// GetScheduledTransactionsByHandler returns scheduled transactions for a specific handler UUID.
 func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owner string, handlerUUID int64, limit, offset int) ([]models.ScheduledTransaction, int, error) {
 	ownerBytes, _ := hex.DecodeString(owner)
 
@@ -324,6 +324,55 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 		LIMIT $3 OFFSET $4
 	`
 	rows, err := r.db.Query(ctx, q, ownerBytes, handlerUUID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var results []models.ScheduledTransaction
+	for rows.Next() {
+		var st models.ScheduledTransaction
+		if err := rows.Scan(
+			&st.ScheduledID, &st.Priority, &st.ExpectedTimestamp, &st.ExecutionEffort, &st.Fees,
+			&st.HandlerOwner, &st.HandlerType, &st.HandlerUUID, &st.HandlerPublicPath,
+			&st.ScheduledBlock, &st.ScheduledTxID, &st.ScheduledAt,
+			&st.Status,
+			&st.ExecutedBlock, &st.ExecutedTxID, &st.ExecutedAt,
+			&st.FeesReturned, &st.FeesDeducted,
+		); err != nil {
+			return nil, 0, err
+		}
+		results = append(results, st)
+	}
+	return results, total, nil
+}
+
+// GetScheduledTransactionsByHandlerType returns scheduled transactions for a specific handler type + owner.
+func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, limit, offset int) ([]models.ScheduledTransaction, int, error) {
+	ownerBytes, _ := hex.DecodeString(owner)
+
+	var total int
+	if err := r.db.QueryRow(ctx,
+		"SELECT COUNT(*) FROM app.scheduled_transactions WHERE handler_owner = $1 AND handler_type = $2",
+		ownerBytes, handlerType,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	q := `
+		SELECT scheduled_id, priority, expected_timestamp, execution_effort, fees,
+			encode(handler_owner, 'hex'), handler_type, handler_uuid, COALESCE(handler_public_path, ''),
+			scheduled_block, encode(scheduled_tx_id, 'hex'), scheduled_at,
+			status,
+			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
+			executed_at,
+			fees_returned, fees_deducted
+		FROM app.scheduled_transactions
+		WHERE handler_owner = $1 AND handler_type = $2
+		ORDER BY scheduled_id DESC
+		LIMIT $3 OFFSET $4
+	`
+	rows, err := r.db.Query(ctx, q, ownerBytes, handlerType, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}

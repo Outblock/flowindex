@@ -38,7 +38,7 @@ interface HandlerSummary {
     handler_type: string;
     handler_contract: string;
     handler_contract_address: string;
-    handler_uuid: number;
+    instance_count: number;
     total_count: number;
     scheduled_count: number;
     executed_count: number;
@@ -59,7 +59,7 @@ interface ScheduledSearchTx extends ScheduledTx {
 interface ScheduledSearch {
     tab?: 'transactions' | 'handlers' | 'search';
     handler_owner?: string;
-    handler_uuid?: number;
+    handler_type?: string;
 }
 
 const formatInterval = (sec: number | null | undefined): string => {
@@ -101,7 +101,7 @@ export const Route = createFileRoute('/scheduled/')({
     validateSearch: (search: Record<string, unknown>): ScheduledSearch => ({
         tab: (search.tab as ScheduledSearch['tab']) || undefined,
         handler_owner: (search.handler_owner as string) || undefined,
-        handler_uuid: search.handler_uuid ? Number(search.handler_uuid) : undefined,
+        handler_type: (search.handler_type as string) || undefined,
     }),
     loader: async () => {
         try {
@@ -303,7 +303,7 @@ function HandlersTab() {
             search: {
                 tab: 'transactions' as const,
                 handler_owner: h.handler_owner,
-                handler_uuid: h.handler_uuid,
+                handler_type: h.handler_type,
             },
             replace: false,
         });
@@ -342,7 +342,7 @@ function HandlersTab() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {displayedHandlers.map((h) => (
                         <div
-                            key={`${h.handler_owner}-${h.handler_uuid}`}
+                            key={`${h.handler_owner}-${h.handler_type}`}
                             onClick={() => handleCardClick(h)}
                             className="border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.02] hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors cursor-pointer p-4 space-y-3"
                         >
@@ -361,11 +361,14 @@ function HandlersTab() {
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-zinc-400 flex-shrink-0 mt-0.5" />
                             </div>
-                            {h.avg_interval_sec != null && h.avg_interval_sec > 0 && (
-                                <div className="text-[10px] text-zinc-500">
-                                    Avg interval: <span className="text-zinc-700 dark:text-zinc-300 font-medium">{formatInterval(h.avg_interval_sec)}</span>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+                                {h.instance_count > 1 && (
+                                    <span>{h.instance_count} instances</span>
+                                )}
+                                {h.avg_interval_sec != null && h.avg_interval_sec > 0 && (
+                                    <span>Avg interval: <span className="text-zinc-700 dark:text-zinc-300 font-medium">{formatInterval(h.avg_interval_sec)}</span></span>
+                                )}
+                            </div>
 
                             {/* Owner */}
                             <div onClick={(e) => e.stopPropagation()}>
@@ -439,7 +442,7 @@ function HandlersTab() {
 
 /* ── Transactions Tab ─────────────────────────────────── */
 
-function TransactionsTab({ handlerOwner, handlerUuid }: { handlerOwner?: string; handlerUuid?: number }) {
+function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string; handlerType?: string }) {
     const { initialData } = Route.useLoaderData();
     const navigate = useNavigate({ from: '/scheduled/' });
     const [transactions, setTransactions] = useState<ScheduledTx[]>([]);
@@ -449,16 +452,16 @@ function TransactionsTab({ handlerOwner, handlerUuid }: { handlerOwner?: string;
     const [expandedId, setExpandedId] = useState<number | null>(null);
     const nowTick = useTimeTicker(20000);
 
-    const isFiltered = !!(handlerOwner && handlerUuid);
+    const isFiltered = !!(handlerOwner && handlerType);
 
     // Build the fetch URL based on whether we're filtered by handler
     const buildUrl = useCallback((baseUrl: string, offset: number) => {
         if (isFiltered) {
             const ownerClean = handlerOwner!.replace(/^0x/, '');
-            return `${baseUrl}/flow/scheduled-handler/${ownerClean}/${handlerUuid}?limit=20&offset=${offset}`;
+            return `${baseUrl}/flow/scheduled-handler/${ownerClean}?handler_type=${encodeURIComponent(handlerType!)}&limit=20&offset=${offset}`;
         }
         return `${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`;
-    }, [isFiltered, handlerOwner, handlerUuid]);
+    }, [isFiltered, handlerOwner, handlerType]);
 
     // Use initial data only when NOT filtered
     useEffect(() => {
@@ -890,11 +893,11 @@ function SearchTab() {
 /* ── Main Page ────────────────────────────────────────── */
 
 function ScheduledPage() {
-    const { tab: searchTab, handler_owner, handler_uuid } = Route.useSearch();
+    const { tab: searchTab, handler_owner, handler_type } = Route.useSearch();
     const navigate = useNavigate({ from: '/scheduled/' });
 
     // If handler filter params are present, force to transactions tab
-    const isFiltered = !!(handler_owner && handler_uuid);
+    const isFiltered = !!(handler_owner && handler_type);
     const activeTab = isFiltered ? 'transactions' : (searchTab || 'transactions');
 
     const setTab = (tab: 'transactions' | 'handlers' | 'search') => {
@@ -947,7 +950,7 @@ function ScheduledPage() {
                 </div>
 
                 {activeTab === 'transactions' ? (
-                    <TransactionsTab handlerOwner={handler_owner} handlerUuid={handler_uuid} />
+                    <TransactionsTab handlerOwner={handler_owner} handlerType={handler_type} />
                 ) : activeTab === 'search' ? (
                     <SearchTab />
                 ) : (

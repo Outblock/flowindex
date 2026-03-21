@@ -468,7 +468,7 @@ type ScheduledTransaction struct {
 type ScheduledHandler struct {
 	HandlerOwner    string     `json:"handler_owner"`
 	HandlerType     string     `json:"handler_type"`
-	HandlerUUID     int64      `json:"handler_uuid"`
+	InstanceCount   int        `json:"instance_count"`
 	TotalCount      int        `json:"total_count"`
 	ScheduledCount  int        `json:"scheduled_count"`
 	ExecutedCount   int        `json:"executed_count"`
