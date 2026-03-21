@@ -450,6 +450,7 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
     const [hasNext, setHasNext] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [excludeEmpty, setExcludeEmpty] = useState(true);
     const nowTick = useTimeTicker(20000);
 
     const isFiltered = !!(handlerOwner && handlerType);
@@ -458,10 +459,12 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
     const buildUrl = useCallback((baseUrl: string, offset: number) => {
         if (isFiltered) {
             const ownerClean = handlerOwner!.replace(/^0x/, '');
-            return `${baseUrl}/flow/scheduled-handler/${ownerClean}?handler_type=${encodeURIComponent(handlerType!)}&limit=20&offset=${offset}`;
+            const params = new URLSearchParams({ handler_type: handlerType!, limit: '20', offset: String(offset) });
+            if (excludeEmpty) params.set('exclude_empty', 'true');
+            return `${baseUrl}/flow/scheduled-handler/${ownerClean}?${params}`;
         }
         return `${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`;
-    }, [isFiltered, handlerOwner, handlerType]);
+    }, [isFiltered, handlerOwner, handlerType, excludeEmpty]);
 
     // Use initial data only when NOT filtered
     useEffect(() => {
@@ -489,13 +492,13 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
         }
     }, [buildUrl]);
 
-    // Load filtered data on mount, or when page changes
+    // Load filtered data on mount, or when page/filter changes
     useEffect(() => {
         if (isFiltered || currentPage > 1) {
             loadPage(currentPage);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, isFiltered]);
+    }, [currentPage, isFiltered, excludeEmpty]);
 
     const clearFilter = () => {
         setCurrentPage(1);
@@ -516,10 +519,21 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                     </button>
                     <span className="text-[10px] text-zinc-400">|</span>
                     <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                        Showing transactions for handler <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerOwner}</span>
-                        {' / '}
-                        <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerUuid}</span>
+                        Showing transactions for <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerOwner}</span>
+                        {handlerType && (
+                            <> / <span className="font-medium text-zinc-800 dark:text-zinc-200">{handlerType.split('.').slice(2).join('.')}</span></>
+                        )}
                     </span>
+                    <span className="text-[10px] text-zinc-400">|</span>
+                    <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={excludeEmpty}
+                            onChange={(e) => { setExcludeEmpty(e.target.checked); setCurrentPage(1); }}
+                            className="h-3.5 w-3.5 rounded border-zinc-300 dark:border-white/20 accent-nothing-green"
+                        />
+                        Hide idle runs
+                    </label>
                 </div>
             )}
 

@@ -816,8 +816,9 @@ func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *htt
 		writeAPIError(w, http.StatusBadRequest, "handler_type query parameter is required")
 		return
 	}
+	excludeEmpty := r.URL.Query().Get("exclude_empty") == "true"
 	limit, offset := parseLimitOffset(r)
-	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, limit, offset)
+	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, excludeEmpty, limit, offset)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return

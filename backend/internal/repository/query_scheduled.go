@@ -348,30 +348,45 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 }
 
 // GetScheduledTransactionsByHandlerType returns scheduled transactions for a specific handler type + owner.
-func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, limit, offset int) ([]models.ScheduledTransaction, int, error) {
+// When excludeEmpty is true, only returns txs whose executor emitted non-system events (filters out idle runs).
+func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, excludeEmpty bool, limit, offset int) ([]models.ScheduledTransaction, int, error) {
 	ownerBytes, _ := hex.DecodeString(owner)
 
+	// System event prefixes to exclude when filtering "empty" runs
+	emptyFilter := ""
+	if excludeEmpty {
+		emptyFilter = ` AND (
+			st.status != 'EXECUTED' OR EXISTS (
+				SELECT 1 FROM raw.events e
+				WHERE e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%'
+				  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%'
+				  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%'
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%'
+				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%'
+			)
+		)`
+	}
+
 	var total int
-	if err := r.db.QueryRow(ctx,
-		"SELECT COUNT(*) FROM app.scheduled_transactions WHERE handler_owner = $1 AND handler_type = $2",
-		ownerBytes, handlerType,
-	).Scan(&total); err != nil {
+	countQ := fmt.Sprintf("SELECT COUNT(*) FROM app.scheduled_transactions st WHERE st.handler_owner = $1 AND st.handler_type = $2%s", emptyFilter)
+	if err := r.db.QueryRow(ctx, countQ, ownerBytes, handlerType).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	q := `
-		SELECT scheduled_id, priority, expected_timestamp, execution_effort, fees,
-			encode(handler_owner, 'hex'), handler_type, handler_uuid, COALESCE(handler_public_path, ''),
-			scheduled_block, encode(scheduled_tx_id, 'hex'), scheduled_at,
-			status,
-			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
-			executed_at,
-			fees_returned, fees_deducted
-		FROM app.scheduled_transactions
-		WHERE handler_owner = $1 AND handler_type = $2
-		ORDER BY scheduled_id DESC
+	q := fmt.Sprintf(`
+		SELECT st.scheduled_id, st.priority, st.expected_timestamp, st.execution_effort, st.fees,
+			encode(st.handler_owner, 'hex'), st.handler_type, st.handler_uuid, COALESCE(st.handler_public_path, ''),
+			st.scheduled_block, encode(st.scheduled_tx_id, 'hex'), st.scheduled_at,
+			st.status,
+			st.executed_block, CASE WHEN st.executed_tx_id IS NOT NULL THEN encode(st.executed_tx_id, 'hex') ELSE NULL END,
+			st.executed_at,
+			st.fees_returned, st.fees_deducted
+		FROM app.scheduled_transactions st
+		WHERE st.handler_owner = $1 AND st.handler_type = $2%s
+		ORDER BY st.scheduled_id DESC
 		LIMIT $3 OFFSET $4
-	`
+	`, emptyFilter)
 	rows, err := r.db.Query(ctx, q, ownerBytes, handlerType, limit, offset)
 	if err != nil {
 		return nil, 0, err
