@@ -818,16 +818,33 @@ func (s *Server) handleFlowScheduledHandlerHistory(w http.ResponseWriter, r *htt
 	}
 	excludeEmpty := r.URL.Query().Get("exclude_empty") == "true"
 	limit, offset := parseLimitOffset(r)
-	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, excludeEmpty, limit, offset)
+	items, total, err := s.repo.GetScheduledTransactionsByHandlerType(r.Context(), owner, handlerType, limit, offset)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	activityMap, err := s.repo.GetScheduledTransactionActivityMap(r.Context(), items, handlerType)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	out := make([]map[string]interface{}, 0, len(items))
 	for _, st := range items {
-		out = append(out, toScheduledTransactionOutput(st))
+		o := toScheduledTransactionOutput(st)
+		isIdle := st.Status == "EXECUTED" && !activityMap[st.ScheduledID]
+		o["is_idle"] = isIdle
+		if excludeEmpty && isIdle {
+			continue
+		}
+		out = append(out, o)
 	}
-	writeAPIResponse(w, out, map[string]interface{}{"limit": limit, "offset": offset, "count": len(out), "total": total}, nil)
+	writeAPIResponse(w, out, map[string]interface{}{
+		"limit":    limit,
+		"offset":   offset,
+		"count":    len(out),
+		"total":    total,
+		"has_more": total > offset+len(items),
+	}, nil)
 }
 
 func (s *Server) handleFlowScheduledTransactionSearch(w http.ResponseWriter, r *http.Request) {

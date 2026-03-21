@@ -31,6 +31,7 @@ interface ScheduledTx {
     executed_at?: string;
     fees_returned?: string;
     fees_deducted?: string;
+    is_idle?: boolean;
 }
 
 interface HandlerSummary {
@@ -476,18 +477,17 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
         if (isFiltered) {
             const ownerClean = handlerOwner!.replace(/^0x/, '');
             const params = new URLSearchParams({ handler_type: handlerType!, limit: '20', offset: String(offset) });
-            if (excludeEmpty) params.set('exclude_empty', 'true');
             return `${baseUrl}/flow/scheduled-handler/${ownerClean}?${params}`;
         }
         return `${baseUrl}/flow/scheduled-transaction?limit=20&offset=${offset}`;
-    }, [isFiltered, handlerOwner, handlerType, excludeEmpty]);
+    }, [isFiltered, handlerOwner, handlerType]);
 
     // Use initial data only when NOT filtered
     useEffect(() => {
         if (!isFiltered && initialData?.data) {
             setTransactions(initialData.data);
             const meta = initialData._meta;
-            setHasNext((meta?.count || 0) >= 20);
+            setHasNext(Boolean(meta?.has_more ?? ((meta?.count || 0) >= 20)));
         }
     }, [initialData, isFiltered]);
 
@@ -500,7 +500,7 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
             const payload = await res.json();
             setTransactions(payload?.data || []);
             const meta = payload?._meta;
-            setHasNext((meta?.count || 0) >= 20);
+            setHasNext(Boolean(meta?.has_more ?? ((meta?.count || 0) >= 20)));
         } catch (err) {
             console.error('Failed to load scheduled transactions', err);
         } finally {
@@ -514,12 +514,16 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
             loadPage(currentPage);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, isFiltered, excludeEmpty]);
+    }, [currentPage, isFiltered]);
 
     const clearFilter = () => {
         setCurrentPage(1);
         navigate({ search: {}, replace: true });
     };
+
+    const displayedTransactions = isFiltered && excludeEmpty
+        ? transactions.filter((tx) => !(tx.status === 'EXECUTED' && tx.is_idle))
+        : transactions;
 
     return (
         <div>
@@ -573,7 +577,7 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                 </div>
 
                 {/* Rows */}
-                {transactions.map((tx) => {
+                {displayedTransactions.map((tx) => {
                     const isExpanded = expandedId === tx.scheduled_id;
                     const timeStr = tx.scheduled_at ? formatRelativeTime(tx.scheduled_at, nowTick) : '';
 
@@ -692,8 +696,12 @@ function TransactionsTab({ handlerOwner, handlerType }: { handlerOwner?: string;
                     );
                 })}
 
-                {transactions.length === 0 && !loading && (
-                    <div className="text-center text-zinc-500 italic py-12">No scheduled transactions found</div>
+                {displayedTransactions.length === 0 && !loading && (
+                    <div className="text-center text-zinc-500 italic py-12">
+                        {isFiltered && excludeEmpty && transactions.length > 0
+                            ? 'No non-idle transactions on this page'
+                            : 'No scheduled transactions found'}
+                    </div>
                 )}
             </div>
 

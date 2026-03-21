@@ -349,42 +349,16 @@ func (r *Repository) GetScheduledTransactionsByHandler(ctx context.Context, owne
 }
 
 // GetScheduledTransactionsByHandlerType returns scheduled transactions for a specific handler type + owner.
-// When excludeEmpty is true, only returns txs whose executor emitted non-system events (filters out idle runs).
-func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, excludeEmpty bool, limit, offset int) ([]models.ScheduledTransaction, int, error) {
+func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, owner string, handlerType string, limit, offset int) ([]models.ScheduledTransaction, int, error) {
 	ownerBytes, _ := hex.DecodeString(owner)
 
-	// System event prefixes to exclude when filtering "empty" runs
-	emptyFilter := ""
-	if excludeEmpty {
-		// Extract handler contract prefix from handler_type (A.{addr}.{Contract}.{Resource})
-		// to also exclude the handler's own events from the "has real activity" check
-		handlerExclude := ""
-		htParts := strings.Split(handlerType, ".")
-		if len(htParts) >= 3 {
-			prefix := "A." + htParts[1] + "." + htParts[2]
-			handlerExclude = fmt.Sprintf(" AND e.type NOT LIKE '%s%%'", prefix)
-		}
-		emptyFilter = fmt.Sprintf(` AND (
-			st.status != 'EXECUTED' OR EXISTS (
-				SELECT 1 FROM raw.events e
-				WHERE e.transaction_id = st.executed_tx_id AND e.block_height = st.executed_block
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%%'
-				  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%%'
-				  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%%'
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%%'
-				  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%%'
-				  %s
-			)
-		)`, handlerExclude)
-	}
-
 	var total int
-	countQ := fmt.Sprintf("SELECT COUNT(*) FROM app.scheduled_transactions st WHERE st.handler_owner = $1 AND st.handler_type = $2%s", emptyFilter)
+	countQ := "SELECT COUNT(*) FROM app.scheduled_transactions st WHERE st.handler_owner = $1 AND st.handler_type = $2"
 	if err := r.db.QueryRow(ctx, countQ, ownerBytes, handlerType).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	q := fmt.Sprintf(`
+	q := `
 		SELECT st.scheduled_id, st.priority, st.expected_timestamp, st.execution_effort, st.fees,
 			encode(st.handler_owner, 'hex'), st.handler_type, st.handler_uuid, COALESCE(st.handler_public_path, ''),
 			st.scheduled_block, encode(st.scheduled_tx_id, 'hex'), st.scheduled_at,
@@ -393,10 +367,10 @@ func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, 
 			st.executed_at,
 			st.fees_returned, st.fees_deducted
 		FROM app.scheduled_transactions st
-		WHERE st.handler_owner = $1 AND st.handler_type = $2%s
+		WHERE st.handler_owner = $1 AND st.handler_type = $2
 		ORDER BY st.scheduled_id DESC
 		LIMIT $3 OFFSET $4
-	`, emptyFilter)
+	`
 	rows, err := r.db.Query(ctx, q, ownerBytes, handlerType, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -419,6 +393,75 @@ func (r *Repository) GetScheduledTransactionsByHandlerType(ctx context.Context, 
 		results = append(results, st)
 	}
 	return results, total, nil
+}
+
+// GetScheduledTransactionActivityMap returns a map of scheduled_id => hasApplicationActivity
+// for the provided page of scheduled transactions. This is used to mark idle runs without
+// forcing the database to filter the entire handler history.
+func (r *Repository) GetScheduledTransactionActivityMap(ctx context.Context, items []models.ScheduledTransaction, handlerType string) (map[int64]bool, error) {
+	results := make(map[int64]bool, len(items))
+	if len(items) == 0 {
+		return results, nil
+	}
+
+	values := make([]string, 0, len(items))
+	args := make([]interface{}, 0, len(items)*3)
+	argIdx := 1
+
+	for _, st := range items {
+		if st.Status != "EXECUTED" || st.ExecutedTxID == nil || st.ExecutedBlock == nil || *st.ExecutedTxID == "" {
+			continue
+		}
+		txIDBytes, err := hex.DecodeString(*st.ExecutedTxID)
+		if err != nil || len(txIDBytes) == 0 {
+			continue
+		}
+		values = append(values, fmt.Sprintf("($%d::bigint, $%d::bytea, $%d::bigint)", argIdx, argIdx+1, argIdx+2))
+		args = append(args, st.ScheduledID, txIDBytes, *st.ExecutedBlock)
+		argIdx += 3
+	}
+
+	if len(values) == 0 {
+		return results, nil
+	}
+
+	handlerExclude := ""
+	htParts := strings.Split(handlerType, ".")
+	if len(htParts) >= 3 {
+		prefix := "A." + htParts[1] + "." + htParts[2]
+		handlerExclude = fmt.Sprintf(" AND e.type NOT LIKE '%s%%'", prefix)
+	}
+
+	q := fmt.Sprintf(`
+		WITH target(scheduled_id, tx_id, block_height) AS (
+			VALUES %s
+		)
+		SELECT DISTINCT t.scheduled_id
+		FROM target t
+		JOIN raw.events e ON e.transaction_id = t.tx_id AND e.block_height = t.block_height
+		WHERE e.type NOT LIKE 'A.e467b9dd11fa00df.FlowTransactionScheduler%%'
+		  AND e.type NOT LIKE 'A.1654653399040a61.FlowToken%%'
+		  AND e.type NOT LIKE 'A.f233dcee88fe0abe.FungibleToken%%'
+		  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowFees%%'
+		  AND e.type NOT LIKE 'A.e467b9dd11fa00df.FlowServiceAccount%%'
+		  %s
+	`, strings.Join(values, ","), handlerExclude)
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var scheduledID int64
+		if err := rows.Scan(&scheduledID); err != nil {
+			return nil, err
+		}
+		results[scheduledID] = true
+	}
+
+	return results, nil
 }
 
 // GetScheduledTransactionsByOwner returns scheduled transactions for a specific handler owner.

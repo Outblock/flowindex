@@ -1078,6 +1078,7 @@ CREATE TABLE IF NOT EXISTS app.scheduled_transactions (
     PRIMARY KEY (scheduled_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sched_tx_owner ON app.scheduled_transactions (handler_owner, scheduled_id DESC);
+CREATE INDEX IF NOT EXISTS idx_sched_tx_owner_type ON app.scheduled_transactions (handler_owner, handler_type, scheduled_id DESC);
 CREATE INDEX IF NOT EXISTS idx_sched_tx_status ON app.scheduled_transactions (status, scheduled_id DESC);
 CREATE INDEX IF NOT EXISTS idx_sched_tx_block ON app.scheduled_transactions (scheduled_block DESC);
 
