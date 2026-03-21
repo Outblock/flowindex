@@ -529,6 +529,58 @@ func (r *Repository) FindScheduledTransactionByTxHash(ctx context.Context, txHas
 	return &st, matchedBy, nil
 }
 
+// ScheduledTxMatch holds a scheduled tx and how it was matched.
+type ScheduledTxMatch struct {
+	ST        models.ScheduledTransaction
+	MatchedBy string // "scheduled_tx" or "executed_tx"
+}
+
+// FindAllScheduledTransactionsByTxHash returns ALL scheduled transactions matching a tx hash
+// (a tx can be both the executed_tx_id of one and the scheduled_tx_id of another).
+func (r *Repository) FindAllScheduledTransactionsByTxHash(ctx context.Context, txHash string) ([]ScheduledTxMatch, error) {
+	txHashBytes, _ := hex.DecodeString(txHash)
+	if len(txHashBytes) == 0 {
+		return nil, nil
+	}
+
+	q := `
+		SELECT scheduled_id, priority, expected_timestamp, execution_effort, fees,
+			encode(handler_owner, 'hex'), handler_type, handler_uuid, COALESCE(handler_public_path, ''),
+			scheduled_block, encode(scheduled_tx_id, 'hex'), scheduled_at,
+			status,
+			executed_block, CASE WHEN executed_tx_id IS NOT NULL THEN encode(executed_tx_id, 'hex') ELSE NULL END,
+			executed_at,
+			fees_returned, fees_deducted,
+			CASE WHEN scheduled_tx_id = $1 THEN 'scheduled_tx' ELSE 'executed_tx' END
+		FROM app.scheduled_transactions
+		WHERE scheduled_tx_id = $1 OR executed_tx_id = $1
+		ORDER BY scheduled_id
+	`
+	rows, err := r.db.Query(ctx, q, txHashBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ScheduledTxMatch
+	for rows.Next() {
+		var m ScheduledTxMatch
+		if err := rows.Scan(
+			&m.ST.ScheduledID, &m.ST.Priority, &m.ST.ExpectedTimestamp, &m.ST.ExecutionEffort, &m.ST.Fees,
+			&m.ST.HandlerOwner, &m.ST.HandlerType, &m.ST.HandlerUUID, &m.ST.HandlerPublicPath,
+			&m.ST.ScheduledBlock, &m.ST.ScheduledTxID, &m.ST.ScheduledAt,
+			&m.ST.Status,
+			&m.ST.ExecutedBlock, &m.ST.ExecutedTxID, &m.ST.ExecutedAt,
+			&m.ST.FeesReturned, &m.ST.FeesDeducted,
+			&m.MatchedBy,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, m)
+	}
+	return results, nil
+}
+
 // SearchScheduledByEvent searches for scheduled transactions whose executor tx
 // emitted events matching the given event_type, scoped to a specific owner.
 func (r *Repository) SearchScheduledByEvent(ctx context.Context, owner string, eventType string, fieldKey, fieldValue string, limit, offset int) ([]models.ScheduledTxSearchResult, int, error) {

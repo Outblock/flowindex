@@ -1225,7 +1225,8 @@ function TransactionDetail() {
         setTransferDisplayMode('meaningful');
     }, [transaction?.id]);
     const hasEvmExecutions = (fullTx?.evm_executions?.length || 0) > 0;
-    const validTabs = ['transfers', 'script', 'events', 'evm'];
+    const hasScheduled = (fullTx?.scheduled_txs?.length || 0) > 0;
+    const validTabs = ['transfers', 'script', 'events', 'evm', 'scheduled'];
     const defaultTab = hasTransfers ? 'transfers' : hasEvmExecutions ? 'evm' : (fullTx?.script ? 'script' : 'events');
     const [activeTab, setActiveTab] = useState(() =>
         urlTab && validTabs.includes(urlTab) ? urlTab : defaultTab
@@ -1816,6 +1817,20 @@ function TransactionDetail() {
                                 <span className="flex items-center gap-2">
                                     <Layers className={`h-4 w-4 ${activeTab === 'evm' ? 'text-blue-600 dark:text-blue-400' : ''}`} />
                                     EVM Execution Details
+                                </span>
+                            </button>
+                        )}
+                        {hasScheduled && (
+                            <button
+                                onClick={() => switchTab('scheduled')}
+                                className={`px-6 py-3 text-xs uppercase tracking-widest transition-colors flex-shrink-0 ${activeTab === 'scheduled'
+                                    ? 'text-zinc-900 dark:text-white border-b-2 border-nothing-green-dark dark:border-nothing-green bg-zinc-100 dark:bg-white/5'
+                                    : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Clock className={`h-4 w-4 ${activeTab === 'scheduled' ? 'text-amber-500' : ''}`} />
+                                    Scheduled
                                 </span>
                             </button>
                         )}
@@ -2556,6 +2571,53 @@ function TransactionDetail() {
                                         <p className="text-xs uppercase tracking-widest">No Events Emitted</p>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {activeTab === 'scheduled' && hasScheduled && (
+                            <div className="space-y-4">
+                                {fullTx.scheduled_txs.map((st: any) => (
+                                    <div key={st.scheduled_id} className="border border-zinc-200 dark:border-white/10 rounded-lg p-4 space-y-3">
+                                        {/* Header: ID + status + priority + link */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Link to="/scheduled/$id" params={{ id: String(st.scheduled_id) }} className="text-nothing-green-dark dark:text-nothing-green hover:underline text-sm font-bold">
+                                                Scheduled #{st.scheduled_id}
+                                            </Link>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold uppercase tracking-wider ${
+                                                st.status === 'EXECUTED' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
+                                                    : st.status === 'CANCELED' ? 'text-red-500 bg-red-500/10 border-red-500/20'
+                                                    : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                                            }`}>{st.status}</span>
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${
+                                                st.priority === 0 ? 'text-red-500 bg-red-500/10 border-red-500/20'
+                                                    : st.priority === 1 ? 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+                                                    : 'text-blue-400 bg-blue-500/10 border-blue-500/20'
+                                            }`}>{st.priority_label}</span>
+                                            <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-white/5 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-white/10">
+                                                {st.matched_by === 'executed_tx' ? 'Executed by this tx' : 'Scheduled by this tx'}
+                                            </span>
+                                        </div>
+                                        {/* Detail grid */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                            <div>
+                                                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Handler</span>
+                                                <p className="text-zinc-800 dark:text-zinc-200 font-medium mt-0.5">{st.handler_contract}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Effort</span>
+                                                <p className="text-zinc-800 dark:text-zinc-200 mt-0.5">{st.execution_effort}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Fees</span>
+                                                <p className="text-zinc-800 dark:text-zinc-200 mt-0.5">{parseFloat(st.fees).toFixed(4)} FLOW</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Expected At</span>
+                                                <p className="text-zinc-800 dark:text-zinc-200 mt-0.5">{new Date(st.expected_at).toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
 

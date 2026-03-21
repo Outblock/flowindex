@@ -197,7 +197,26 @@ func (s *Server) handleFlowGetTransaction(w http.ResponseWriter, r *http.Request
 
 	s.enrichTransactionOutput(r, out, tx, evmExecs)
 
+	// Check if this tx is related to any scheduled transactions
+	s.enrichWithScheduledTx(r.Context(), out, tx.ID)
+
 	writeAPIResponse(w, []interface{}{out}, nil, nil)
+}
+
+// enrichWithScheduledTx checks if a tx hash is related to scheduled transactions
+// and adds scheduled metadata to the output.
+func (s *Server) enrichWithScheduledTx(ctx context.Context, out map[string]interface{}, txHash string) {
+	results, err := s.repo.FindAllScheduledTransactionsByTxHash(ctx, txHash)
+	if err != nil || len(results) == 0 {
+		return
+	}
+	var scheduled []map[string]interface{}
+	for _, r := range results {
+		entry := toScheduledTransactionOutput(r.ST)
+		entry["matched_by"] = r.MatchedBy
+		scheduled = append(scheduled, entry)
+	}
+	out["scheduled_txs"] = scheduled
 }
 
 // buildScheduledTxOutput builds a transaction output from a scheduled tx.
