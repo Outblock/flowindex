@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -281,6 +282,13 @@ func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map
 	// Add scheduled tx metadata
 	out["is_scheduled"] = true
 	out["scheduled"] = toScheduledTransactionOutput(*st)
+	out["scheduled_txs"] = []map[string]interface{}{
+		func() map[string]interface{} {
+			e := toScheduledTransactionOutput(*st)
+			e["matched_by"] = matchedBy
+			return e
+		}(),
+	}
 
 	// Include handler stats
 	if stats, err := s.repo.GetScheduledHandlerStats(ctx, st.HandlerOwner); err == nil {
@@ -288,7 +296,108 @@ func (s *Server) buildScheduledTxOutput(ctx context.Context, txHash string) (map
 		scheduled["handler_stats"] = stats
 	}
 
+	// Build FT transfers from events (system txs don't have app.ft_transfers records)
+	ftTransfers := s.buildFTTransfersFromEvents(events, synth.Timestamp)
+	if len(ftTransfers) > 0 {
+		out["ft_transfers"] = ftTransfers
+	}
+
+	// Fetch handler contract code as script from DB
+	contractID := strings.TrimPrefix(st.HandlerType, "A.")
+	// contractID is like "a7d9a1bece1378a3.FlowYieldVaultsEVMWorkerOps.SchedulerHandler"
+	// GetContractByIdentifier expects "address.ContractName"
+	idParts := strings.SplitN(contractID, ".", 3)
+	if len(idParts) >= 2 {
+		lookupID := idParts[0] + "." + idParts[1]
+		if contracts, err := s.repo.GetContractByIdentifier(ctx, lookupID); err == nil && len(contracts) > 0 && contracts[0].Code != "" {
+			out["script"] = "// Handler contract: " + st.HandlerType + "\n// This is a scheduled transaction (system tx) — the handler's executeTransaction() was called.\n\n" + contracts[0].Code
+		}
+	}
+
 	return out, true
+}
+
+// buildFTTransfersFromEvents extracts FT transfer entries from events for system txs
+// that don't have app.ft_transfers records.
+func (s *Server) buildFTTransfersFromEvents(events []models.Event, timestamp time.Time) []map[string]interface{} {
+	var transfers []map[string]interface{}
+	for _, e := range events {
+		if !strings.Contains(e.Type, "FungibleToken.Deposited") && !strings.Contains(e.Type, "FungibleToken.Withdrawn") {
+			continue
+		}
+
+		var payload map[string]interface{}
+		if err := json.Unmarshal(e.Payload, &payload); err != nil {
+			continue
+		}
+
+		amount, _ := payload["amount"].(string)
+		tokenType, _ := payload["type"].(string)
+		if amount == "" {
+			continue
+		}
+
+		// Parse token identifier: "A.1654653399040a61.FlowToken.Vault" -> parts
+		tokenParts := strings.Split(tokenType, ".")
+		var tokenID, contractName, contractAddr string
+		if len(tokenParts) >= 3 {
+			contractAddr = tokenParts[1]
+			contractName = tokenParts[2]
+			tokenID = contractAddr + "." + contractName
+		}
+
+		isDeposit := strings.Contains(e.Type, "Deposited")
+		var fromAddr, toAddr string
+		if isDeposit {
+			toAddr, _ = payload["to"].(string)
+		} else {
+			fromAddr, _ = payload["from"].(string)
+		}
+
+		item := map[string]interface{}{
+			"token":         tokenID,
+			"from_address":  formatAddressV1(fromAddr),
+			"to_address":    formatAddressV1(toAddr),
+			"amount":        amount,
+			"event_index":   e.EventIndex,
+			"transfer_type": "transfer",
+		}
+
+		// Token metadata enrichment
+		if contractName != "" {
+			metas, _ := s.repo.GetFTTokenMetadataByIdentifiers(context.Background(), []string{tokenID})
+			if meta, ok := metas[tokenID]; ok {
+				item["token_name"] = meta.Name
+				item["token_symbol"] = meta.Symbol
+				item["token_logo"] = meta.Logo
+				item["token_decimals"] = meta.Decimals
+				if meta.MarketSymbol != "" {
+					if p, ok := s.priceCache.GetPriceAt(meta.MarketSymbol, timestamp); ok {
+						item["amount_usd"] = p * parseFloat64(amount)
+					}
+				}
+			}
+			// FlowToken fallback
+			if contractName == "FlowToken" {
+				if item["token_name"] == nil {
+					item["token_name"] = "Flow"
+					item["token_symbol"] = "FLOW"
+				}
+				if p, ok := s.priceCache.GetPriceAt("FLOW", timestamp); ok {
+					item["amount_usd"] = p * parseFloat64(amount)
+				}
+			}
+		}
+
+		transfers = append(transfers, item)
+	}
+	return transfers
+}
+
+func parseFloat64(s string) float64 {
+	f := 0.0
+	fmt.Sscanf(s, "%f", &f)
+	return f
 }
 
 // fetchTransactionFromRPC fetches a transaction and its result from the Flow access node.
