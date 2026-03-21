@@ -73,7 +73,14 @@ function getFlatItems(state: SearchState): FlatItem[] {
       const data = state.previewData as TxPreviewResponse;
       if (data.cadence) items.push({ route: `/txs/${data.cadence.id}`, label: 'Cadence Transaction' });
       if (data.evm) items.push({ route: `/txs/${data.evm.hash}?view=evm`, label: 'EVM Transaction' });
-      if (data.scheduled) items.push({ route: `/scheduled/${data.scheduled.scheduled_id}`, label: 'Scheduled Transaction' });
+      if (data.scheduled) {
+        items.push({ route: `/scheduled/${data.scheduled.scheduled_id}`, label: 'Scheduled Transaction' });
+        // Also add a link to the tx detail page if no cadence entry already covers it
+        if (!data.cadence) {
+          const txHash = state.quickMatches[0]?.value;
+          if (txHash) items.push({ route: `/txs/${txHash}`, label: 'View Transaction' });
+        }
+      }
     } else if (state.previewData && state.previewType === 'address') {
       const data = state.previewData as AddressPreviewResponse;
       // Show the searched address type first
@@ -426,6 +433,8 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
 
                   {data.scheduled && (() => {
                     const idx = globalIdx++;
+                    const txHash = state.quickMatches[0]?.value;
+                    const showTxLink = !data.cadence && txHash;
                     return (
                       <>
                         <SectionLabel label="Scheduled Transaction" />
@@ -462,6 +471,36 @@ export const SearchDropdown = forwardRef<SearchDropdownHandle, SearchDropdownPro
                             <span>{data.scheduled!.handler_owner}</span>
                           </div>
                         </button>
+                        {showTxLink && (() => {
+                          const txIdx = globalIdx++;
+                          return (
+                            <>
+                              <SectionLabel label="Transaction Detail" />
+                              <button
+                                type="button"
+                                data-index={txIdx}
+                                onClick={() => goTo(`/txs/${txHash}`)}
+                                className={`flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition-colors ${
+                                  activeIndex === txIdx
+                                    ? 'border-l-nothing-green bg-nothing-green/5'
+                                    : 'border-l-transparent hover:bg-white/[0.02]'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase bg-zinc-700 text-zinc-300">
+                                    {data.scheduled!.matched_by === 'executed_tx' ? 'System TX' : 'Transaction'}
+                                  </span>
+                                  <span className="text-xs text-zinc-400">
+                                    View in transaction detail page
+                                  </span>
+                                </div>
+                                <span className="font-mono text-xs text-zinc-400 truncate block">
+                                  <HighlightMatch text={txHash} query={highlightQuery} />
+                                </span>
+                              </button>
+                            </>
+                          );
+                        })()}
                       </>
                     );
                   })()}
