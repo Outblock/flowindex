@@ -194,6 +194,8 @@ export default function AISummary({ transaction }: { transaction: any }) {
                     to_meta: e.to_meta || null,
                     decoded_call: e.decoded_call || null,
                 })),
+                is_scheduled: transaction.is_scheduled || false,
+                scheduled_txs: transaction.scheduled_txs || [],
             };
 
             const res = await fetch(`${baseUrl}/ai/tx-summary`, {

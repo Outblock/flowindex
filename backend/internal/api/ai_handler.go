@@ -21,6 +21,7 @@ type aiTxSummaryRequest struct {
 	ID              string `json:"id"`
 	Status          string `json:"status,omitempty"`
 	IsEVM           bool   `json:"is_evm,omitempty"`
+	IsScheduled     bool   `json:"is_scheduled,omitempty"`
 	Events          []any  `json:"events,omitempty"`
 	FTTransfers     []any  `json:"ft_transfers,omitempty"`
 	DefiEvents      []any  `json:"defi_events,omitempty"`
@@ -33,6 +34,8 @@ type aiTxSummaryRequest struct {
 	ActivityLabel      string `json:"activity_label,omitempty"`
 	PreliminarySummary string `json:"preliminary_summary,omitempty"`
 	TransferSummary    any    `json:"transfer_summary,omitempty"`
+	// Scheduled transaction metadata
+	ScheduledTxs []any `json:"scheduled_txs,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -311,6 +314,17 @@ The input includes:
 - "activity_type"/"activity_label": pre-classified tx type
 - "preliminary_summary": basic one-line summary
 - "contract_imports": Cadence contracts used
+- "is_scheduled": true if this tx is related to Flow Scheduled Transactions
+- "scheduled_txs": array of related scheduled tx metadata (handler_contract, handler_owner, status, priority, fees, execution_effort, scheduled_at, expected_at, matched_by)
+
+=== SCHEDULED TRANSACTIONS ===
+Flow Scheduled Transactions allow smart contracts to autonomously execute at future times.
+- If "is_scheduled" is true, this tx is either the scheduling tx or the executor (system tx).
+- "matched_by" indicates: "scheduled_tx" = this tx scheduled it, "executed_tx" = this tx executed it.
+- The handler_contract is the Cadence contract whose executeTransaction() was called.
+- Explain WHAT the scheduled handler did (e.g. "automated token rebalance", "DeFi yield check", "recurring swap").
+- For idle/empty runs (only scheduler system events), note it was a routine check with no action taken.
+- For active runs, describe the actual token movements and actions performed.
 
 === SUMMARY ===
 - 1-2 concise sentences with **markdown**: **bold** for token names, amounts, protocol names.
