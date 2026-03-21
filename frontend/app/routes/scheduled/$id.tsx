@@ -541,9 +541,12 @@ function ScheduledTransactionDetail() {
                                                 <span className="text-zinc-400">|</span>
                                             </>
                                         )}
-                                        <span className="text-zinc-700 dark:text-zinc-300 break-all font-mono text-[10px]">
+                                        <Link
+                                            to={`/txs/${tx.executed_tx_id.replace('0x', '')}` as any}
+                                            className="text-nothing-green-dark dark:text-nothing-green hover:underline break-all font-mono text-[10px]"
+                                        >
                                             {tx.executed_tx_id}
-                                        </span>
+                                        </Link>
                                         <CopyButton text={tx.executed_tx_id} />
                                         <span className="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-white/5 text-zinc-500 border border-zinc-200 dark:border-white/10">
                                             System TX
